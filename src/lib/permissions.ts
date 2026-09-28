@@ -163,7 +163,8 @@ export const PERMISSIONS = {
   canCreateRole,
   canBlockUsers,
   canDeleteUsers,
-  canCreateClient:   (role: UserRole) => hasRole(role, 'manager'),
+  // Decisão do dono (28/09/2026): todos os cargos cadastram clientes; só o Administrador exclui.
+  canCreateClient:   (_role: UserRole) => true,
   canEditClient:     (role: UserRole) => hasRole(role, 'manager'),
   // Igual à regra do banco (firestore.rules: clients → delete só isAdmin). Antes o
   // Gerente via o botão "Excluir", mas o banco recusava e aparecia erro.
