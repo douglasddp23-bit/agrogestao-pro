@@ -987,7 +987,7 @@ export default function Irrigation() {
                         <div className="text-[10px] font-bold text-slate-700 truncate pr-6">{p.propertyName || 'Sem Nome'}</div>
                         <div className="flex justify-between items-center mt-1">
                           <span className="text-[9px] text-slate-400">{p.clientName}</span>
-                          <span className="text-[9px] font-bold text-emerald-600">{formatDate(p.createdAt?.toDate())}</span>
+                          <span className="text-[9px] font-bold text-emerald-600">{formatDate(typeof p.createdAt?.toDate === 'function' ? p.createdAt.toDate() : p.createdAt)}</span>
                         </div>
                         {!((user?.effectiveRole ?? user?.role) === 'staff' || (user?.effectiveRole ?? user?.role) === 'consultant') && (
                           <button 

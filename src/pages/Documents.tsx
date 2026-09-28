@@ -914,8 +914,10 @@ export default function Documents() {
     }
   };
 
-  const formatSize = (bytes: number) => {
-    if (bytes === 0) return '0 B';
+  const formatSize = (bytes: number | string) => {
+    // Pastas de laudo gravam o tamanho como texto ("0 KB"); registros antigos podem não ter.
+    if (typeof bytes === 'string') return bytes;
+    if (!bytes || !isFinite(bytes)) return '—';
     const k = 1024;
     const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -1447,7 +1449,7 @@ export default function Documents() {
                               )}
                             </div>
                             <div className="text-[10px] font-bold text-slate-400 uppercase mt-1">
-                              {doc.type.split('/')[1]?.toUpperCase() || 'FILE'} • {formatSize(doc.size)} • {doc.uploadedAt ? formatDateTime(doc.uploadedAt) : 'Recent'}
+                              {(doc.type || '').split('/')[1]?.toUpperCase() || 'FILE'} • {formatSize(doc.size)} • {doc.uploadedAt ? formatDateTime(doc.uploadedAt) : 'Recent'}
                             </div>
                           </div>
                         </div>

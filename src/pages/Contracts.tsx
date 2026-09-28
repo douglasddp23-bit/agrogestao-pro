@@ -422,7 +422,25 @@ export default function Contracts() {
   useEffect(() => {
     const q = query(collection(db, 'contracts'), orderBy('createdAt', 'desc'));
     const unsubscribeContracts = onSnapshot(q, (snapshot) => {
-      setContracts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Contract)));
+      // Completa campos ausentes (rascunho antigo, contrato importado...): sem
+      // isso, UM contrato sem valor/parcelas derrubava a tela inteira.
+      setContracts(snapshot.docs.map(doc => {
+        const d: any = doc.data();
+        const installments = Array.isArray(d.installments)
+          ? d.installments.map((i: any) => ({ ...i, value: Number(i?.value) || 0 }))
+          : [];
+        return {
+          id: doc.id,
+          ...d,
+          clientName: d.clientName || 'Cliente não informado',
+          contractNumber: d.contractNumber || 'S/N',
+          category: d.category || 'outro',
+          totalValue: Number(d.totalValue ?? d.value) || 0,
+          installments,
+          installmentsCount: d.installmentsCount ?? installments.length,
+          adendums: Array.isArray(d.adendums) ? d.adendums : [],
+        } as Contract;
+      }));
       setLoading(false);
     }, (error) => {
       console.error(error);

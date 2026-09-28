@@ -505,7 +505,7 @@ const { url: downloadUrl } = await saveFile(item.file, filename);
       'Data da Visita': formatDate(v.visitDate),
       Objetivo: v.objective,
       Técnico: v.technicianName,
-      Culturas: v.crops.map(c => `${c.name} (${c.stage})`).join(', '),
+      Culturas: (v.crops || []).map(c => `${c.name} (${c.stage})`).join(', '),
       Recomendações: v.recommendations,
       Dispositivo: v.createdByDevice || 'indefinido'
     }));
@@ -534,7 +534,7 @@ const { url: downloadUrl } = await saveFile(item.file, filename);
       v.clientName || 'N/D',
       v.propertyName || 'N/D',
       v.objective || 'N/D',
-      v.crops && Array.isArray(v.crops) ? v.crops.map(c => `${c.name} (${c.stage})`).join('\n') : 'N/A',
+      v.crops && Array.isArray(v.crops) ? (v.crops || []).map(c => `${c.name} (${c.stage})`).join('\n') : 'N/A',
       v.technicianName || 'N/D'
     ]);
 
@@ -628,7 +628,7 @@ const { url: downloadUrl } = await saveFile(item.file, filename);
     doc.setFont('Helvetica', 'bold');
     doc.text('CULTURAS INSPECIONADAS & DIAGNÓSTICO FITOSSANITÁRIO', 15, lastY);
 
-    const cropsBody = visit.crops.map(c => [
+    const cropsBody = (visit.crops || []).map(c => [
       c.name,
       c.stage,
       `${c.estimatedArea} ha`,
@@ -771,7 +771,7 @@ const { url: downloadUrl } = await saveFile(item.file, filename);
 
   // Unique list of technicians for filter options
   const techniciansList = Array.from(new Set(visits.map(v => v.technicianName).filter(Boolean)));
-  const cropsList = Array.from(new Set(visits.flatMap(v => v.crops.map(c => c.name)).filter(Boolean)));
+  const cropsList = Array.from(new Set(visits.flatMap(v => (v.crops || []).map(c => c.name)).filter(Boolean)));
 
   // Selected client's properties helper
   const availableProperties = clients.find(c => c.id === clientId)?.properties || [];
@@ -974,7 +974,7 @@ const { url: downloadUrl } = await saveFile(item.file, filename);
 
                     {/* Crop Badges */}
                     <div className="flex flex-wrap gap-1.5 mb-4">
-                      {visit.crops.map((c, i) => (
+                      {(visit.crops || []).map((c, i) => (
                         <span key={i} className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-md text-[10px] font-bold uppercase">
                           {c.name} ({c.stage})
                         </span>
@@ -1082,7 +1082,7 @@ const { url: downloadUrl } = await saveFile(item.file, filename);
                   <div className="space-y-2">
                     <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Culturas Inspecionadas</h4>
                     <div className="space-y-3">
-                      {selectedVisit.crops.map((c, i) => (
+                      {(selectedVisit.crops || []).map((c, i) => (
                         <div key={i} className="p-4 border border-slate-200 rounded-xl space-y-2 bg-slate-50/50">
                           <div className="flex items-center justify-between">
                             <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-lg uppercase tracking-wider">{c.name}</span>

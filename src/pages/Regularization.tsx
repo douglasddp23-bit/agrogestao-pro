@@ -441,7 +441,7 @@ export default function Regularization() {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                   {Object.entries(service.documents).map(([key, val]) => val && (
+                   {Object.entries(service.documents || {}).map(([key, val]) => val && (
                      <div key={key} className="px-2 py-1 bg-white/60 border border-slate-100 rounded-lg flex items-center gap-1.5">
                         {DOCUMENT_TYPES.find(d => d.id === key)?.icon && React.createElement(DOCUMENT_TYPES.find(d => d.id === key)!.icon as any, {className: 'w-3 h-3 text-emerald-500'})}
                         <span className="text-[9px] font-bold text-slate-600">{key.toUpperCase()}</span>

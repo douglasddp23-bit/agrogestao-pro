@@ -951,7 +951,7 @@ export default function Messages() {
                             {msg.subject || '(Sem assunto)'}
                           </span>
                           <span className="text-slate-400 font-normal truncate shrink text-[11px]">
-                            — {msg.content.replace(/\s+/g, ' ')}
+                            — {(msg.content || '').replace(/\s+/g, ' ')}
                           </span>
                         </div>
                         {/* Tags */}
@@ -1223,7 +1223,7 @@ export default function Messages() {
                           setNewMessage({
                             recipientId: selectedMsg.senderId,
                             subject: selectedMsg.subject.startsWith('Re:') ? selectedMsg.subject : `Re: ${selectedMsg.subject}`,
-                            content: `\n\nEm ${formatDateTime(selectedMsg.createdAt)}, ${selectedMsg.senderName} escreveu:\n> ${selectedMsg.content.split('\n').join('\n> ')}`,
+                            content: `\n\nEm ${formatDateTime(selectedMsg.createdAt)}, ${selectedMsg.senderName} escreveu:\n> ${(selectedMsg.content || '').split('\n').join('\n> ')}`,
                             cc: '',
                             bcc: ''
                           });
