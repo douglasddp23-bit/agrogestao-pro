@@ -26,6 +26,8 @@ import autoTable from 'jspdf-autotable';
 import ProcessStatusTimeline from '../components/ProcessStatusTimeline';
 import AuditTrail from '../components/AuditTrail';
 import { logAudit } from '../lib/audit';
+import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
+import { Landmark as PageIcon } from 'lucide-react';
 
 const PURPOSE_LABELS: Record<string, string> = {
   compra_venda: 'Compra e Venda',
@@ -496,9 +498,8 @@ export default function RuralPropertyValuationPage() {
         }
       }
 
-      if (!clientId && clients.length > 0) {
-        clientId = clients[0].id;
-      }
+      // (Removido: sem cliente identificado, o laudo ia para o dossiê do PRIMEIRO
+      // cliente da lista — um produtor sem relação com a avaliação.)
 
       if (!clientId) {
         if (showToast) {
@@ -569,6 +570,7 @@ export default function RuralPropertyValuationPage() {
         serviceId: val.id,
         serviceName: `Avaliação NBR 14.653: ${val.propertyName}`,
         isGeneratedReport: true,
+        uploadedBy: user?.uid || 'sistema', // obrigatório pelas regras do banco
         uploadedAt: new Date().toISOString(),
         createdAt: serverTimestamp()
       };
@@ -803,22 +805,8 @@ export default function RuralPropertyValuationPage() {
     <div className="flex flex-col gap-6 p-1 sm:p-2 pb-16">
       {confirmModal}
       {/* HEADER */}
-      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-emerald-600 to-emerald-800 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-600/20">
-              <MapPin className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-display font-bold text-slate-800 dark:text-slate-100 tracking-tight">
-                Avaliação de Imóveis Rurais
-              </h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                Laudos e pareceres técnicos — ABNT NBR 14.653-3
-              </p>
-            </div>
-          </div>
-        </div>
+      <header className={PAGE_HEADER_CLASS} data-page-header>
+        <PageTitle icon={PageIcon} title="Avaliação de Imóveis" subtitle="Laudos e pareceres técnicos de avaliação (ABNT NBR 14.653-3)" />
 
         <div className="flex items-center gap-3">
           <button

@@ -38,8 +38,18 @@ export function useOfflineCache<T extends { id: string }>(
       setCacheLoaded(true);
       saveCollectionCache(collectionName, liveData);
     } else if (!loading && (!liveData || liveData.length === 0)) {
-      // Se não vieram dados ou a rede falhou, recupera do IndexedDB
-      loadOfflineCache();
+      if (typeof navigator !== 'undefined' && navigator.onLine) {
+        // Online e o banco devolveu lista vazia = a lista está vazia MESMO
+        // (ex.: registros excluídos em outro computador). Antes mostrava a
+        // cópia antiga guardada neste PC — os itens "reapareciam".
+        setCachedData([]);
+        setIsUsingCache(false);
+        setCacheLoaded(true);
+        saveCollectionCache(collectionName, []);
+      } else {
+        // Sem internet: usa a última cópia guardada neste PC
+        loadOfflineCache();
+      }
     }
   }, [collectionName, liveData, loading, loadOfflineCache]);
 

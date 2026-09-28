@@ -1180,14 +1180,39 @@ Retorne APENAS um objeto JSON com as seguintes chaves (sem markdown, sem texto e
   }
 
 
-  // Agendar tarefa diária às 00:00 (Meia-noite) para verificação de prazos rurais e licenças
-  cron.schedule('0 0 * * *', async () => {
+  // Com o sistema aberto em mais de um computador, a verificação automática
+  // de prazos rodaria em todos — avisos e e-mail-resumo em dobro. O primeiro
+  // PC do dia "reserva" a execução no banco (system_jobs/daily_checks); os
+  // outros pulam. (O botão "Verificar Alertas" continua rodando na hora.)
+  async function claimDailyRun(job: string): Promise<boolean> {
+    const todayBR = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
     try {
+      const ref = admin.firestore().collection('system_jobs').doc(job);
+      return await admin.firestore().runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        if (snap.exists && snap.data()?.lastRunDate === todayBR) return false;
+        tx.set(ref, { lastRunDate: todayBR, lastRunAt: new Date().toISOString() }, { merge: true });
+        return true;
+      });
+    } catch {
+      return true; // sem acesso ao banco para reservar: roda mesmo assim
+    }
+  }
+
+  const runDailyChecksOnce = async (origem: string) => {
+    try {
+      if (!(await claimDailyRun('daily_checks'))) {
+        console.log(`[BACKGROUND SERVICE] Verificação de prazos de hoje já feita (${origem}) — outro computador ou abertura anterior.`);
+        return;
+      }
       await runDailyExpiringChecks();
     } catch (err) {
-      console.error('[CRON ERROR] Falha ao executar tarefa diária de prazos:', err);
+      console.error(`[BACKGROUND SERVICE] Falha na verificação diária de prazos (${origem}):`, err);
     }
-  });
+  };
+
+  // Agendar tarefa diária às 00:00 (Meia-noite) para verificação de prazos rurais e licenças
+  cron.schedule('0 0 * * *', () => { runDailyChecksOnce('meia-noite'); });
 
   // Backup diário do banco (ver backend/services/backupService.ts). O PC pode
   // estar desligado num horário fixo, então a cada hora conferimos se o último
@@ -1195,14 +1220,8 @@ Retorne APENAS um objeto JSON com as seguintes chaves (sem markdown, sem texto e
   cron.schedule('7 * * * *', () => { runBackupIfDue(); });
   setTimeout(() => { runBackupIfDue(); }, 60_000);
 
-  // Executar imediatamente na inicialização do servidor (com pequeno atraso) para carregar os alertas na hora
-  setTimeout(async () => {
-    try {
-      await runDailyExpiringChecks();
-    } catch (err) {
-      console.error('[STARTUP ERROR] Falha ao executar verificação inicial de prazos:', err);
-    }
-  }, 5000);
+  // Na inicialização (se ainda não rodou hoje em nenhum computador)
+  setTimeout(() => { runDailyChecksOnce('inicialização'); }, 5000);
 
   // API: Check for Expiring Contracts & Licenses in Firestore (Dynamic operational check)
   app.all('/api/notifications/check', requireAuth, async (req, res) => {

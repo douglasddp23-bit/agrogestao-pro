@@ -39,6 +39,8 @@ import { logAudit } from '../lib/audit';
 import ConfirmationModal from '../components/ConfirmationModal';
 import UserDetailModal from '../components/users/UserDetailModal';
 import NewDelegationModal from '../components/users/NewDelegationModal';
+import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
+import { UsersRound as PageIcon } from 'lucide-react';
 
 export default function Users() {
   const { user } = useAuth();
@@ -584,12 +586,9 @@ export default function Users() {
 
   return (
     <div className="flex flex-col gap-6 h-full">
-      <header className="flex flex-wrap gap-4 justify-between items-center bg-white/30 p-4 rounded-2xl glass border border-white/40">
+      <header className={PAGE_HEADER_CLASS} data-page-header>
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <UsersRound className="w-5 h-5 text-emerald-600" />
-            <h2 className="text-xl font-display font-bold">Gestão da Equipe</h2>
-          </div>
+          <PageTitle icon={PageIcon} title="Usuários" subtitle="Equipe, cargos, acessos e delegações" />
           <div className="relative hidden sm:block">
             <input 
               type="text" 

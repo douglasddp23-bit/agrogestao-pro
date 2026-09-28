@@ -24,6 +24,8 @@ import {
   FolderSync
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import PageHeader from '../components/layout/PageHeader';
+import { FileText as PageIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { collection, onSnapshot, query, orderBy, where, addDoc, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
 import { saveFile, deleteStoredFile, handleFileLinkClick, uploadErrorMessage, FileTooLargeError, isTooLargeToSave } from '../lib/fileStore';
@@ -1051,20 +1053,18 @@ export default function Documents() {
         onChange={handleFileUpload}
       />
 
+      <PageHeader icon={PageIcon} title="Documentos" subtitle="Dossiê digital de cada cliente: laudos, contratos e arquivos" />
+
       {!selectedClient ? (
-        <div className="flex flex-col items-center justify-center min-h-[70vh] py-12 px-4">
-          <motion.div 
+        <div className="flex flex-col items-center justify-center min-h-[55vh] py-8 px-4">
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="text-center space-y-6 max-w-2xl w-full"
           >
-            <div className="inline-flex p-4 bg-emerald-600 text-white rounded-3xl shadow-xl shadow-emerald-100 mb-4 text-center mx-auto">
-              <FileText className="w-10 h-10" />
-            </div>
-            
             <div className="space-y-2">
-              <h1 className="text-4xl font-display font-bold text-slate-800 tracking-tight">Gestão Documental</h1>
-              <p className="text-slate-500 font-medium italic">Acesso seguro e centralizado ao dossiê de seus clientes</p>
+              <h2 className="text-lg font-display font-bold text-slate-700">Buscar dossiê do cliente</h2>
+              <p className="text-sm text-slate-500">Digite o nome ou o CPF do produtor para abrir as pastas de documentos.</p>
             </div>
 
             <div className="relative mt-12">
@@ -1079,7 +1079,7 @@ export default function Documents() {
                   setSearchTerm(e.target.value);
                 }}
                 className={cn(
-                  "w-full pl-16 pr-6 py-6 text-lg glass border-none shadow-2xl rounded-[32px] focus:ring-4 focus:ring-emerald-500/20 transition-all placeholder:text-slate-300 font-medium",
+                  "w-full pl-16 pr-6 py-5 text-base bg-white border border-slate-200 shadow-lg rounded-[28px] focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-400 outline-none transition-all placeholder:text-slate-400 font-medium",
                   filteredClients.length > 0 && "rounded-b-none"
                 )}
               />

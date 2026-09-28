@@ -1,6 +1,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@500;700&display=swap');
 @import "tailwindcss";
 
+/* O modo escuro segue o botão de tema do sistema (classe "dark" no <html>),
+   e não a configuração do Windows. Sem isto, num Windows em modo escuro os
+   estilos "dark:" eram aplicados com o app no modo CLARO — textos quase
+   brancos sobre fundo claro (ex.: títulos das páginas). */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Space Grotesk", sans-serif;

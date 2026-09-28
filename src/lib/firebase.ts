@@ -284,6 +284,9 @@ export async function ensureDocumentFolder({
         size: initialFile?.size || '0 KB',
         isGeneratedReport: true,
         folderType,
+        // Obrigatório pelas regras do banco (isValidDoc). Sem ele a criação da
+        // pasta do laudo era sempre recusada — e derrubava o salvamento da perícia.
+        uploadedBy: auth.currentUser?.uid || 'sistema',
         uploadedAt: new Date().toISOString(),
         createdAt: serverTimestamp(),
         ...metadata

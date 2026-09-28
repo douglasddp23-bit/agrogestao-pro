@@ -28,6 +28,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { AuditLog, UserProfile } from '../types';
 import { cn, formatDateTime, todayLocalDateString } from '../lib/utils';
 import { toast } from 'sonner';
+import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
+import { History as PageIcon } from 'lucide-react';
 
 export default function AuditLogs() {
   const { user } = useAuth();
@@ -338,16 +340,8 @@ export default function AuditLogs() {
 
   return (
     <div className="flex flex-col gap-6 h-full">
-      <header className="flex flex-wrap gap-4 justify-between items-center bg-white/30 p-4 rounded-2xl glass border border-white/40">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <History className="w-5 h-5 text-slate-600" />
-            <h2 className="text-xl font-display font-bold">Auditoria Global</h2>
-          </div>
-          <span className="text-[10px] bg-slate-100 text-slate-800 px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider">
-            Logs de Segurança do Sistema
-          </span>
-        </div>
+      <header className={PAGE_HEADER_CLASS} data-page-header>
+        <PageTitle icon={PageIcon} title="Auditoria Global" subtitle="Registro de acessos e alterações feitas no sistema" />
 
         <div className="flex items-center gap-2">
           <button

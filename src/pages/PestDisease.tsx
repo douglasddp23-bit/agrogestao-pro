@@ -18,6 +18,8 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, 
   Tooltip, Legend, PieChart, Pie, Cell 
 } from 'recharts';
+import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
+import { Bug as PageIcon } from 'lucide-react';
 
 export default function PestDiseasePage() {
   const { user } = useAuth();
@@ -357,13 +359,8 @@ export default function PestDiseasePage() {
     <div className="space-y-6 pb-12 text-slate-700">
       {confirmModal}
       {/* Title Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/40 p-6 rounded-[2rem] glass border border-white/40 shadow-sm">
-        <div>
-          <h1 className="text-2xl font-display font-bold text-slate-800 flex items-center gap-2">
-            <Bug className="w-6 h-6 text-emerald-600" /> Detecção de Pragas & Fitossanidade
-          </h1>
-          <p className="text-xs text-slate-500 mt-0.5">Gestão integrada do combate a patógenos, infestações de lagartas, insetos e monitoramento de talhões</p>
-        </div>
+      <div className={PAGE_HEADER_CLASS} data-page-header>
+        <PageTitle icon={PageIcon} title="Pragas e Doenças" subtitle="Registro e acompanhamento de pragas, doenças e controle nos talhões" />
         <button 
           onClick={() => { resetForm(); setIsModalOpen(true); }}
           className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-bold uppercase transition-all shadow-md active:scale-95 self-start md:self-auto"

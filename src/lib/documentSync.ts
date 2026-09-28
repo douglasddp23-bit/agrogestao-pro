@@ -11,7 +11,7 @@ import {
   Unsubscribe 
 } from 'firebase/firestore';
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { db } from './firebase';
+import { db, auth } from './firebase';
 import { JudicialExpertise, RuralPropertyValuation, ClientDocument } from '../types';
 
 export type SyncBadgeState = 'synced' | 'syncing' | 'recent' | 'unlinked' | 'pending';
@@ -110,6 +110,8 @@ export async function ensureServiceDocumentFolder({
       size: initialFile?.size || '0 KB',
       isGeneratedReport: true,
       folderType: serviceType,
+      // Obrigatório pelas regras do banco (isValidDoc)
+      uploadedBy: auth.currentUser?.uid || 'sistema',
       uploadedAt: new Date().toISOString(),
       createdAt: serverTimestamp(),
       ...metadata

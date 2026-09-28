@@ -43,6 +43,8 @@ import SkeletonList from '../components/SkeletonList';
 import { formatDateTime, formatDate, todayLocalDateString, formatCurrency } from '../lib/utils';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { FinancialRecord, FinancialStatus, PaymentMethod, FinancialCategory, Client, ServiceAnalysis, ExpenseReport, UserRole } from '../types';
+import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
+import { DollarSign as PageIcon } from 'lucide-react';
 
 export default function Financial() {
   const { user } = useAuth();
@@ -748,16 +750,8 @@ function FinancialContent() {
     <div className="space-y-6">
       
       {/* Page Header banner */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm animate-fadeIn">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-xl flex items-center justify-center">
-            <DollarSign className="w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-display font-bold text-slate-800">Controle Financeiro</h1>
-            <p className="text-sm text-slate-500">Conciliação de pagamentos, fluxo de receitas de assessoria e faturamentos fiscais</p>
-          </div>
-        </div>
+      <div className={PAGE_HEADER_CLASS} data-page-header>
+        <PageTitle icon={PageIcon} title="Financeiro" subtitle="Recebimentos, despesas, faturamento e conciliação" />
 
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
           <button

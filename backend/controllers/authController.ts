@@ -304,7 +304,7 @@ async function isPasswordReused(uid: string, plain: string): Promise<boolean> {
   const hashes = new Set<string>([
     ...(Array.isArray(cred?.passwordHistory) ? cred.passwordHistory : []),
     ...(cred?.passwordHash ? [cred.passwordHash] : []),
-    ...(virtualUsersMap.get(uid)?.passwordHash ? [virtualUsersMap.get(uid).passwordHash] : []),
+    ...(virtualUsersMap.get(uid)?.isVirtual && virtualUsersMap.get(uid)?.passwordHash ? [virtualUsersMap.get(uid).passwordHash] : []),
   ]);
   for (const h of hashes) if (hashMatches(plain, h)) return true;
   return false;
@@ -1345,8 +1345,13 @@ export async function loginUser(req: Request, res: Response) {
     const queryUpper = queryId.toUpperCase();
     let userData: any = null;
 
-    // Check virtual memory store first
+    // Memória local: SÓ usuários virtuais (sem conta real). Os usuários reais
+    // criados neste PC também ficam nesse mapa, mas com dados congelados no
+    // momento da criação — com dois computadores, a senha trocada no outro PC,
+    // o bloqueio ou a troca de cargo não apareceriam aqui (a senha temporária
+    // antiga continuaria valendo). Usuário real = sempre lido do banco.
     for (const u of virtualUsersMap.values()) {
+      if (!u.isVirtual) continue;
       if (u.email?.toLowerCase() === queryLower || u.registrationNumber?.toUpperCase() === queryUpper) {
         userData = u;
         break;
@@ -1473,7 +1478,8 @@ export async function updateUserPassword(req: Request, res: Response) {
     // exige a senha atual, para que alguém que encontre o PC destravado não
     // consiga trocar a senha. No primeiro acesso (senha temporária) não precisa.
     if (authorized) {
-      let mustChange = !!virtualUsersMap.get(uid)?.mustChangePassword;
+      // (memória local só vale para usuário virtual — ver loginUser)
+      let mustChange = !!(virtualUsersMap.get(uid)?.isVirtual && virtualUsersMap.get(uid)?.mustChangePassword);
       try {
         const snap = await admin.firestore().collection('users').doc(uid).get();
         mustChange = mustChange || !!snap.data()?.mustChangePassword;

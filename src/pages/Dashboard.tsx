@@ -34,7 +34,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import PrintPreviewModal from '../components/PrintPreviewModal';
-import { collection, query, limit, orderBy, onSnapshot, where } from 'firebase/firestore';
+import { collection, query, limit, orderBy, onSnapshot, where, doc as fsDoc, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Client, UserProfile, VacationRequest, InternalMessage, FieldVisit, FinancialRecord, InventoryItem, Contract, Vehicle } from '../types';
 import { formatDateTime, formatDate, cn, handleFirestoreError, OperationType, getAuthToken, todayLocalDateString, sortByDateDesc } from '../lib/utils';
@@ -60,6 +60,8 @@ import {
   Area,
   CartesianGrid
 } from 'recharts';
+import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
+import { LayoutDashboard as PageIcon } from 'lucide-react';
 
 interface AgNews {
   id: string;
@@ -290,20 +292,45 @@ export default function Dashboard() {
     return Math.min(100, Math.round((producaoAgrícolaRealizada / producaoMeta) * 100));
   }, [producaoAgrícolaRealizada, producaoMeta]);
 
-  const handleSaveMetas = (e: React.FormEvent) => {
+  // Metas mensais ficam no banco (settings/dashboard_goals), iguais em todos
+  // os computadores. Antes ficavam só neste PC: com dois computadores cada um
+  // mostrava uma meta diferente. O valor local continua como reserva offline.
+  useEffect(() => {
+    const unsub = onSnapshot(fsDoc(db, 'settings', 'dashboard_goals'), (snap) => {
+      const d = snap.data();
+      if (typeof d?.faturamentoMeta === 'number' && d.faturamentoMeta > 0) {
+        setFaturamentoMeta(d.faturamentoMeta);
+        localStorage.setItem('meta_faturamento', String(d.faturamentoMeta));
+      }
+      if (typeof d?.producaoMeta === 'number' && d.producaoMeta > 0) {
+        setProducaoMeta(d.producaoMeta);
+        localStorage.setItem('meta_producao', String(d.producaoMeta));
+      }
+    }, () => { /* sem acesso: fica o valor local */ });
+    return () => unsub();
+  }, []);
+
+  const handleSaveMetas = async (e: React.FormEvent) => {
     e.preventDefault();
     const fVal = parseFloat(tempFaturamento);
     const pVal = parseFloat(tempProducao);
-    if (!isNaN(fVal) && fVal > 0) {
-      setFaturamentoMeta(fVal);
-      localStorage.setItem('meta_faturamento', fVal.toString());
+    const update: Record<string, any> = {};
+    if (!isNaN(fVal) && fVal > 0) update.faturamentoMeta = fVal;
+    if (!isNaN(pVal) && pVal > 0) update.producaoMeta = pVal;
+    if (Object.keys(update).length === 0) { setIsEditingMeta(false); return; }
+    try {
+      await setDoc(fsDoc(db, 'settings', 'dashboard_goals'), {
+        ...update,
+        updatedAt: new Date().toISOString(),
+        updatedBy: user?.uid || '',
+      }, { merge: true });
+      if (update.faturamentoMeta) setFaturamentoMeta(update.faturamentoMeta);
+      if (update.producaoMeta) setProducaoMeta(update.producaoMeta);
+      setIsEditingMeta(false);
+      toast.success('Metas mensais atualizadas para toda a equipe!');
+    } catch {
+      toast.error('Somente Administrador, Gerente ou RH podem alterar as metas mensais.');
     }
-    if (!isNaN(pVal) && pVal > 0) {
-      setProducaoMeta(pVal);
-      localStorage.setItem('meta_producao', pVal.toString());
-    }
-    setIsEditingMeta(false);
-    toast.success('Metas mensais atualizadas com sucesso!');
   };
 
   const handleOpenEditMetas = () => {
@@ -764,13 +791,8 @@ export default function Dashboard() {
   return (
     <div className="flex flex-col gap-8 pb-10">
       {/* Top Header and Personalization Button */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white/30 p-4 rounded-3xl glass border border-white/40 mb-2">
-        <div>
-          <h2 className="text-2xl font-display font-bold text-slate-800 flex items-center gap-2">
-            <Leaf className="w-7 h-7 text-emerald-600" /> Painel de Controle
-          </h2>
-          <p className="text-xs text-slate-500 mt-0.5">Visão geral da sua operação agrícola, métricas em tempo real e controle pessoal.</p>
-        </div>
+      <div className={PAGE_HEADER_CLASS} data-page-header>
+        <PageTitle icon={PageIcon} title="Dashboard" subtitle="Visão geral da operação, métricas em tempo real e controle pessoal" />
 
         <div className="flex gap-2">
           <button 

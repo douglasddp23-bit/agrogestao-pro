@@ -47,6 +47,8 @@ import { cn, todayLocalDateString } from '../lib/utils';
 import ConfirmationModal from '../components/ConfirmationModal';
 import PronafWizard from '../components/PronafWizard';
 import { toast } from 'sonner';
+import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
+import { Wallet as PageIcon } from 'lucide-react';
 
 export default function RuralCredit() {
   const { user } = useAuth();
@@ -326,11 +328,8 @@ export default function RuralCredit() {
     <div className="flex flex-col gap-6 h-full pb-6">
       {/* Header & Stats */}
       <header className="flex flex-col gap-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-display font-bold text-slate-800">Crédito Rural</h1>
-            <p className="text-slate-500 text-sm">Gestão de financiamentos e custeio agropecuário.</p>
-          </div>
+        <div className={PAGE_HEADER_CLASS} data-page-header>
+          <PageTitle icon={PageIcon} title="Crédito Rural" subtitle="Financiamentos, custeio agropecuário e projetos Pronaf" />
           <div className="flex items-center gap-3">
           {(user?.effectiveRole ?? user?.role) === 'staff' || (user?.effectiveRole ?? user?.role) === 'consultant' ? (
             <button

@@ -64,6 +64,8 @@ import iconMarker from 'leaflet/dist/images/marker-icon.png';
 import iconRetina from 'leaflet/dist/images/marker-icon-2x.png';
 // @ts-ignore
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
+import { ClipboardList as PageIcon } from 'lucide-react';
 
 let DefaultIcon = L.icon({
     iconUrl: iconMarker,
@@ -779,16 +781,8 @@ const { url: downloadUrl } = await saveFile(item.file, filename);
   return (
     <div className="space-y-6">
       {/* Top Banner & Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-xl flex items-center justify-center">
-            <ClipboardList className="w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-display font-bold text-slate-800">Visitas de Campo</h1>
-            <p className="text-sm text-slate-500">Monitoramento agronômico em tempo real e sincronização mobile offline</p>
-          </div>
-        </div>
+      <div className={PAGE_HEADER_CLASS} data-page-header>
+        <PageTitle icon={PageIcon} title="Visitas de Campo" subtitle="Registro das visitas técnicas, culturas, fotos e recomendações" />
 
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
           <button

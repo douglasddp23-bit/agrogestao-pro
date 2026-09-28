@@ -35,6 +35,8 @@ import iconMarker from 'leaflet/dist/images/marker-icon.png';
 import iconRetina from 'leaflet/dist/images/marker-icon-2x.png';
 // @ts-ignore
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
+import { MapPinned as PageIcon } from 'lucide-react';
 
 let DefaultIcon = L.icon({
   iconUrl: iconMarker,
@@ -214,16 +216,8 @@ export default function PropertyMap() {
     <div className="space-y-6">
       
       {/* Title banner */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm animate-fadeIn">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-slate-100 text-slate-700 rounded-xl flex items-center justify-center">
-            <MapPin className="w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-display font-bold text-slate-800">Mapa Georreferenciado</h1>
-            <p className="text-sm text-slate-500">Delimição de divisas rurais, análise de relevos por satélite e uploads KML/Shapefile</p>
-          </div>
-        </div>
+      <div className={PAGE_HEADER_CLASS} data-page-header>
+        <PageTitle icon={PageIcon} title="Mapa de Propriedades" subtitle="Divisas das propriedades, imagens de satélite e arquivos KML/Shapefile" />
 
         {/* Change basemap rendering style */}
         <div className="flex bg-slate-100 p-0.5 rounded-xl border">

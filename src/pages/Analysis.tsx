@@ -38,6 +38,8 @@ import { ServiceAnalysis, AnalysisType, Client, UserRole } from '../types';
 import { PERMISSIONS } from '../lib/permissions';
 import { logAudit } from '../lib/audit';
 import { motion, AnimatePresence } from 'motion/react';
+import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
+import { ClipboardCheck as PageIcon } from 'lucide-react';
 import { handleFirestoreError, OperationType, formatDateTime, cn, formatDate, getStatusConfig, todayLocalDateString } from '../lib/utils';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -800,8 +802,8 @@ export default function Analysis({ typeFilter }: AnalysisProps) {
 
   return (
     <div className="flex flex-col gap-6 h-full">
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/30 p-4 rounded-2xl glass border border-white/40">
-        <h2 className="text-xl font-display font-bold">{getTitle()}</h2>
+      <header className={PAGE_HEADER_CLASS} data-page-header>
+        <PageTitle icon={PageIcon} title={getTitle()} subtitle="Análises de solo, água e foliar, com laudos e resultados" />
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
           <div className="relative flex-1 md:w-48">
             <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />

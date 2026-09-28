@@ -36,7 +36,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { handleFirestoreError, OperationType, formatDateTime, formatDate, cn, todayLocalDateString, sortByDateDesc, toMillis, formatCurrency, validateCPF } from '../lib/utils';
 import WeeklyWorkedHoursChart from '../components/WeeklyWorkedHoursChart';
-import { canCreateRole, UserRole } from '../lib/permissions';
+import { canCreateRole, UserRole, ROLE_LABELS } from '../lib/permissions';
+import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
+import { Clock as PageIcon } from 'lucide-react';
 
 export default function HR() {
   const { user } = useAuth();
@@ -782,13 +784,8 @@ export default function HR() {
   return (
     <div className="flex flex-col gap-6 h-full p-2">
       {/* Header and custom navigation tab system */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/30 p-4 rounded-3xl glass border border-white/40">
-        <div>
-          <h2 className="text-2xl font-display font-bold text-slate-800 flex items-center gap-2">
-            <UsersRound className="w-7 h-7 text-emerald-600" /> Recursos Humanos (RH)
-          </h2>
-          <p className="text-xs text-slate-500 mt-0.5">Gestão de ponto, férias, licenças, folha de pagamento e auditoria agro.</p>
-        </div>
+      <div className={PAGE_HEADER_CLASS} data-page-header>
+        <PageTitle icon={PageIcon} title="Ponto Eletrônico" subtitle="Ponto, férias, licenças e folha de pagamento" />
 
         {/* Tab switcher buttons */}
         <div className="flex flex-wrap gap-1 bg-slate-100 p-1 rounded-2xl">
@@ -1233,7 +1230,7 @@ export default function HR() {
                           <div className="flex flex-col">
                             <span className="text-sm font-bold text-slate-700">{member.displayName}</span>
                             <div className="flex items-center gap-1">
-                              <span className="text-[10px] text-slate-400 capitalize">{member.role}</span>
+                              <span className="text-[10px] text-slate-400">{ROLE_LABELS[member.role as UserRole] || member.role}</span>
                               {isVacationOverdue(member.createdAt, 0) && (
                                 <span className="px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider bg-rose-100 text-rose-800 rounded animate-pulse">
                                   Férias Vencidas
@@ -1301,7 +1298,7 @@ export default function HR() {
                           {emp.registrationNumber || '---'}
                         </td>
                         <td className="p-4">
-                          <span className="font-semibold text-slate-700 capitalize">{emp.role}</span>
+                          <span className="font-semibold text-slate-700">{ROLE_LABELS[emp.role as UserRole] || emp.role}</span>
                           <div className="text-[10px] text-slate-400">{emp.department || 'Operações'}</div>
                         </td>
                         <td className="p-4 font-bold text-slate-700">

@@ -12,6 +12,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { handleFirestoreError, OperationType, todayLocalDateString } from '../lib/utils';
 
 import ConfirmationModal from '../components/ConfirmationModal';
+import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
+import { Map as PageIcon } from 'lucide-react';
 
 export interface GPSPoint {
   id: string;
@@ -467,16 +469,8 @@ export default function Topography() {
 
   return (
     <div className="flex flex-col gap-8 h-full overflow-y-auto pr-2 pb-10">
-      <header className="flex justify-between items-center bg-white/30 p-6 rounded-3xl glass border border-white/40 shadow-sm">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-emerald-600 text-white rounded-2xl shadow-lg shadow-emerald-200">
-            <Compass className="w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-display font-bold text-slate-800">Serviços de Topografia</h1>
-            <p className="text-xs text-slate-500 mt-0.5">Gestão de levantamentos, medições e georreferenciamento</p>
-          </div>
-        </div>
+      <header className={PAGE_HEADER_CLASS} data-page-header>
+        <PageTitle icon={PageIcon} title="Topografia" subtitle="Levantamentos, medições e georreferenciamento" />
         
         <div className="px-4 py-2 bg-slate-50 text-slate-600 rounded-2xl text-[10px] font-bold uppercase tracking-widest border border-slate-100 hidden md:block">
            Módulo de Precision Mapping

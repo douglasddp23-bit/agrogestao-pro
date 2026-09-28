@@ -29,6 +29,8 @@ import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { InternalMessage, UserProfile, EmailTemplate, Channel } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
+import PageHeader from '../components/layout/PageHeader';
+import { MessageSquare as PageIcon } from 'lucide-react';
 import { handleFirestoreError, OperationType, formatDateTime, formatTime, cn } from '../lib/utils';
 import { FileText, Settings, Copy } from 'lucide-react';
 
@@ -622,7 +624,9 @@ export default function Messages() {
   ];
 
   return (
-    <div className="flex h-full bg-slate-50 p-0 overflow-hidden text-slate-800">
+    <div className="flex flex-col gap-4 h-full">
+      <PageHeader icon={PageIcon} title="Mensagens" subtitle="E-mail interno da equipe e canais de conversa" />
+      <div className="flex flex-1 min-h-0 bg-slate-50 p-0 overflow-hidden text-slate-800 rounded-2xl">
       {/* Left Navigation Rails - exactly modern Gmail style! */}
       <div className="w-64 bg-slate-50 pr-2 pl-3 py-4 flex flex-col gap-1 shrink-0 select-none hidden md:flex">
         {/* Gmail written compose button */}
@@ -1952,6 +1956,7 @@ export default function Messages() {
         description="Esta ação removerá permanentemente o modelo de e-mail. Você não poderá recuperá-lo."
         confirmLabel="Excluir Modelo"
       />
+      </div>
     </div>
   );
 }

@@ -34,6 +34,7 @@ import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { Channel, ChannelMessage, UserProfile, MessageAttachment } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
+import { ROLE_LABELS, UserRole } from '../lib/permissions';
 import { handleFirestoreError, OperationType, cn } from '../lib/utils';
 
 interface ChannelChatProps {
@@ -905,7 +906,7 @@ export default function ChannelChat({ channel, users, onBack }: ChannelChatProps
                       )}
                       <div className="min-w-0 flex-1">
                         <p className="text-[10.5px] font-semibold text-slate-700 truncate">{member.displayName}</p>
-                        <p className="text-[8.5px] text-slate-400 font-medium capitalize">{member.role}</p>
+                        <p className="text-[8.5px] text-slate-400 font-medium">{ROLE_LABELS[member.role as UserRole] || member.role}</p>
                       </div>
                     </div>
                   ))}

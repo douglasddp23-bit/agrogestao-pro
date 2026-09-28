@@ -52,6 +52,8 @@ import SignaturePad from '../components/SignaturePad';
 import AuditTrail from '../components/AuditTrail';
 import { formatDateTime, formatDate, todayLocalDateString, formatCurrency } from '../lib/utils';
 import { Contract, ContractPayment, ContractAdendum, ContractRevision, Client, FinancialRecord, ContractTemplate, ContractTemplateVersion } from '../types';
+import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
+import { FilePen as PageIcon } from 'lucide-react';
 
 const statusBadge: Record<string, { label: string; color: string }> = {
   active: { label: 'Ativo', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
@@ -1317,16 +1319,8 @@ export default function Contracts() {
     <div className="space-y-6">
       
       {/* Banner Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm animate-fadeIn">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-slate-100 text-slate-700 rounded-xl flex items-center justify-center">
-            <FileText className="w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-display font-bold text-slate-800">Contratos Agronômicos</h1>
-            <p className="text-sm text-slate-500">Gestão administrativa de vigências, parcelamentos integrados e aditivos contratuais</p>
-          </div>
-        </div>
+      <div className={PAGE_HEADER_CLASS} data-page-header>
+        <PageTitle icon={PageIcon} title="Contratos" subtitle="Vigências, parcelas e aditivos contratuais" />
 
         <div className="flex flex-wrap gap-2 w-full sm:w-auto p-0.5">
           <button

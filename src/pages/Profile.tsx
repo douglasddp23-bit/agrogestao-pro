@@ -29,6 +29,8 @@ import { toast } from 'sonner';
 import { doc, getDoc, updateDoc, collection, query, where, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db, storage, hasValidConfig } from '../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
+import PageHeader from '../components/layout/PageHeader';
+import { User as PageIcon } from 'lucide-react';
 import TwoFactorCard from '../components/security/TwoFactorCard';
 import BackupCard from '../components/security/BackupCard';
 import ChangePasswordModal from '../components/security/ChangePasswordModal';
@@ -304,9 +306,7 @@ export default function Profile() {
   return (
     <div className="flex flex-col gap-6 h-full overflow-y-auto pr-2 pb-10">
       {isChangePasswordOpen && <ChangePasswordModal onClose={() => setIsChangePasswordOpen(false)} />}
-      <header className="bg-white/30 p-4 rounded-2xl glass border border-white/40">
-        <h2 className="text-xl font-display font-bold">Meu Perfil</h2>
-      </header>
+      <PageHeader icon={PageIcon} title="Meu Perfil" subtitle="Seus dados, senha, férias e preferências" />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Profile Card */}

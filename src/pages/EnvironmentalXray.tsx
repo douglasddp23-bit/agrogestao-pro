@@ -20,6 +20,8 @@ import {
 } from 'recharts';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
+import { Leaf as PageIcon } from 'lucide-react';
 
 export default function EnvironmentalXrayPage() {
   const { user } = useAuth();
@@ -414,13 +416,8 @@ export default function EnvironmentalXrayPage() {
     <div className="space-y-6 pb-12 text-slate-700">
       {confirmModal}
       {/* Title Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/40 p-6 rounded-[2rem] glass border border-white/40 shadow-sm">
-        <div>
-          <h1 className="text-2xl font-display font-bold text-slate-800 flex items-center gap-2">
-            <Leaf className="w-6 h-6 text-emerald-600" /> Raio-X Ambiental & ESG
-          </h1>
-          <p className="text-xs text-slate-500 mt-0.5">Auditorias ecológicas de propriedades, conformidade com código florestal e análise de passivos</p>
-        </div>
+      <div className={PAGE_HEADER_CLASS} data-page-header>
+        <PageTitle icon={PageIcon} title="Raio-X Ambiental" subtitle="Diagnóstico ambiental, código florestal e passivos da propriedade" />
         <button 
           onClick={() => { resetForm(); setIsModalOpen(true); }}
           className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-bold uppercase transition-all shadow-md active:scale-95 self-start md:self-auto"

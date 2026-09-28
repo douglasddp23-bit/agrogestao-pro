@@ -35,6 +35,8 @@ import SkeletonList from '../components/SkeletonList';
 import EfficiencyReport from '../components/EfficiencyReport';
 import { formatDate, formatCurrency } from '../lib/utils';
 import { Client, FieldVisit, FinancialRecord, ServiceAnalysis, Contract } from '../types';
+import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
+import { BarChart3 as PageIcon } from 'lucide-react';
 
 export default function Reports() {
   const { user } = useAuth();
@@ -996,16 +998,8 @@ ${analyses.slice(0, 3).map(a => `- Tipo: ${a.type}, Fazenda: ${a.propertyName ||
     <div className="space-y-6">
       
       {/* Banner Title with Tabs */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-xl flex items-center justify-center">
-            <BarChart3 className="w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-display font-bold text-slate-800">Central de Inteligência Agronômica</h1>
-            <p className="text-sm text-slate-500">Relatórios anuais consolidados, análise de eficiência e suporte cognitivo via Gemini AI</p>
-          </div>
-        </div>
+      <div className={PAGE_HEADER_CLASS} data-page-header>
+        <PageTitle icon={PageIcon} title="Relatórios" subtitle="Relatórios consolidados, eficiência da equipe e assistente de IA" />
 
         {/* Tab Switcher */}
         <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-xl self-start md:self-auto">

@@ -18,6 +18,8 @@ import {
   MapPin, Navigation, Route, LocateFixed, ArrowUpDown, ExternalLink
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
+import { CalendarDays as PageIcon } from 'lucide-react';
 
 export default function Scheduling() {
   const { user } = useAuth();
@@ -859,16 +861,8 @@ export default function Scheduling() {
   return (
     <div className="flex-1 flex flex-col overflow-y-auto px-1 gap-6 pb-12">
       {/* ─── HEADER ROW ─── */}
-      <div id="scheduling-header" className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white/45 backdrop-blur-md p-6 rounded-[2rem] border border-white/60 shadow-sm">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-500/20">
-            <CalendarDays className="w-6 h-6 animate-pulse" />
-          </div>
-          <div>
-            <h1 className="font-display font-black text-2xl text-slate-800 tracking-tight leading-tight">Agendamentos</h1>
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1">Gestão de visitas e consultorias agronômicas</p>
-          </div>
-        </div>
+      <div id="scheduling-header" className={PAGE_HEADER_CLASS} data-page-header>
+        <PageTitle icon={PageIcon} title="Agendamentos" subtitle="Agenda de visitas e consultorias da equipe" />
 
         <div className="flex items-center gap-2.5">
           <button 

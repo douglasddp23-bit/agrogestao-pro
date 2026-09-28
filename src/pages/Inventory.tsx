@@ -37,6 +37,8 @@ import { formatDateTime, formatDate, cn, formatCurrency } from '../lib/utils';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { PERMISSIONS } from '../lib/permissions';
 import { UserRole } from '../types';
+import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
+import { Package as PageIcon } from 'lucide-react';
 
 interface InventoryItemState {
   id: string;
@@ -432,11 +434,8 @@ export default function Inventory() {
   return (
     <div className="flex flex-col gap-6 h-full overflow-y-auto custom-scrollbar pr-1" id="inventory-module">
       {/* Title Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-display font-bold tracking-tight text-slate-800">Almoxarifado & Insumos</h1>
-          <p className="text-sm text-slate-500">Fluxo interno e controle de ferramentas de campo, reagentes de solo, piquetes e defensivos piloto.</p>
-        </div>
+      <div className={PAGE_HEADER_CLASS} data-page-header>
+        <PageTitle icon={PageIcon} title="Estoque / Insumos" subtitle="Controle de insumos, ferramentas de campo e reagentes" />
         
         <div className="flex items-center gap-2">
           <button

@@ -45,6 +45,8 @@ import { logAudit } from '../lib/audit';
 import { PERMISSIONS, UserRole } from '../lib/permissions';
 import { createNotification } from '../lib/notifications';
 import { motion, AnimatePresence } from 'motion/react';
+import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
+import { Users as PageIcon } from 'lucide-react';
 import { handleFirestoreError, OperationType, cn, validateCPF, validateEmail, formatPhone, formatCPF, formatDate, todayLocalDateString } from '../lib/utils';
 import { toast } from 'sonner';
 import ConfirmationModal from '../components/ConfirmationModal';
@@ -1199,8 +1201,8 @@ export default function Clients() {
   return (
     <div className="flex flex-col gap-6 h-full">
       {confirmModal}
-      <header className="flex justify-between items-center bg-white/30 p-4 rounded-2xl glass border border-white/40">
-        <h2 className="text-xl font-display font-bold">Gestão de Clientes</h2>
+      <header className={PAGE_HEADER_CLASS} data-page-header>
+        <PageTitle icon={PageIcon} title="Clientes" subtitle="Cadastro de produtores, propriedades e histórico de atendimento" />
         {PERMISSIONS.canCreateClient(((user?.effectiveRole ?? user?.role) as UserRole) || 'consultant') && (
           <button 
             onClick={() => setIsModalOpen(true)}

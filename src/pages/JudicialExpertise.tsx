@@ -25,6 +25,8 @@ import autoTable from 'jspdf-autotable';
 import ProcessStatusTimeline from '../components/ProcessStatusTimeline';
 import AuditTrail from '../components/AuditTrail';
 import { logAudit } from '../lib/audit';
+import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
+import { Scale as PageIcon } from 'lucide-react';
 
 const EXPERTISE_TYPE_LABELS: Record<string, string> = {
   servidao_administrativa: 'Servidão Administrativa',
@@ -395,10 +397,8 @@ export default function JudicialExpertisePage() {
         }
       }
 
-      if (!clientId && clients.length > 0) {
-        // Fallback to first client if none found, to guarantee a dossier folder link
-        clientId = clients[0].id;
-      }
+      // (Removido: sem cliente identificado, o laudo ia para o dossiê do PRIMEIRO
+      // cliente da lista — um produtor sem relação com o processo.)
 
       if (!clientId) {
         if (showToast) {
@@ -473,6 +473,7 @@ export default function JudicialExpertisePage() {
         serviceId: exp.id,
         serviceName: `Perícia Judicial: Proc. ${exp.processNumber}`,
         isGeneratedReport: true,
+        uploadedBy: user?.uid || 'sistema', // obrigatório pelas regras do banco
         uploadedAt: new Date().toISOString(),
         createdAt: serverTimestamp()
       };
@@ -575,9 +576,12 @@ export default function JudicialExpertisePage() {
           (c.propertyName && payload.propertyName && (c.propertyName || '').trim().toLowerCase() === (payload.propertyName || '').trim().toLowerCase())
         );
         if (match) targetClientId = match.id;
-        else if (clients.length > 0) targetClientId = clients[0].id;
       }
 
+      // Dossiê do cliente: se falhar, a perícia já está salva — não pode virar
+      // "Falha ao salvar" (antes derrubava o salvamento inteiro).
+      let dossierOk = true;
+      try {
       if (targetClientId) {
         await ensureDocumentFolder({
           clientId: targetClientId,
@@ -598,7 +602,11 @@ export default function JudicialExpertisePage() {
 
       // Automatic synchronization with client dossier in 'documents' collection
       const fullExp: JudicialExpertise = { id: savedId!, ...payload, clientId: targetClientId || payload.clientId };
-      await syncExpertiseToDossier(fullExp, targetClientId, false);
+      if (targetClientId) await syncExpertiseToDossier(fullExp, targetClientId, false);
+      } catch (dossierErr) {
+        dossierOk = false;
+        console.warn('Perícia salva, mas o dossiê não foi atualizado:', dossierErr);
+      }
 
       if (user) {
         await logAudit({
@@ -614,7 +622,10 @@ export default function JudicialExpertisePage() {
         });
       }
 
-      toast.success(editingId ? 'Perícia judicial atualizada e sincronizada com o dossiê!' : 'Perícia judicial cadastrada e sincronizada com o dossiê!');
+      const baseMsg = editingId ? 'Perícia judicial atualizada' : 'Perícia judicial cadastrada';
+      if (!targetClientId) toast.success(`${baseMsg}! (sem cliente vinculado — o laudo não foi anexado a nenhum dossiê)`);
+      else if (!dossierOk) toast.warning(`${baseMsg}, mas não foi possível atualizar o dossiê do cliente agora.`);
+      else toast.success(`${baseMsg} e sincronizada com o dossiê!`);
       setIsModalOpen(false);
       setEditingId(null);
     } catch (error) {
@@ -758,22 +769,8 @@ export default function JudicialExpertisePage() {
     <div className="flex flex-col gap-6 p-1 sm:p-2 pb-16">
       {confirmModal}
       {/* HEADER */}
-      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-700 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
-              <Scale className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-display font-bold text-slate-800 dark:text-slate-100 tracking-tight">
-                Perícias Judiciais
-              </h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                Gestão de processos periciais — TJMG / PJe
-              </p>
-            </div>
-          </div>
-        </div>
+      <header className={PAGE_HEADER_CLASS} data-page-header>
+        <PageTitle icon={PageIcon} title="Perícia Judicial" subtitle="Processos periciais, honorários e laudos (TJMG / PJe)" />
 
         <div className="flex items-center gap-3">
           <button

@@ -31,6 +31,8 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import { formatDate, todayLocalDateString } from '../lib/utils';
 import { exportToExcel } from '../lib/exportExcel';
 import { Vehicle, VehicleTrip, FieldVisit } from '../types';
+import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
+import { Car as PageIcon } from 'lucide-react';
 
 export default function Vehicles() {
   const { user } = useAuth();
@@ -329,16 +331,8 @@ export default function Vehicles() {
     <div className="space-y-6">
       
       {/* Upper header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm animate-fadeIn">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-slate-100 text-slate-700 rounded-xl flex items-center justify-center">
-            <Car className="w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-display font-bold text-slate-800">Frota Automotiva</h1>
-            <p className="text-sm text-slate-500">Mapeamento de deslocamentos agronômicos, diário de bordo e controle de viagens corporativas</p>
-          </div>
-        </div>
+      <div className={PAGE_HEADER_CLASS} data-page-header>
+        <PageTitle icon={PageIcon} title="Veículos / Km" subtitle="Frota, diário de bordo, viagens e vencimentos" />
 
         <div className="flex gap-2">
           <button

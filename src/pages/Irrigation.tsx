@@ -29,6 +29,8 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 import ConfirmationModal from '../components/ConfirmationModal';
+import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
+import { Droplet as PageIcon } from 'lucide-react';
 
 interface CalculationStep {
   id: number;
@@ -786,16 +788,8 @@ export default function Irrigation() {
 
   return (
     <div className="flex flex-col gap-6 h-full overflow-y-auto pr-2 pb-10 custom-scrollbar">
-      <header className="flex flex-col lg:flex-row lg:items-center justify-between bg-white/30 p-6 rounded-3xl glass border border-white/40 shadow-sm gap-6">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-emerald-600 text-white rounded-2xl shadow-lg shadow-emerald-200">
-            <Droplet className="w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-display font-bold text-slate-800">Cálculo de Engenharia Hídrica</h1>
-            <p className="text-xs text-slate-500 mt-0.5">Memorial técnico normatizado e bibliográfico</p>
-          </div>
-        </div>
+      <header className={PAGE_HEADER_CLASS} data-page-header>
+        <PageTitle icon={PageIcon} title="Irrigação" subtitle="Projetos e cálculos de engenharia hídrica com memorial técnico" />
 
         <div className="flex items-center gap-4">
            {showPropertySelect && (
