@@ -30,7 +30,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
-import { cn, handleFirestoreError, OperationType, shrinkImage } from '../../lib/utils';
+import { cn, handleFirestoreError, OperationType, shrinkImage, getAuthToken } from '../../lib/utils';
 import { db } from '../../lib/firebase';
 import { collection, onSnapshot, query, where, orderBy, doc, limit, setDoc } from 'firebase/firestore';
 import { UserProfile, AttendanceRecord } from '../../types';
@@ -425,6 +425,47 @@ export default function MainApp() {
     const t = setTimeout(next, 1200);
     return () => { cancelled = true; clearTimeout(t); };
   }, [user?.uid, user?.role, user?.effectiveRole]);
+
+  // Validade da senha (troca obrigatória a cada 30 dias): ao abrir o sistema,
+  // avisa quando faltam 5 dias ou menos. Se já venceu (sessão aberta há dias),
+  // o servidor marca a ficha e recarregamos para cair na tela de troca.
+  useEffect(() => {
+    if (!user?.uid || user.isVirtual) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getAuthToken();
+        if (!token) return;
+        const r = await fetch('/api/password-status', { headers: { Authorization: `Bearer ${token}` } });
+        if (!r.ok || cancelled) return;
+        const s = await r.json();
+        if (s.expired) {
+          // Só uma vez por sessão (evita recarregar sem parar se algo falhar)
+          if (!sessionStorage.getItem('pwd_expired_reload')) {
+            sessionStorage.setItem('pwd_expired_reload', '1');
+            window.location.reload();
+          }
+          return;
+        }
+        const warnKey = `pwd_warned_${user.uid}`;
+        if (s.daysLeft <= (s.warnDays ?? 5) && !sessionStorage.getItem(warnKey)) {
+          sessionStorage.setItem(warnKey, '1');
+          toast.warning(
+            s.daysLeft <= 1 ? 'Sua senha vence amanhã' : `Sua senha vence em ${s.daysLeft} dias`,
+            {
+              id: 'password-expiry-warning',
+              description: 'Troque agora para não ser obrigado a trocar no próximo acesso.',
+              duration: 12000,
+              action: { label: 'Trocar senha', onClick: () => navigate('/profile?trocarSenha=1') },
+            }
+          );
+        }
+      } catch {
+        // sem rede: tenta de novo no próximo acesso
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.uid]);
 
   const [globalSearch, setGlobalSearch] = useState('');
   const { results: searchResults, loading: searchLoading } = useGlobalSearch(globalSearch);

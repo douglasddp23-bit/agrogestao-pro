@@ -16,7 +16,8 @@ import {
   twoFactorStatus,
   twoFactorSetup,
   twoFactorEnable,
-  twoFactorDisable
+  twoFactorDisable,
+  passwordStatus
 } from '../controllers/authController';
 import { backupStatus, runBackupNow } from '../services/backupService';
 
@@ -79,6 +80,8 @@ router.post('/login', loginIpLimiter, loginLimiter, loginUser);
 router.post('/login/verify-2fa', loginIpLimiter, verifyLogin2fa);
 router.post('/update-password', loginIpLimiter, loginLimiter, updateUserPassword);
 router.post('/sync-role-claim', authApiLimiter, syncRoleClaim);
+// Validade da senha de quem está logado (aviso "sua senha vence em X dias")
+router.get('/password-status', authApiLimiter, requireAuth, passwordStatus);
 
 // Verificação em duas etapas da própria conta (tela Meu Perfil — Administrador)
 router.get('/2fa/status', requireAuth, twoFactorStatus);

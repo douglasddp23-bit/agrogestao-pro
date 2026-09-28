@@ -194,7 +194,10 @@ export default function Profile() {
     }
   };
 
-  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  // Abre direto a troca de senha quando vem do aviso "sua senha vence em X dias"
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(
+    () => new URLSearchParams(window.location.search).has('trocarSenha')
+  );
   const handleResetPassword = () => setIsChangePasswordOpen(true);
 
   const [myVacations, setMyVacations] = useState<any[]>([]);

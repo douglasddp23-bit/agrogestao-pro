@@ -75,11 +75,13 @@ service cloud.firestore {
       allow update: if isSignedIn() && strMax(incoming().get('displayName', ''), 120) && (
         isAdmin() ||
         (isManagement() && request.auth.uid != userId
-          && !incoming().diff(existing()).affectedKeys().hasAny(['blocked', 'uid', 'isPrimaryAdmin'])
+          && !incoming().diff(existing()).affectedKeys().hasAny(['blocked', 'uid', 'isPrimaryAdmin', 'mustChangePassword', 'passwordExpired', 'passwordChangedAt', 'twoFactorEnabled'])
           && (!incoming().diff(existing()).affectedKeys().hasAny(['role'])
               || (isHR() && incoming().get('role', '') in ['consultant', 'hr'] && existing().get('role', '') in ['consultant', 'hr', 'staff']))) ||
+        // Os campos de troca obrigatória de senha só o servidor altera: antes o
+        // próprio usuário podia desmarcar "mustChangePassword" e pular a troca.
         (request.auth.uid == userId
-          && !incoming().diff(existing()).affectedKeys().hasAny(['role', 'blocked', 'uid', 'email', 'registrationNumber', 'isPrimaryAdmin', 'createdBy']))
+          && !incoming().diff(existing()).affectedKeys().hasAny(['role', 'blocked', 'uid', 'email', 'registrationNumber', 'isPrimaryAdmin', 'createdBy', 'mustChangePassword', 'passwordExpired', 'passwordChangedAt', 'twoFactorEnabled']))
       );
       allow delete: if isAdmin() && request.auth.uid != userId;
     }

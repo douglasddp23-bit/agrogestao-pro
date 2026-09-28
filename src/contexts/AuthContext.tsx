@@ -616,7 +616,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (currentPassword === undefined) passwordChangeTokenRef.current = null;
 
       // Synchronize local state
-      setUser(prev => prev ? { ...prev, mustChangePassword: false } : null);
+      setUser(prev => prev ? { ...prev, mustChangePassword: false, passwordExpired: false } : null);
       
       // Update virtual session inside localStorage if active
       const storedVirtualSession = localStorage.getItem('virtual_user_session');

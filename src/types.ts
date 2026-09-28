@@ -21,6 +21,7 @@ export interface UserProfile {
   createdAt?: string;
   temporaryPassword?: string;
   mustChangePassword?: boolean;
+  passwordExpired?: boolean; // troca obrigatória porque a senha passou de 30 dias
   professionalCertification?: string;
   emailSignature?: string;
   emailSignaturePhoto?: string;

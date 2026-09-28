@@ -258,6 +258,104 @@ async function setUserCredential(uid: string, passwordHash: string): Promise<boo
   }
 }
 
+// ─── Validade da senha (troca obrigatória periódica) e histórico ─────────────
+// Toda senha vale PASSWORD_MAX_AGE_DAYS dias (padrão 30). Passado o prazo, o
+// próximo login cai na tela obrigatória de troca. As últimas 5 senhas ficam
+// guardadas (só o hash bcrypt, em user_credentials/{uid}.passwordHistory, que
+// o navegador não consegue ler) para impedir que alguém "troque" por uma
+// senha recente.
+export const PASSWORD_MAX_AGE_DAYS = Number(process.env.PASSWORD_MAX_AGE_DAYS) || 30;
+export const PASSWORD_WARN_DAYS = 5;
+const PASSWORD_HISTORY_SIZE = 5;
+const REUSED_PASSWORD_MSG = 'Essa senha já foi usada recentemente, escolha outra.';
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Grava uma senha nova: hash atual + histórico (últimas 5) + data da troca. */
+async function recordNewPassword(uid: string, passwordHash: string): Promise<void> {
+  try {
+    const cred: any = await getCredentialDoc(uid);
+    const previous: string[] = Array.isArray(cred?.passwordHistory)
+      ? cred.passwordHistory
+      : (cred?.passwordHash ? [cred.passwordHash] : []);
+    const passwordHistory = [passwordHash, ...previous.filter(h => h !== passwordHash)].slice(0, PASSWORD_HISTORY_SIZE);
+    await admin.firestore().collection('user_credentials').doc(uid).set({
+      passwordHash,
+      passwordHistory,
+      passwordChangedAt: new Date().toISOString(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  } catch {
+    await setUserCredential(uid, passwordHash); // fallback (só o hash)
+  }
+}
+
+function hashMatches(plain: string, hash: string): boolean {
+  if (!hash) return false;
+  if (hash.length === 64 && !hash.startsWith('$')) {
+    const input = crypto.createHash('sha256').update(plain).digest('hex');
+    return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(input));
+  }
+  try { return bcrypt.compareSync(plain, hash); } catch { return false; }
+}
+
+/** A senha é a atual ou uma das últimas 5? */
+async function isPasswordReused(uid: string, plain: string): Promise<boolean> {
+  const cred: any = await getCredentialDoc(uid);
+  const hashes = new Set<string>([
+    ...(Array.isArray(cred?.passwordHistory) ? cred.passwordHistory : []),
+    ...(cred?.passwordHash ? [cred.passwordHash] : []),
+    ...(virtualUsersMap.get(uid)?.passwordHash ? [virtualUsersMap.get(uid).passwordHash] : []),
+  ]);
+  for (const h of hashes) if (hashMatches(plain, h)) return true;
+  return false;
+}
+
+interface PasswordAge { changedAt: string; expiresAt: string; daysLeft: number; expired: boolean }
+
+/**
+ * Calcula a validade da senha. Conta antiga sem data registrada ganha a data
+ * de hoje (30 dias de prazo a partir de agora — ninguém é bloqueado de
+ * surpresa no dia em que esta regra entra no ar). Se venceu, marca a ficha
+ * para a tela de troca obrigatória aparecer.
+ */
+async function checkPasswordAge(uid: string): Promise<PasswordAge | null> {
+  try {
+    const ref = admin.firestore().collection('user_credentials').doc(uid);
+    const cred: any = await getCredentialDoc(uid);
+    let changedAt: string | undefined = cred?.passwordChangedAt;
+    if (!changedAt) {
+      changedAt = new Date().toISOString();
+      await ref.set({ passwordChangedAt: changedAt }, { merge: true });
+    }
+    const expiresMs = new Date(changedAt).getTime() + PASSWORD_MAX_AGE_DAYS * DAY_MS;
+    const expired = Date.now() >= expiresMs;
+    if (expired) {
+      await admin.firestore().collection('users').doc(uid).set(
+        { mustChangePassword: true, passwordExpired: true }, { merge: true }
+      );
+      const v = virtualUsersMap.get(uid);
+      if (v) { v.mustChangePassword = true; v.passwordExpired = true; }
+    }
+    return {
+      changedAt,
+      expiresAt: new Date(expiresMs).toISOString(),
+      daysLeft: Math.max(0, Math.ceil((expiresMs - Date.now()) / DAY_MS)),
+      expired,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// GET /api/password-status — validade da senha de quem está logado (aviso "vence em X dias")
+export async function passwordStatus(req: Request, res: Response) {
+  const uid = String((req as any).user?.uid || '');
+  if (!uid) return res.status(401).json({ error: 'Sessão expirada.' });
+  const age = await checkPasswordAge(uid);
+  if (!age) return res.status(500).json({ error: 'Não foi possível consultar a validade da senha.' });
+  return res.json({ ...age, maxAgeDays: PASSWORD_MAX_AGE_DAYS, warnDays: PASSWORD_WARN_DAYS });
+}
+
 // As regras do Firestore (firestore.rules → getRole) só enxergam o cargo que
 // está no token de login do Firebase (custom claim "role") — elas NÃO leem o
 // campo "role" do documento users/{uid}. Se o token não tiver o cargo, a
@@ -592,7 +690,7 @@ export async function createUser(req: Request, res: Response) {
     // vai nele — fica só em user_credentials/{uid}, que o cliente não
     // consegue ler (ver firestore.rules).
     const { passwordHash: _omitHash, ...firestoreProfile } = userProfile;
-    await setUserCredential(uid, passwordHash);
+    await recordNewPassword(uid, passwordHash);
 
     try {
       await db.collection('users').doc(uid).set({
@@ -747,7 +845,7 @@ export async function resetPassword(req: Request, res: Response) {
     }
 
     // 2. O hash fica em user_credentials/{uid}, nunca em users/{uid}.
-    await setUserCredential(uid, passwordHash);
+    await recordNewPassword(uid, passwordHash);
 
     try {
       await db.collection('users').doc(uid).update({
@@ -969,6 +1067,9 @@ async function buildLoginSuccess(userData: any) {
   // emitido para usuários virtuais (só em memória, sem conta real).
   let firebaseToken: string | null = null;
   if (!userData.isVirtual) {
+    // Senha vencida (mais de 30 dias): entra direto na tela de troca obrigatória.
+    const age = await checkPasswordAge(userData.uid);
+    if (age?.expired) userData = { ...userData, mustChangePassword: true, passwordExpired: true };
     try {
       try {
         await setRoleClaim(userData.uid, userData.role);
@@ -990,6 +1091,7 @@ async function buildLoginSuccess(userData: any) {
       role: userData.role,
       registrationNumber: userData.registrationNumber,
       mustChangePassword: !!userData.mustChangePassword,
+      passwordExpired: !!userData.passwordExpired,
       blocked: !!userData.blocked,
       department: userData.department || 'Suporte Técnico',
       professionalCertification: userData.professionalCertification || '',
@@ -1394,11 +1496,10 @@ export async function updateUserPassword(req: Request, res: Response) {
   try {
     const db = admin.firestore();
 
-    // A senha temporária (primeiro acesso / redefinida pelo administrador) não
-    // pode ser "trocada" por ela mesma — senão continuaria valendo para sempre.
-    const currentHash = virtualUsersMap.get(uid)?.passwordHash || await getUserCredentialHash(uid);
-    if (currentHash && currentHash.startsWith('$') && bcrypt.compareSync(newPassword, currentHash)) {
-      return res.status(400).json({ error: 'A nova senha precisa ser diferente da senha atual/temporária.' });
+    // Não pode repetir a senha atual (inclusive a temporária do primeiro acesso)
+    // nem nenhuma das últimas 5.
+    if (await isPasswordReused(uid, newPassword)) {
+      return res.status(400).json({ error: REUSED_PASSWORD_MSG });
     }
 
     const passwordHash = bcrypt.hashSync(newPassword, 10);
@@ -1418,11 +1519,13 @@ export async function updateUserPassword(req: Request, res: Response) {
       // ignore
     }
 
-    await setUserCredential(uid, passwordHash);
+    await recordNewPassword(uid, passwordHash);
+    if (virtualUser) virtualUser.passwordExpired = false;
 
     try {
       await db.collection('users').doc(uid).update({
         mustChangePassword: false,
+        passwordExpired: false,
         passwordChangedAt: new Date().toISOString(),
       });
     } catch {

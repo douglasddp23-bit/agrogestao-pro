@@ -45,7 +45,7 @@ export function getPasswordStrength(pass: string): PasswordStrength {
 }
 
 export default function ResetPasswordRequired() {
-  const { updateUserPassword, logout } = useAuth();
+  const { user, updateUserPassword, logout } = useAuth();
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
@@ -92,8 +92,10 @@ export default function ResetPasswordRequired() {
             <ShieldAlert className="w-7 h-7" />
           </div>
           <h1 className="text-xl font-display font-bold text-slate-800">Alteração de Senha Obrigatória</h1>
-          <p className="text-slate-500 text-xs max-w-sm mt-1 leading-relaxed">
-            Como este é seu primeiro acesso ou suas credenciais foram redefinidas administrativamente, você precisa configurar uma nova senha forte para proteger sua conta.
+          <p id="reset-password-reason" className="text-slate-500 text-xs max-w-sm mt-1 leading-relaxed">
+            {user?.passwordExpired
+              ? 'Sua senha venceu. Por segurança, a senha precisa ser trocada a cada 30 dias. Crie uma nova senha (diferente das últimas 5 que você usou) para continuar.'
+              : 'Como este é seu primeiro acesso ou suas credenciais foram redefinidas administrativamente, você precisa configurar uma nova senha forte para proteger sua conta.'}
           </p>
         </div>
 
