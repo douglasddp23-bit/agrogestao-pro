@@ -40,32 +40,76 @@ import { useGlobalSearch } from '../../hooks/useGlobalSearch';
 import NotificationBell from './NotificationBell';
 import QuickTipsTour from '../QuickTipsTour';
 
-// Lazy loaded Pages (25 modules)
-const DashboardPage = React.lazy(() => import('../../pages/Dashboard'));
-const ClientsPage = React.lazy(() => import('../../pages/Clients'));
-const ContractsPage = React.lazy(() => import('../../pages/Contracts'));
-const DocumentsPage = React.lazy(() => import('../../pages/Documents'));
-const FinancialPage = React.lazy(() => import('../../pages/Financial'));
-const HRPage = React.lazy(() => import('../../pages/HR'));
-const InventoryPage = React.lazy(() => import('../../pages/Inventory'));
-const IrrigationPage = React.lazy(() => import('../../pages/Irrigation'));
-const MessagesPage = React.lazy(() => import('../../pages/Messages'));
-const ProfilePage = React.lazy(() => import('../../pages/Profile'));
-const PropertyMapPage = React.lazy(() => import('../../pages/PropertyMap'));
-const RegularizationPage = React.lazy(() => import('../../pages/Regularization'));
-const ReportsPage = React.lazy(() => import('../../pages/Reports'));
-const RuralCreditPage = React.lazy(() => import('../../pages/RuralCredit'));
-const SchedulingPage = React.lazy(() => import('../../pages/Scheduling'));
-const TopographyPage = React.lazy(() => import('../../pages/Topography'));
-const UsersPage = React.lazy(() => import('../../pages/Users'));
-const VehiclesPage = React.lazy(() => import('../../pages/Vehicles'));
-const FieldVisitsPage = React.lazy(() => import('../../pages/FieldVisits'));
-const AnalysisPage = React.lazy(() => import('../../pages/Analysis'));
-const AuditLogsPage = React.lazy(() => import('../../pages/AuditLogs'));
-const JudicialExpertisePage = React.lazy(() => import('../../pages/JudicialExpertise'));
-const RuralPropertyValuationPage = React.lazy(() => import('../../pages/RuralPropertyValuation'));
-const PestDiseasePage = React.lazy(() => import('../../pages/PestDisease'));
-const EnvironmentalXrayPage = React.lazy(() => import('../../pages/EnvironmentalXray'));
+// Cada tela é um arquivo separado, baixado sob demanda (React.lazy). O mesmo
+// "carregador" é usado para pré-baixar as telas em segundo plano (ver
+// prefetchPage), então ao clicar numa aba o código dela já está pronto.
+const PAGE_LOADERS: Record<string, () => Promise<{ default: React.ComponentType<any> }>> = {
+  dashboard: () => import('../../pages/Dashboard'),
+  clients: () => import('../../pages/Clients'),
+  field_visits: () => import('../../pages/FieldVisits'),
+  scheduling: () => import('../../pages/Scheduling'),
+  'judicial-expertise': () => import('../../pages/JudicialExpertise'),
+  analysis: () => import('../../pages/Analysis'),
+  analysis_irrigation: () => import('../../pages/Irrigation'),
+  analysis_documentation: () => import('../../pages/Regularization'),
+  analysis_topography: () => import('../../pages/Topography'),
+  analysis_credit: () => import('../../pages/RuralCredit'),
+  rural_valuation: () => import('../../pages/RuralPropertyValuation'),
+  pest_disease: () => import('../../pages/PestDisease'),
+  environmental_xray: () => import('../../pages/EnvironmentalXray'),
+  financial: () => import('../../pages/Financial'),
+  reports: () => import('../../pages/Reports'),
+  inventory: () => import('../../pages/Inventory'),
+  property_map: () => import('../../pages/PropertyMap'),
+  hr: () => import('../../pages/HR'),
+  vehicles: () => import('../../pages/Vehicles'),
+  users: () => import('../../pages/Users'),
+  contracts: () => import('../../pages/Contracts'),
+  documents: () => import('../../pages/Documents'),
+  audit_logs: () => import('../../pages/AuditLogs'),
+  messages: () => import('../../pages/Messages'),
+  profile: () => import('../../pages/Profile'),
+};
+
+const prefetched = new Set<string>();
+function prefetchPage(pageId: string) {
+  const load = PAGE_LOADERS[pageId];
+  if (!load || prefetched.has(pageId)) return;
+  prefetched.add(pageId);
+  load().catch(() => prefetched.delete(pageId));
+}
+
+const DashboardPage = React.lazy(PAGE_LOADERS.dashboard);
+const ClientsPage = React.lazy(PAGE_LOADERS.clients);
+const ContractsPage = React.lazy(PAGE_LOADERS.contracts);
+const DocumentsPage = React.lazy(PAGE_LOADERS.documents);
+const FinancialPage = React.lazy(PAGE_LOADERS.financial);
+const HRPage = React.lazy(PAGE_LOADERS.hr);
+const InventoryPage = React.lazy(PAGE_LOADERS.inventory);
+const IrrigationPage = React.lazy(PAGE_LOADERS.analysis_irrigation);
+const MessagesPage = React.lazy(PAGE_LOADERS.messages);
+const ProfilePage = React.lazy(PAGE_LOADERS.profile);
+const PropertyMapPage = React.lazy(PAGE_LOADERS.property_map);
+const RegularizationPage = React.lazy(PAGE_LOADERS.analysis_documentation);
+const ReportsPage = React.lazy(PAGE_LOADERS.reports);
+const RuralCreditPage = React.lazy(PAGE_LOADERS.analysis_credit);
+const SchedulingPage = React.lazy(PAGE_LOADERS.scheduling);
+const TopographyPage = React.lazy(PAGE_LOADERS.analysis_topography);
+const UsersPage = React.lazy(PAGE_LOADERS.users);
+const VehiclesPage = React.lazy(PAGE_LOADERS.vehicles);
+const FieldVisitsPage = React.lazy(PAGE_LOADERS.field_visits);
+const AnalysisPage = React.lazy(PAGE_LOADERS.analysis);
+const AuditLogsPage = React.lazy(PAGE_LOADERS.audit_logs);
+const JudicialExpertisePage = React.lazy(PAGE_LOADERS['judicial-expertise']);
+const RuralPropertyValuationPage = React.lazy(PAGE_LOADERS.rural_valuation);
+const PestDiseasePage = React.lazy(PAGE_LOADERS.pest_disease);
+const EnvironmentalXrayPage = React.lazy(PAGE_LOADERS.environmental_xray);
+
+const PageFallback = () => (
+  <div className="flex items-center justify-center h-full">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600" />
+  </div>
+);
 
 const shakeVariants = {
   shake: {
@@ -356,7 +400,31 @@ export default function MainApp() {
     return () => {
       unsubscribeUnreadMessages();
     };
-  }, [user]);
+  }, [user?.uid]);
+
+  // Depois que o sistema abre, baixa em segundo plano (quando o PC está
+  // ocioso) o código de todas as telas que este usuário pode acessar.
+  useEffect(() => {
+    if (!user?.uid) return;
+    const role = (user.effectiveRole ?? user.role) as UserRole;
+    const ids = [
+      ...NAV_ITEMS.filter(item => canAccessNav(role, item.key)).map(item => item.id),
+      'messages',
+      'profile',
+    ];
+    const idle: (cb: () => void) => void = (window as any).requestIdleCallback
+      ? (cb) => (window as any).requestIdleCallback(cb, { timeout: 2000 })
+      : (cb) => setTimeout(cb, 150);
+    let cancelled = false;
+    let i = 0;
+    const next = () => {
+      if (cancelled || i >= ids.length) return;
+      prefetchPage(ids[i++]);
+      idle(next);
+    };
+    const t = setTimeout(next, 1200);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [user?.uid, user?.role, user?.effectiveRole]);
 
   const [globalSearch, setGlobalSearch] = useState('');
   const { results: searchResults, loading: searchLoading } = useGlobalSearch(globalSearch);
@@ -512,9 +580,11 @@ export default function MainApp() {
               <React.Fragment key={group}>
                 <div className="px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">{group}</div>
                 {visibleItems.map(item => (
-                  <button 
+                  <button
                     key={item.id}
                     id={`nav-${item.id}`}
+                    onMouseEnter={() => prefetchPage(item.id)}
+                    onFocus={() => prefetchPage(item.id)}
                     onClick={() => changePage(item.id as Page)}
                     className={cn(
                       "flex items-center justify-between px-4 py-2 rounded-xl font-medium transition-all group",
@@ -694,27 +764,21 @@ export default function MainApp() {
         </header>
 
         <section className="flex-1 overflow-y-auto pr-2">
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-              key={currentPage}
-              initial={{ opacity: 0, y: 12, scale: 0.99 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -12, scale: 0.99 }}
-              transition={{ 
-                duration: 0.28, 
-                ease: [0.16, 1, 0.3, 1] // Custom easeOutExpo-like curves for super-premium feel
-              }}
-              className="h-full"
-            >
-              <React.Suspense fallback={
-                <div className="flex items-center justify-center h-full">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600" />
-                </div>
-              }>
-                {renderPage()}
-              </React.Suspense>
-            </motion.div>
-          </AnimatePresence>
+          {/* Antes: AnimatePresence mode="wait" esperava a aba antiga terminar
+              uma animação de saída (0,28 s) para só então começar a montar a
+              nova — cada clique tinha um atraso fixo. Agora a aba nova entra
+              na hora, com um fade curto. */}
+          <motion.div
+            key={currentPage}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.15, ease: 'easeOut' }}
+            className="h-full"
+          >
+            <React.Suspense fallback={<PageFallback />}>
+              {renderPage()}
+            </React.Suspense>
+          </motion.div>
         </section>
       </main>
 

@@ -22,6 +22,7 @@ import helmet from 'helmet';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import cron from 'node-cron';
+import { runBackupIfDue } from './backend/services/backupService';
 
 // Helper to get Gemini SDK instance dynamically on-demand with correct key
 function getGeminiClient(): GoogleGenAI | null {
@@ -175,7 +176,13 @@ async function startServer() {
         styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
         fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],
         imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
-        connectSrc: ["'self'", 'https:', 'wss:', 'data:', 'blob:'],
+        connectSrc: [
+          "'self'", 'https:', 'wss:', 'data:', 'blob:',
+          // Só nos testes automáticos com o Firebase Emulator (banco de teste local)
+          ...(process.env.FIRESTORE_EMULATOR_HOST || process.env.FIREBASE_AUTH_EMULATOR_HOST
+            ? ['http://127.0.0.1:9099', 'http://127.0.0.1:8080', 'ws://127.0.0.1:8080']
+            : []),
+        ],
         frameSrc: ["'self'", 'blob:', 'https://*.firebaseapp.com', 'https://accounts.google.com', 'https://apis.google.com'],
         workerSrc: ["'self'", 'blob:'],
         childSrc: ["'self'", 'blob:'],
@@ -1180,6 +1187,12 @@ Retorne APENAS um objeto JSON com as seguintes chaves (sem markdown, sem texto e
       console.error('[CRON ERROR] Falha ao executar tarefa diária de prazos:', err);
     }
   });
+
+  // Backup diário do banco (ver backend/services/backupService.ts). O PC pode
+  // estar desligado num horário fixo, então a cada hora conferimos se o último
+  // backup tem mais de 24 h — e também 1 minuto depois de abrir o app.
+  cron.schedule('7 * * * *', () => { runBackupIfDue(); });
+  setTimeout(() => { runBackupIfDue(); }, 60_000);
 
   // Executar imediatamente na inicialização do servidor (com pequeno atraso) para carregar os alertas na hora
   setTimeout(async () => {

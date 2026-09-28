@@ -29,6 +29,9 @@ import { toast } from 'sonner';
 import { doc, getDoc, updateDoc, collection, query, where, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db, storage, hasValidConfig } from '../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
+import TwoFactorCard from '../components/security/TwoFactorCard';
+import BackupCard from '../components/security/BackupCard';
+import ChangePasswordModal from '../components/security/ChangePasswordModal';
 
 const compressImage = (file: File, maxWidth = 180, maxHeight = 180): Promise<string> => {
   return new Promise((resolve) => {
@@ -191,19 +194,8 @@ export default function Profile() {
     }
   };
 
-  const handleResetPassword = async () => {
-    if (!user?.email) return;
-    const toastId = toast.loading('Enviando solicitação...');
-    try {
-      const { sendPasswordResetEmail } = await import('firebase/auth');
-      const { auth } = await import('../lib/firebase');
-      await sendPasswordResetEmail(auth, user.email);
-      toast.success('E-mail de redefinição enviado! Verifique sua caixa de entrada.', { id: toastId });
-    } catch (error: any) {
-      console.error(error);
-      toast.error('Erro ao enviar solicitação: ' + (error.message || 'Tente novamente'), { id: toastId });
-    }
-  };
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const handleResetPassword = () => setIsChangePasswordOpen(true);
 
   const [myVacations, setMyVacations] = useState<any[]>([]);
   const [isVacationModalOpen, setIsVacationModalOpen] = useState(false);
@@ -308,6 +300,7 @@ export default function Profile() {
 
   return (
     <div className="flex flex-col gap-6 h-full overflow-y-auto pr-2 pb-10">
+      {isChangePasswordOpen && <ChangePasswordModal onClose={() => setIsChangePasswordOpen(false)} />}
       <header className="bg-white/30 p-4 rounded-2xl glass border border-white/40">
         <h2 className="text-xl font-display font-bold">Meu Perfil</h2>
       </header>
@@ -475,6 +468,14 @@ export default function Profile() {
                  </div>
               </div>
            </div>
+
+           {/* Segurança e backup — só para a conta de Administrador */}
+           {user?.role === 'admin' && (
+             <>
+               <TwoFactorCard />
+               <BackupCard />
+             </>
+           )}
 
            {/* Notification Settings */}
            <div className="glass-card p-8 text-left">

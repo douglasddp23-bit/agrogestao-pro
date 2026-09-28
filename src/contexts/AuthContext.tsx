@@ -15,14 +15,18 @@ import { UserProfile, UserRole } from '../types';
 import { generateRegistrationNumber, handleFirestoreError, OperationType } from '../lib/utils';
 import { getEffectiveRole, getActiveDelegation } from '../lib/permissions';
 
+export type LoginResult = { mfaRequired: true; ticket: string } | { mfaRequired: false };
+
 interface AuthContextType {
   user: UserProfile | null;
   loading: boolean;
   authError: string | null;
   signIn: () => Promise<void>;
-  signInWithCredentials: (id: string, pass: string) => Promise<void>;
-  updateUserPassword: (newPass: string) => Promise<void>;
-  logout: () => Promise<void>;
+  signInWithCredentials: (id: string, pass: string) => Promise<LoginResult>;
+  verifySecondFactor: (ticket: string, code: string) => Promise<void>;
+  updateUserPassword: (newPass: string, currentPassword?: string) => Promise<void>;
+  renewSession: (firebaseToken?: string | null) => Promise<void>;
+  logout: (reasonMessage?: string) => Promise<void>;
   clearAuthError: () => void;
   isVirtualGoogleChooserOpen: boolean;
   setVirtualGoogleChooserOpen: (open: boolean) => void;
@@ -64,6 +68,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // correta. É exigido para trocar a própria senha (ver updateUserPassword),
   // assim ninguém consegue trocar a senha de outra pessoa só sabendo o uid.
   const passwordChangeTokenRef = useRef<string | null>(null);
+  const renewingUidRef = useRef<string | null>(null);
+
+  // Trocar a senha (ou ativar o 2FA) invalida as sessões abertas no Firebase.
+  // O servidor devolve um token novo e a sessão deste PC é renovada na hora,
+  // sem piscar a tela nem perder o que está aberto.
+  const renewSession = async (firebaseToken?: string | null) => {
+    const current = auth.currentUser;
+    if (!firebaseToken || !current) return;
+    renewingUidRef.current = current.uid;
+    try {
+      await signInWithCustomToken(auth, firebaseToken);
+    } catch (e) {
+      console.warn('[AuthContext] Não foi possível renovar a sessão:', e);
+    } finally {
+      setTimeout(() => { renewingUidRef.current = null; }, 1000);
+    }
+  };
 
   // Helper to record authentication attempts on server-side audit logs
   const triggerLoginLog = async (email: string, status: 'success' | 'failure', errorMsg?: string) => {
@@ -98,8 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const lastActive = parseInt(stored, 10);
         const inactivityPeriod = Date.now() - lastActive;
         if (inactivityPeriod > 3600000) { // 1 hour in ms
-          setAuthError('Sua sessão expirou por inatividade de 1 hora. Realize um novo login por segurança.');
-          logout();
+          logout('Sua sessão expirou por inatividade de 1 hora. Realize um novo login por segurança.');
         }
       }
     };
@@ -206,6 +226,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user?.uid, user?.role]);
 
   useEffect(() => {
+    // Motivo da saída anterior (ex.: sessão expirada), guardado antes de recarregar a janela
+    try {
+      const msg = sessionStorage.getItem('logout_message');
+      if (msg) {
+        setAuthError(msg);
+        sessionStorage.removeItem('logout_message');
+      }
+    } catch { /* sem sessionStorage */ }
+
     // 1. Check for Virtual User session on mount
     const storedVirtualSession = localStorage.getItem('virtual_user_session');
     let hasVirtual = false;
@@ -233,6 +262,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let unsubscribe = () => {};
     try {
       unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+        // Renovação da sessão da MESMA pessoa (ver renewSession): não recarrega
+        // o perfil nem mostra a tela "Carregando" — só troca o token.
+        if (firebaseUser && renewingUidRef.current === firebaseUser.uid) {
+          return;
+        }
         if (firebaseUser) {
           // Clear virtual session if we have a real Firebase Auth user logged in, to prevent collision
           localStorage.removeItem('virtual_user_session');
@@ -431,34 +465,69 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAuthError('Login simulado desativado. Use seu e-mail/matrícula e senha.');
   };
 
-  const signInWithCredentials = async (id: string, pass: string) => {
-    setLoading(true);
-    const trackingEmail = id;
-    const cleanId = id.replace(/[^a-zA-Z0-9]/g, '');
-    const attemptsKey = `login_attempts_${cleanId}`;
-    
-    const storedAttempts = localStorage.getItem(attemptsKey);
-    const failedAttemptsCount = storedAttempts ? parseInt(storedAttempts, 10) : 0;
-
-    if (failedAttemptsCount >= 5) {
-      triggerLoginLog(trackingEmail, 'failure', 'Suspensa por excesso de tentativas (5+)');
-      throw new Error('Conta suspensa por exceder 5 tentativas. Contate o Administrador.');
-    }
-
+  // Chamada ao servidor local com mensagem clara quando ele não responde.
+  const postJson = async (url: string, body: any) => {
+    let response: Response;
     try {
-      // Call our secure unified login API
-      const response = await fetch('/api/login', {
+      response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, password: pass })
+        body: JSON.stringify(body),
       });
+    } catch {
+      throw new Error('Não foi possível falar com o servidor do sistema. Feche e abra o aplicativo e tente de novo.');
+    }
+    let data: any = {};
+    try { data = await response.json(); } catch { /* resposta sem corpo */ }
+    return { response, data };
+  };
+
+  // Entrada no Firebase depois que o servidor conferiu a senha (e o 2FA, se ligado).
+  const finishServerLogin = async (data: any) => {
+    passwordChangeTokenRef.current = data.passwordChangeToken || null;
+    if (data.isVirtual) {
+      // Usuário virtual: sem Firebase Auth, usar sessão local
+      safeLocalStorageSetItem('virtual_user_session', JSON.stringify(data.user));
+      const resolved = await resolveUserWithDelegation(data.user);
+      setUser(resolved);
+      triggerLoginLog(data.user.email, 'success');
+      return;
+    }
+    try {
+      if (!data.firebaseToken) throw new Error('sem token');
+      // Token emitido pelo servidor depois de validar a senha: entra
+      // no Firebase mesmo que a senha de lá esteja dessincronizada,
+      // evitando a sessão virtual (que não consegue gravar nada).
+      await signInWithCustomToken(auth, data.firebaseToken);
+      localStorage.removeItem('virtual_user_session');
+      triggerLoginLog(data.user.email, 'success');
+    } catch {
+      // Sem acesso ao Firebase Auth: sessão virtual (o servidor já validou).
+      safeLocalStorageSetItem('virtual_user_session', JSON.stringify(data.user));
+      const resolved = await resolveUserWithDelegation(data.user);
+      setUser(resolved);
+      triggerLoginLog(data.user.email, 'success');
+    }
+  };
+
+  // Mensagem única para usuário inexistente e senha errada (por segurança,
+  // não revela qual dos dois está errado).
+  const INVALID_LOGIN = 'E-mail ou senha incorretos.';
+
+  const signInWithCredentials = async (id: string, pass: string): Promise<LoginResult> => {
+    // Não liga o "loading" global aqui: ele troca a tela de login pela tela
+    // "Carregando Sistema..." e, se a senha estiver errada, a mensagem de erro
+    // se perdia junto com a tela. A própria tela de login mostra o carregando.
+    try {
+      const { response, data } = await postJson('/api/login', { id, password: pass });
 
       if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || `E-mail, matrícula ou senha inválidos.`);
+        throw new Error(response.status === 401 ? INVALID_LOGIN : (data.error || 'Não foi possível entrar. Tente novamente.'));
       }
 
-      const data = await response.json();
+      if (data.mfaRequired && data.mfaTicket) {
+        return { mfaRequired: true, ticket: data.mfaTicket };
+      }
 
       if (data.useNativeAuth) {
         // Usuários legados sem passwordHash no backend: quem valida a senha
@@ -472,7 +541,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // mal configurado) — nunca quando o motivo é credencial inválida.
         try {
           await signInWithEmailAndPassword(auth, data.email, pass);
-          localStorage.removeItem(attemptsKey);
         } catch (firebaseErr: any) {
           const credentialErrorCodes = [
             'auth/wrong-password',
@@ -484,106 +552,68 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const isCredentialError = credentialErrorCodes.includes(firebaseErr?.code);
           // SEGURANÇA: antes, se o Firebase estivesse inacessível, o app entrava numa
           // "sessão virtual" SEM a senha ter sido conferida por ninguém. Agora falha.
-          if (isCredentialError) throw new Error('E-mail/matrícula ou senha inválidos.');
+          if (isCredentialError) throw new Error(INVALID_LOGIN);
           throw new Error('Não foi possível conectar ao servidor de login. Verifique a internet e tente novamente.');
         }
       } else if (data.success && data.user) {
-        localStorage.removeItem(attemptsKey);
-        passwordChangeTokenRef.current = data.passwordChangeToken || null;
-        if (data.isVirtual) {
-          // Usuário virtual: sem Firebase Auth, usar sessão local
-          safeLocalStorageSetItem('virtual_user_session', JSON.stringify(data.user));
-          const resolved = await resolveUserWithDelegation(data.user);
-          setUser(resolved);
-          triggerLoginLog(data.user.email, 'success');
-        } else {
-          // Usuário real: backend já validou a senha via bcrypt.
-          // Tentar sincronizar com Firebase Auth (best effort).
-          // Se falhar, usar sessão virtual — o backend é a fonte de verdade.
-          try {
-            if (data.firebaseToken) {
-              // Token emitido pelo servidor depois de validar a senha: entra
-              // no Firebase mesmo que a senha de lá esteja dessincronizada,
-              // evitando a sessão virtual (que não consegue gravar nada).
-              await signInWithCustomToken(auth, data.firebaseToken);
-            } else {
-              await signInWithEmailAndPassword(auth, data.user.email, pass);
-            }
-            localStorage.removeItem('virtual_user_session');
-            triggerLoginLog(data.user.email, 'success');
-          } catch (firebaseErr: any) {
-            // Firebase Auth dessincronizado (senha mudou só no Firestore via bcrypt).
-            // Usar sessão virtual como fallback seguro — o backend já validou.
-            safeLocalStorageSetItem('virtual_user_session', JSON.stringify(data.user));
-            const resolved = await resolveUserWithDelegation(data.user);
-            setUser(resolved);
-            setLoading(false);
-            triggerLoginLog(data.user.email, 'success');
-            // Tentar sincronizar senha no Firebase Auth em background (best effort).
-            // O token de uso único é consumido pelo servidor assim que essa
-            // chamada chega nele — independente do resultado. Por isso já
-            // limpamos a referência aqui: se não fizermos isso, uma troca de
-            // senha de verdade logo em seguida (ex: tela de "primeiro
-            // acesso") reenviaria esse mesmo token já gasto e receberia um
-            // "sessão de troca de senha inválida" confuso, obrigando o
-            // usuário a sair e entrar de novo sem entender o motivo.
-            const syncToken = passwordChangeTokenRef.current;
-            passwordChangeTokenRef.current = null;
-            try {
-              fetch('/api/update-password', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  uid: data.user.uid,
-                  newPassword: pass,
-                  passwordChangeToken: syncToken,
-                }),
-              });
-            } catch (_syncErr) {
-              // Falha silenciosa — sessão virtual já está ativa
-            }
-          }
-        }
+        await finishServerLogin(data);
       } else {
         throw new Error('Falha inesperada no servidor de login.');
       }
+      return { mfaRequired: false };
     } catch (error: any) {
-      const newAttempts = failedAttemptsCount + 1;
-      safeLocalStorageSetItem(attemptsKey, newAttempts.toString());
-      
+      // O limite de tentativas agora é só o do servidor (5 erros a cada 15 min).
+      // Antes, havia também um contador guardado neste PC que, depois de 5
+      // erros, bloqueava o login PARA SEMPRE neste computador — só zerava
+      // acertando a senha, o que ficava impossível.
       triggerLoginLog(id, 'failure', error.message || String(error));
-      
-      console.error(error);
-      if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential' || error.message?.includes('incorretos')) {
-        throw new Error(`E-mail, matrícula ou senha inválidos. (${newAttempts}/5 tentativas)`);
-      }
       throw error;
-    } finally {
-      setLoading(false);
     }
   };
 
-  const updateUserPassword = async (newPass: string) => {
+  // 2ª etapa do login (conta com verificação em duas etapas ligada).
+  const verifySecondFactor = async (ticket: string, code: string) => {
+    const { response, data } = await postJson('/api/login/verify-2fa', { ticket, code });
+    if (!response.ok) {
+      const err: any = new Error(data.error || 'Código incorreto.');
+      err.restart = !!data.restart;
+      throw err;
+    }
+    await finishServerLogin(data);
+  };
+
+  // Sem currentPassword: tela obrigatória de primeiro acesso (usa o token do login).
+  // Com currentPassword: troca voluntária em Meu Perfil (o servidor confere a senha atual).
+  const updateUserPassword = async (newPass: string, currentPassword?: string) => {
     if (!user) return;
     try {
-      // Call our robust corporative change password API
+      // Além do token de uso único do login, manda a sessão do Firebase: assim
+      // a troca funciona mesmo se a janela foi recarregada depois do login.
+      let idToken = '';
+      try { idToken = (await auth.currentUser?.getIdToken()) || ''; } catch { /* sem sessão Firebase */ }
       const response = await fetch('/api/update-password', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
         body: JSON.stringify({
           uid: user.uid,
           newPassword: newPass,
-          passwordChangeToken: passwordChangeTokenRef.current,
+          ...(currentPassword !== undefined
+            ? { currentPassword }
+            : { passwordChangeToken: passwordChangeTokenRef.current }),
         })
       });
 
+      const result = await response.json().catch(() => ({}));
       if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || 'Falha ao redefinir senha corporativa.');
+        throw new Error(result.error || 'Falha ao redefinir senha corporativa.');
       }
+      await renewSession(result.firebaseToken);
 
       // Token de uso único já foi consumido pelo servidor — evita reenviar.
-      passwordChangeTokenRef.current = null;
+      if (currentPassword === undefined) passwordChangeTokenRef.current = null;
 
       // Synchronize local state
       setUser(prev => prev ? { ...prev, mustChangePassword: false } : null);
@@ -639,7 +669,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const logout = async () => {
+  const logout = async (reasonMessage?: string) => {
+    // Usado também direto em onClick={logout} — aí o argumento é o evento do clique.
+    const reason = typeof reasonMessage === 'string' ? reasonMessage : null;
     try {
       localStorage.removeItem('virtual_user_session');
       if (user?.uid) {
@@ -665,7 +697,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } finally {
       setUser(null);
-      setAuthError(null);
+      setAuthError(reason);
+      // Recarrega a janela: apaga da memória os dados do Firestore em cache
+      // (ver memoryLocalCache em lib/firebase.ts), para o próximo usuário
+      // deste PC não ver nem por um instante dados da conta anterior.
+      try {
+        if (reason) sessionStorage.setItem('logout_message', reason);
+      } catch { /* sem sessionStorage */ }
+      window.location.replace('/');
     }
   };
 
@@ -688,9 +727,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading, 
       authError, 
       signIn, 
-      signInWithCredentials, 
-      updateUserPassword, 
-      logout, 
+      signInWithCredentials,
+      verifySecondFactor,
+      updateUserPassword,
+      renewSession,
+      logout,
       clearAuthError,
       isVirtualGoogleChooserOpen,
       setVirtualGoogleChooserOpen,

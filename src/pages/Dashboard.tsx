@@ -545,7 +545,9 @@ export default function Dashboard() {
     return () => {
       unsubs.forEach(u => u());
     };
-  }, [user, isManagement]);
+    // Só o uid importa aqui: com [user], qualquer mudança no perfil (ex.: tema
+    // claro/escuro) derrubava e refazia as 14 consultas do painel.
+  }, [user?.uid, isManagement]);
 
   const fetchNews = async () => {
     const CACHE_KEY = 'ag_news_cache';
@@ -631,25 +633,9 @@ export default function Dashboard() {
     }
   };
 
+  // Contado no mesmo listener de "clients" acima (antes havia um segundo
+  // listener idêntico, que baixava a coleção inteira de clientes duas vezes).
   const [mappedPropertiesCount, setMappedPropertiesCount] = useState(0);
-
-  useEffect(() => {
-    if (!user) return;
-    
-    // Count properties across all clients
-    const unsubscribeProps = onSnapshot(collection(db, 'clients'), (snapshot) => {
-      let count = 0;
-      snapshot.docs.forEach(doc => {
-        const client = doc.data() as Client;
-        if (client.properties) count += client.properties.length;
-      });
-      setMappedPropertiesCount(count);
-    }, (error) => {
-      console.error("Dashboard Props Error:", error);
-    });
-
-    return () => unsubscribeProps();
-  }, [user]);
 
   const distributionData = useMemo(() => [
     { name: 'Analises', value: stats.pendingAnalyses || 10, color: '#10b981' },

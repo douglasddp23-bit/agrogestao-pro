@@ -1,7 +1,8 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, connectAuthEmulator } from 'firebase/auth';
 import {
-  initializeFirestore, getFirestore, disableNetwork,
+  initializeFirestore, getFirestore, disableNetwork, connectFirestoreEmulator,
+  memoryLocalCache, memoryLruGarbageCollector,
   collection, addDoc, query, where, getDocs, updateDoc, doc, serverTimestamp
 } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
@@ -131,7 +132,17 @@ try {
   app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
   try {
     dbInstance = initializeFirestore(app, {
-      ignoreUndefinedProperties: true
+      ignoreUndefinedProperties: true,
+      // Cache SÓ na memória (nada gravado no disco — ver comentário abaixo),
+      // mas que guarda os documentos já baixados mesmo depois de sair da aba.
+      // O padrão do SDK descartava tudo ao trocar de aba: voltar para
+      // Clientes/Contratos baixava a lista inteira de novo e a tela ficava
+      // vazia até a internet responder. Agora a lista aparece na hora (do
+      // cache) e é atualizada em seguida pelo servidor. O cache some ao
+      // fechar o app ou sair da conta (a janela é recarregada no logout).
+      localCache: memoryLocalCache({
+        garbageCollector: memoryLruGarbageCollector({ cacheSizeBytes: 60 * 1024 * 1024 }),
+      }),
     }, firebaseConfig.firestoreDatabaseId);
   } catch (dbErr) {
     dbInstance = getFirestore(app, firebaseConfig.firestoreDatabaseId);
@@ -151,6 +162,15 @@ try {
   }
 
   authInstance = getAuth(app);
+
+  // Só para testes automáticos: com VITE_USE_EMULATORS=1 o app fala com o
+  // banco/login de TESTE rodando neste PC (Firebase Emulator), nunca com os
+  // dados reais. Em uso normal essa variável não existe e nada muda.
+  if ((import.meta as any).env.VITE_USE_EMULATORS === '1') {
+    connectAuthEmulator(authInstance, 'http://127.0.0.1:9099', { disableWarnings: true });
+    connectFirestoreEmulator(dbInstance, '127.0.0.1', 8080);
+  }
+
   storageInstance = getStorage(app);
   // Padrão do SDK é tentar por até 10 min antes de desistir: com o Storage indisponível
   // o botão ficava travado em "Armazenando...". Com 30s o usuário recebe o erro a tempo.

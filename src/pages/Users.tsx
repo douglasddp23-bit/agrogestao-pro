@@ -211,16 +211,20 @@ export default function Users() {
       });
 
       let result: any = {};
-      if (response.ok) {
-        const responseText = await response.text();
-        try {
-          result = JSON.parse(responseText);
-        } catch (jsonErr) {}
+      try {
+        result = await response.json();
+      } catch (jsonErr) {}
+      // Antes, se o servidor recusasse, a tela seguia assim mesmo com uma
+      // matrícula/senha inventadas — o colaborador recebia um PDF de acesso
+      // que nunca funcionaria.
+      if (!response.ok || !result.uid || !(result.temporaryPassword || result.tempPassword)) {
+        toast.error(result.error || 'O servidor não conseguiu criar o acesso. Nada foi cadastrado.');
+        return;
       }
 
-      const finalUid = result.uid || `USER-${Date.now()}`;
-      const finalRegNum = result.registrationNumber || `AGR${Date.now().toString().slice(-4)}`;
-      const finalTempPass = result.temporaryPassword || result.tempPassword || 'Definida no primeiro acesso';
+      const finalUid = result.uid;
+      const finalRegNum = result.registrationNumber;
+      const finalTempPass = result.temporaryPassword || result.tempPassword;
 
       const successData = {
         email: result.email || autoEmail,
@@ -370,7 +374,7 @@ export default function Users() {
           
           <div className="my-1.5 p-3 bg-rose-50 rounded-xl border border-rose-100 text-rose-800 font-medium leading-relaxed font-sans text-center">
              <span className="text-[9px] text-rose-500 font-bold block uppercase mb-1">Nova Senha Temporária</span>
-             <span className="font-mono text-lg font-bold block tracking-widest text-rose-700 select-all">{result.tempPassword || 'SENHA123'}</span>
+             <span className="font-mono text-lg font-bold block tracking-widest text-rose-700 select-all">{result.tempPassword || result.temporaryPassword}</span>
           </div>
           <p className="text-[10px] text-slate-500 leading-tight">
              Entregue esta nova senha ao colaborador para que ele possa realizar o acesso inicial e cadastrar a senha definitiva.

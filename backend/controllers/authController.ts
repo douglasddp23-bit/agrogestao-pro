@@ -5,6 +5,14 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { sendAdminCredentialsEmail } from '../services/mailService';
+import QRCode from 'qrcode';
+import {
+  generateTotpSecret,
+  verifyTotp,
+  otpauthUrl,
+  generateRecoveryCodes,
+  hashRecoveryCode,
+} from '../services/totp';
 
 // In-memory Virtual Users Store for Sandbox / Development mode
 const virtualUsersMap = new Map<string, any>();
@@ -187,16 +195,31 @@ async function saveFirestoreUserREST(uid: string, userProfile: any) {
 // user_credentials/{uid}, que as regras do Firestore bloqueiam por completo
 // para o SDK do cliente — só o servidor (Admin SDK, que ignora as regras)
 // consegue ler ou escrever nela.
-async function getUserCredentialHash(uid: string): Promise<string | null> {
+interface TotpConfig {
+  enabled: boolean;
+  secret: string;
+  enabledAt?: string;
+  lastStep?: number | null;
+  recoveryCodes?: string[]; // só os hashes SHA-256
+}
+
+/** Documento user_credentials/{uid} inteiro (hash da senha + configuração do 2FA). */
+async function getCredentialDoc(uid: string): Promise<{ passwordHash?: string; totp?: TotpConfig; totpPending?: { secret: string; createdAt: number } } | null> {
   try {
     const snap = await admin.firestore().collection('user_credentials').doc(uid).get();
-    if (snap.exists) {
-      const hash = snap.data()?.passwordHash;
-      if (hash) return hash;
-    }
+    return snap.exists ? (snap.data() as any) : null;
   } catch {
-    // cai para o fallback REST abaixo
+    return null;
   }
+}
+
+function activeTotp(cred: { totp?: TotpConfig } | null): TotpConfig | null {
+  return cred?.totp?.enabled && cred.totp.secret ? cred.totp : null;
+}
+
+async function getUserCredentialHash(uid: string): Promise<string | null> {
+  const cred = await getCredentialDoc(uid);
+  if (cred?.passwordHash) return cred.passwordHash;
   const config = getFirebaseConfig();
   if (!config) return null;
   try {
@@ -717,7 +740,7 @@ export async function resetPassword(req: Request, res: Response) {
     // 1. Update Password in Firebase Auth via Admin SDK (Attempt)
     try {
       await admin.auth().updateUser(uid, {
-        password: tempPassword
+        password: await firebasePasswordFor(uid, tempPassword)
       });
     } catch {
       // ignore
@@ -748,9 +771,13 @@ export async function resetPassword(req: Request, res: Response) {
       }).catch(() => {});
     }
 
+    // Devolve a senha temporária para a tela mostrar ao administrador (como na
+    // criação de colaborador). Antes só ia por e-mail — e sem SMTP configurado
+    // a tela exibia um "SENHA123" que não era a senha de verdade.
     return res.json({
       success: true,
       message: 'Senha redefinida eletronicamente.',
+      tempPassword,
     });
   } catch (error: any) {
     console.error('Erro ao redefinir senha do colaborador:', error);
@@ -887,6 +914,318 @@ export async function loginLog(req: Request, res: Response) {
   }
 }
 
+// ─── Verificação em duas etapas (2FA) ────────────────────────────────────────
+
+// Ticket entregue depois da senha correta, enquanto falta o código do 2FA.
+const mfaTickets = new Map<string, { uid: string; expires: number; attempts: number }>();
+const MFA_TICKET_TTL = 5 * 60 * 1000;
+const MFA_MAX_ATTEMPTS = 5;
+
+function issueMfaTicket(uid: string): string {
+  const now = Date.now();
+  for (const [t, rec] of mfaTickets) if (rec.expires < now) mfaTickets.delete(t);
+  const ticket = crypto.randomBytes(24).toString('hex');
+  mfaTickets.set(ticket, { uid, expires: now + MFA_TICKET_TTL, attempts: 0 });
+  return ticket;
+}
+
+/** Senha aleatória que ninguém conhece, gravada no Firebase Auth. */
+function unguessablePassword(): string {
+  return crypto.randomBytes(32).toString('base64url') + 'aA1!';
+}
+
+/**
+ * Senha que deve ficar gravada no Firebase Auth. Com o 2FA ligado, o login
+ * passa SEMPRE pelo servidor (que confere senha + código e emite um token).
+ * Se a senha real ficasse também no Firebase Auth, alguém com a senha
+ * poderia entrar direto pelo Firebase e pular o código. Por isso, nesse caso,
+ * o Firebase Auth recebe uma senha aleatória.
+ */
+async function firebasePasswordFor(uid: string, plain: string): Promise<string> {
+  return activeTotp(await getCredentialDoc(uid)) ? unguessablePassword() : plain;
+}
+
+/**
+ * Token para o app renovar a própria sessão depois de uma troca de senha
+ * (a troca invalida as sessões abertas — o que é bom para OUTROS PCs, mas
+ * derrubaria também quem acabou de trocar).
+ */
+async function freshSessionToken(uid: string): Promise<string | null> {
+  try {
+    const snap = await admin.firestore().collection('users').doc(uid).get();
+    const role = snap.data()?.role;
+    return await admin.auth().createCustomToken(uid, role ? { role } : undefined);
+  } catch {
+    return null;
+  }
+}
+
+/** Resposta de login bem-sucedido (depois da senha e, se ligado, do 2FA). */
+async function buildLoginSuccess(userData: any) {
+  // A senha foi validada aqui (bcrypt), mas a senha do Firebase Auth pode
+  // estar dessincronizada — e aí o app caía numa "sessão virtual" sem
+  // login no Firebase, onde toda gravação no Firestore é negada. Com este
+  // token o app entra no Firebase sem depender da senha de lá. Não é
+  // emitido para usuários virtuais (só em memória, sem conta real).
+  let firebaseToken: string | null = null;
+  if (!userData.isVirtual) {
+    try {
+      try {
+        await setRoleClaim(userData.uid, userData.role);
+      } catch {
+        // a claim também é gravada depois, por /api/sync-role-claim
+      }
+      firebaseToken = await admin.auth().createCustomToken(userData.uid, { role: userData.role });
+    } catch (tokenErr: any) {
+      console.warn('[loginUser] Não foi possível emitir token do Firebase (verifique o service-account.json):', tokenErr.message || tokenErr);
+    }
+  }
+
+  return {
+    success: true,
+    user: {
+      uid: userData.uid,
+      displayName: userData.displayName,
+      email: userData.email,
+      role: userData.role,
+      registrationNumber: userData.registrationNumber,
+      mustChangePassword: !!userData.mustChangePassword,
+      blocked: !!userData.blocked,
+      department: userData.department || 'Suporte Técnico',
+      professionalCertification: userData.professionalCertification || '',
+      isVirtual: !!userData.isVirtual
+    },
+    isVirtual: !!userData.isVirtual,
+    // Só quem acabou de provar que sabe a senha recebe este token, e só
+    // ele permite trocar a senha logo em seguida (ver /api/update-password).
+    passwordChangeToken: issuePasswordChangeToken(userData.uid),
+    firebaseToken
+  };
+}
+
+/**
+ * Confere um código do aplicativo autenticador OU um código de recuperação.
+ * Grava o uso (código TOTP não pode ser reaproveitado; código de recuperação
+ * é apagado). Devolve true/false.
+ */
+async function checkSecondFactor(uid: string, totp: TotpConfig, code: string): Promise<boolean> {
+  const ref = admin.firestore().collection('user_credentials').doc(uid);
+  const step = verifyTotp(totp.secret, code, totp.lastStep ?? null);
+  if (step !== null) {
+    await ref.set({ totp: { ...totp, lastStep: step } }, { merge: true });
+    return true;
+  }
+  const hashed = hashRecoveryCode(code);
+  const codes = totp.recoveryCodes || [];
+  if (String(code || '').replace(/[^A-Za-z0-9]/g, '').length === 10 && codes.includes(hashed)) {
+    await ref.set({ totp: { ...totp, recoveryCodes: codes.filter(c => c !== hashed) } }, { merge: true });
+    return true;
+  }
+  return false;
+}
+
+// POST /api/login/verify-2fa { ticket, code } — 2ª etapa do login
+export async function verifyLogin2fa(req: Request, res: Response) {
+  const { ticket, code } = req.body || {};
+  if (typeof ticket !== 'string' || typeof code !== 'string') {
+    return res.status(400).json({ error: 'Informe o código de verificação.' });
+  }
+  const rec = mfaTickets.get(ticket);
+  if (!rec || rec.expires < Date.now()) {
+    mfaTickets.delete(ticket);
+    return res.status(401).json({ error: 'O tempo para digitar o código acabou. Entre com sua senha novamente.', restart: true });
+  }
+  rec.attempts++;
+  if (rec.attempts > MFA_MAX_ATTEMPTS) {
+    mfaTickets.delete(ticket);
+    return res.status(429).json({ error: 'Muitas tentativas com código errado. Entre com sua senha novamente.', restart: true });
+  }
+
+  try {
+    const cred = await getCredentialDoc(rec.uid);
+    const totp = activeTotp(cred);
+    const snap = await admin.firestore().collection('users').doc(rec.uid).get();
+    const userData = snap.exists ? { uid: rec.uid, ...snap.data() } as any : null;
+    if (!userData || userData.blocked) {
+      mfaTickets.delete(ticket);
+      return res.status(403).json({ error: 'Acesso suspenso pelo Administrador.', restart: true });
+    }
+    // 2FA desligado entre a senha e o código (ex.: por outro administrador): segue o login normal.
+    if (totp && !(await checkSecondFactor(rec.uid, totp, code))) {
+      return res.status(401).json({ error: `Código incorreto ou já utilizado (${MFA_MAX_ATTEMPTS - rec.attempts} tentativa(s) restante(s)).` });
+    }
+    mfaTickets.delete(ticket);
+    return res.json(await buildLoginSuccess(userData));
+  } catch (error: any) {
+    console.error('Erro na verificação em duas etapas:', error?.message || error);
+    return res.status(500).json({ error: 'Falha ao verificar o código. Tente novamente.' });
+  }
+}
+
+function require2faOwner(req: Request, res: Response): { uid: string; email: string } | null {
+  const u = (req as any).user || {};
+  if (!u.uid) {
+    res.status(401).json({ error: 'Sessão expirada. Entre novamente.' });
+    return null;
+  }
+  if (u.role !== 'admin') {
+    res.status(403).json({ error: 'A verificação em duas etapas está disponível para contas de Administrador.' });
+    return null;
+  }
+  return { uid: String(u.uid), email: String(u.email || '') };
+}
+
+// GET /api/2fa/status
+export async function twoFactorStatus(req: Request, res: Response) {
+  const owner = require2faOwner(req, res);
+  if (!owner) return;
+  const totp = activeTotp(await getCredentialDoc(owner.uid));
+  return res.json({
+    enabled: !!totp,
+    enabledAt: totp?.enabledAt || null,
+    recoveryCodesLeft: totp?.recoveryCodes?.length ?? 0,
+  });
+}
+
+// POST /api/2fa/setup — gera um segredo novo (ainda não ativo) e o QR Code
+export async function twoFactorSetup(req: Request, res: Response) {
+  const owner = require2faOwner(req, res);
+  if (!owner) return;
+  try {
+    if (activeTotp(await getCredentialDoc(owner.uid))) {
+      return res.status(400).json({ error: 'A verificação em duas etapas já está ativa nesta conta.' });
+    }
+    const secret = generateTotpSecret();
+    await admin.firestore().collection('user_credentials').doc(owner.uid).set(
+      { totpPending: { secret, createdAt: Date.now() } },
+      { merge: true }
+    );
+    const url = otpauthUrl(secret, owner.email || owner.uid);
+    const qrDataUrl = await QRCode.toDataURL(url, { margin: 1, width: 220 });
+    return res.json({ qrDataUrl, secret: secret.replace(/(.{4})/g, '$1 ').trim() });
+  } catch (error: any) {
+    console.error('Erro ao preparar 2FA:', error?.message || error);
+    return res.status(500).json({ error: 'Não foi possível preparar a verificação em duas etapas.' });
+  }
+}
+
+/** Confere a senha atual do usuário (bcrypt no servidor ou, se não houver, pelo Firebase Auth). */
+async function checkCurrentPassword(uid: string, email: string, password: string): Promise<boolean> {
+  const hash = await getUserCredentialHash(uid);
+  if (hash) {
+    if (hash.length === 64 && !hash.startsWith('$')) {
+      const input = crypto.createHash('sha256').update(password).digest('hex');
+      return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(input));
+    }
+    return bcrypt.compareSync(password, hash);
+  }
+  const config = getFirebaseConfig();
+  if (!config || !email) return false;
+  try {
+    const emulator = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+    const base = emulator ? `http://${emulator}/identitytoolkit.googleapis.com` : 'https://identitytoolkit.googleapis.com';
+    const r = await fetch(`${base}/v1/accounts:signInWithPassword?key=${config.apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, returnSecureToken: false }),
+    });
+    if (!r.ok) return false;
+    const data = await r.json();
+    return data.localId === uid;
+  } catch {
+    return false;
+  }
+}
+
+// POST /api/2fa/enable { code, currentPassword }
+export async function twoFactorEnable(req: Request, res: Response) {
+  const owner = require2faOwner(req, res);
+  if (!owner) return;
+  const { code, currentPassword } = req.body || {};
+  if (typeof code !== 'string' || typeof currentPassword !== 'string' || !currentPassword) {
+    return res.status(400).json({ error: 'Informe sua senha atual e o código de 6 dígitos do aplicativo.' });
+  }
+  try {
+    const cred = await getCredentialDoc(owner.uid);
+    const pending = cred?.totpPending;
+    if (!pending?.secret || Date.now() - pending.createdAt > 15 * 60 * 1000) {
+      return res.status(400).json({ error: 'A configuração expirou. Clique em "Ativar" de novo para gerar outro QR Code.' });
+    }
+    if (!(await checkCurrentPassword(owner.uid, owner.email, currentPassword))) {
+      return res.status(401).json({ error: 'Senha atual incorreta.' });
+    }
+    const step = verifyTotp(pending.secret, code);
+    if (step === null) {
+      return res.status(400).json({ error: 'Código incorreto. Confira se o horário do celular está certo e digite o código que aparece agora.' });
+    }
+
+    const recoveryCodes = generateRecoveryCodes();
+    const ref = admin.firestore().collection('user_credentials').doc(owner.uid);
+    await ref.set({
+      // Garante que exista o hash da senha no servidor: com o 2FA ligado o
+      // login só pode acontecer por ele (nunca direto pelo Firebase Auth).
+      passwordHash: cred?.passwordHash || bcrypt.hashSync(currentPassword, 10),
+      totp: {
+        enabled: true,
+        secret: pending.secret,
+        enabledAt: new Date().toISOString(),
+        lastStep: step,
+        recoveryCodes: recoveryCodes.map(hashRecoveryCode),
+      },
+      totpPending: admin.firestore.FieldValue.delete(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    // Tira a senha real do Firebase Auth (ver firebasePasswordFor).
+    try {
+      await admin.auth().updateUser(owner.uid, { password: unguessablePassword() });
+    } catch (e: any) {
+      console.warn('[2FA] Não foi possível trocar a senha interna do Firebase Auth:', e?.message || e);
+    }
+    try {
+      await admin.firestore().collection('users').doc(owner.uid).update({ twoFactorEnabled: true });
+    } catch {
+      // só informativo (a regra de verdade está em user_credentials)
+    }
+    // Trocar a senha interna do Firebase derruba todas as sessões abertas
+    // (inclusive a desta tela). Mandamos uma sessão nova para este PC.
+    return res.json({ success: true, recoveryCodes, firebaseToken: await freshSessionToken(owner.uid) });
+  } catch (error: any) {
+    console.error('Erro ao ativar 2FA:', error?.message || error);
+    return res.status(500).json({ error: 'Não foi possível ativar a verificação em duas etapas.' });
+  }
+}
+
+// POST /api/2fa/disable { code } — exige um código válido (ou de recuperação)
+export async function twoFactorDisable(req: Request, res: Response) {
+  const owner = require2faOwner(req, res);
+  if (!owner) return;
+  const { code } = req.body || {};
+  if (typeof code !== 'string' || !code.trim()) {
+    return res.status(400).json({ error: 'Digite o código do aplicativo autenticador para desativar.' });
+  }
+  try {
+    const totp = activeTotp(await getCredentialDoc(owner.uid));
+    if (!totp) return res.json({ success: true });
+    if (!(await checkSecondFactor(owner.uid, totp, code))) {
+      return res.status(401).json({ error: 'Código incorreto.' });
+    }
+    await admin.firestore().collection('user_credentials').doc(owner.uid).set(
+      { totp: admin.firestore.FieldValue.delete() },
+      { merge: true }
+    );
+    try {
+      await admin.firestore().collection('users').doc(owner.uid).update({ twoFactorEnabled: false });
+    } catch {
+      // só informativo
+    }
+    return res.json({ success: true });
+  } catch (error: any) {
+    console.error('Erro ao desativar 2FA:', error?.message || error);
+    return res.status(500).json({ error: 'Não foi possível desativar a verificação em duas etapas.' });
+  }
+}
+
 export async function loginUser(req: Request, res: Response) {
   const { id, password } = req.body;
   if (!id || !password) {
@@ -936,7 +1275,7 @@ export async function loginUser(req: Request, res: Response) {
 
     // Mensagem única para "usuário não existe" e "senha errada": não revela
     // a quem tenta adivinhar quais e-mails/matrículas estão cadastrados.
-    const INVALID_CREDENTIALS = 'E-mail/matrícula ou senha inválidos.';
+    const INVALID_CREDENTIALS = 'E-mail ou senha incorretos.';
 
     // SEGURANÇA: removido o antigo "sandbox" que, fora do modo produção, criava
     // na hora um usuário virtual (inclusive ADMINISTRADOR, se o e-mail tivesse
@@ -970,45 +1309,13 @@ export async function loginUser(req: Request, res: Response) {
       }
 
       if (isMatch) {
-        // A senha foi validada aqui (bcrypt), mas a senha do Firebase Auth pode
-        // estar dessincronizada — e aí o app caía numa "sessão virtual" sem
-        // login no Firebase, onde toda gravação no Firestore é negada. Com este
-        // token o app entra no Firebase sem depender da senha de lá. Não é
-        // emitido para usuários virtuais (só em memória, sem conta real).
-        let firebaseToken: string | null = null;
-        if (!userData.isVirtual) {
-          try {
-            try {
-              await setRoleClaim(userData.uid, userData.role);
-            } catch {
-              // a claim também é gravada depois, por /api/sync-role-claim
-            }
-            firebaseToken = await admin.auth().createCustomToken(userData.uid, { role: userData.role });
-          } catch (tokenErr: any) {
-            console.warn('[loginUser] Não foi possível emitir token do Firebase (verifique o service-account.json):', tokenErr.message || tokenErr);
-          }
+        // Verificação em duas etapas ligada: a senha certa ainda NÃO libera o
+        // acesso — devolve só um "ticket" de 5 minutos que precisa ser trocado
+        // pelo código do aplicativo autenticador em /api/login/verify-2fa.
+        if (!userData.isVirtual && activeTotp(await getCredentialDoc(userData.uid))) {
+          return res.json({ success: false, mfaRequired: true, mfaTicket: issueMfaTicket(userData.uid) });
         }
-
-        return res.json({
-          success: true,
-          user: {
-            uid: userData.uid,
-            displayName: userData.displayName,
-            email: userData.email,
-            role: userData.role,
-            registrationNumber: userData.registrationNumber,
-            mustChangePassword: !!userData.mustChangePassword,
-            blocked: !!userData.blocked,
-            department: userData.department || 'Suporte Técnico',
-            professionalCertification: userData.professionalCertification || '',
-            isVirtual: !!userData.isVirtual
-          },
-          isVirtual: !!userData.isVirtual,
-          // Só quem acabou de provar que sabe a senha recebe este token, e só
-          // ele permite trocar a senha logo em seguida (ver /api/update-password).
-          passwordChangeToken: issuePasswordChangeToken(userData.uid),
-          firebaseToken
-        });
+        return res.json(await buildLoginSuccess(userData));
       } else {
         return res.status(401).json({ error: INVALID_CREDENTIALS });
       }
@@ -1040,10 +1347,45 @@ export async function updateUserPassword(req: Request, res: Response) {
     return res.status(400).json({ error: 'A senha deve ter pelo menos 8 caracteres, com letras e números.' });
   }
 
-  // Sem este token (emitido só no momento em que o próprio usuário acabou de
-  // fazer login com a senha correta), qualquer pessoa que soubesse um uid
-  // conseguiria trocar a senha de qualquer conta sem se autenticar. Bloqueado.
-  if (!passwordChangeToken || !consumePasswordChangeToken(uid, passwordChangeToken)) {
+  // Quem pode trocar: (a) quem acabou de fazer login com a senha correta
+  // (token de uso único), ou (b) o próprio dono da conta com sessão válida do
+  // Firebase (token no cabeçalho Authorization com o MESMO uid). Sem uma das
+  // duas, qualquer pessoa que soubesse um uid trocaria a senha de outra conta.
+  // O (b) evita o erro "sessão inválida" na tela de primeiro acesso quando o
+  // usuário recarrega a janela ou o servidor foi reiniciado depois do login.
+  let authorized = !!passwordChangeToken && consumePasswordChangeToken(uid, passwordChangeToken);
+  let sessionEmail = '';
+  if (!authorized) {
+    const header = req.headers.authorization || '';
+    const idToken = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
+    if (idToken) {
+      try {
+        const decoded = await admin.auth().verifyIdToken(idToken, true);
+        authorized = decoded.uid === uid;
+        sessionEmail = decoded.email || '';
+      } catch {
+        authorized = false;
+      }
+    }
+    // Troca "normal" (Meu Perfil → Alterar Minha Senha) com sessão aberta:
+    // exige a senha atual, para que alguém que encontre o PC destravado não
+    // consiga trocar a senha. No primeiro acesso (senha temporária) não precisa.
+    if (authorized) {
+      let mustChange = !!virtualUsersMap.get(uid)?.mustChangePassword;
+      try {
+        const snap = await admin.firestore().collection('users').doc(uid).get();
+        mustChange = mustChange || !!snap.data()?.mustChangePassword;
+      } catch { /* sem leitura: exige a senha atual */ }
+      if (!mustChange) {
+        const { currentPassword } = req.body;
+        if (typeof currentPassword !== 'string' || !currentPassword ||
+            !(await checkCurrentPassword(uid, sessionEmail, currentPassword))) {
+          return res.status(401).json({ error: 'Senha atual incorreta.' });
+        }
+      }
+    }
+  }
+  if (!authorized) {
     return res.status(401).json({
       error: 'Sessão de troca de senha inválida ou expirada. Faça login novamente e tente outra vez.'
     });
@@ -1051,6 +1393,14 @@ export async function updateUserPassword(req: Request, res: Response) {
 
   try {
     const db = admin.firestore();
+
+    // A senha temporária (primeiro acesso / redefinida pelo administrador) não
+    // pode ser "trocada" por ela mesma — senão continuaria valendo para sempre.
+    const currentHash = virtualUsersMap.get(uid)?.passwordHash || await getUserCredentialHash(uid);
+    if (currentHash && currentHash.startsWith('$') && bcrypt.compareSync(newPassword, currentHash)) {
+      return res.status(400).json({ error: 'A nova senha precisa ser diferente da senha atual/temporária.' });
+    }
+
     const passwordHash = bcrypt.hashSync(newPassword, 10);
 
     const virtualUser = virtualUsersMap.get(uid);
@@ -1062,7 +1412,7 @@ export async function updateUserPassword(req: Request, res: Response) {
 
     try {
       await admin.auth().updateUser(uid, {
-        password: newPassword
+        password: await firebasePasswordFor(uid, newPassword)
       });
     } catch {
       // ignore
@@ -1072,14 +1422,21 @@ export async function updateUserPassword(req: Request, res: Response) {
 
     try {
       await db.collection('users').doc(uid).update({
-        mustChangePassword: false
+        mustChangePassword: false,
+        passwordChangedAt: new Date().toISOString(),
       });
     } catch {
       // Documento pode ainda não existir com esse campo — não é crítico,
       // o hash em user_credentials já foi atualizado acima.
     }
 
-    return res.json({ success: true, message: 'Senha atualizada corporativamente com sucesso!' });
+    return res.json({
+      success: true,
+      message: 'Senha atualizada corporativamente com sucesso!',
+      // (virtualUsersMap também guarda usuários reais recém-criados — o que
+      // importa é a flag isVirtual)
+      firebaseToken: virtualUser?.isVirtual ? null : await freshSessionToken(uid),
+    });
   } catch (error: any) {
     console.error('Erro na alteração de senha:', error);
     return res.status(500).json({ error: error.message || 'Falha ao processar redefinição de senha' });
