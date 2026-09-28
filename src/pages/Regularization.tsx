@@ -361,7 +361,7 @@ export default function Regularization() {
               className="pl-10 pr-4 py-2 glass-input text-xs w-64 bg-white/50"
             />
           </div>
-          {!((user?.effectiveRole ?? user?.role) === 'staff' || (user?.effectiveRole ?? user?.role) === 'consultant') && (
+          {/* Todos os cargos abrem protocolos (decisão do dono, 28/09/2026) */ true && (
             <button 
               onClick={() => setIsModalOpen(true)}
               className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 text-white rounded-2xl text-xs font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200"
@@ -478,7 +478,7 @@ export default function Regularization() {
                       >
                          <Download className="w-4 h-4" />
                       </button>
-                      {!((user?.effectiveRole ?? user?.role) === 'staff' || (user?.effectiveRole ?? user?.role) === 'consultant') && (
+                      {/* Excluir: só Administrador, igual à regra do banco */ (user?.effectiveRole ?? user?.role) === 'admin' && (
                         <button 
                           onClick={() => setIsDeleteModalOpen(service.id)}
                           className="p-2 bg-rose-50 text-rose-400 rounded-xl hover:bg-rose-600 hover:text-white transition-all shadow-sm"
