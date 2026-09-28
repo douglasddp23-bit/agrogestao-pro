@@ -156,7 +156,8 @@ if (admin.apps.length === 0) {
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  // O app de computador (Electron) já define AGROGESTAO_PORT; padrão 3000.
+  const PORT = Number(process.env.AGROGESTAO_PORT) || 3000;
 
   // Set trust proxy to true (or 1) to accurately identify client IP behind reverse proxy
   app.set('trust proxy', 1);
