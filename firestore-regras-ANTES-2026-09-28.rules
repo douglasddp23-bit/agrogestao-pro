@@ -363,33 +363,24 @@ service cloud.firestore {
       allow delete: if isManagement() && isValidId(visitId);
     }
 
-    // --- Financeiro (só Gerente e Administrador lêem e editam) ---
+    // --- Financeiro (só gestão lê e grava) ---
     match /financials/{id} {
-      // Antes qualquer consultor lia todo o faturamento da empresa; até 28/09/2026
-      // o RH também lia e gravava (sem ter a tela de Financeiro).
-      allow list: if isManager();
-      allow get: if isManager() && isValidId(id);
-      // Qualquer colaborador pode CRIAR a cobrança pendente gerada automaticamente
-      // ao concluir um serviço (ex.: análise técnica) — mas não consegue lê-la.
-      allow create: if isValidId(id) && incoming().value is number && incoming().value >= 0 && (
-        isManager() || (
-          isStaff() && incoming().createdBy == request.auth.uid
-          && incoming().status == 'pending'
-          && incoming().linkedServiceId is string
-        )
-      );
-      allow update: if isManager() && isValidId(id);
+      // Antes qualquer consultor lia todo o faturamento da empresa.
+      allow list: if isManagement();
+      allow get: if isManagement() && isValidId(id);
+      allow create: if isManagement() && isValidId(id) && incoming().value is number && incoming().value >= 0;
+      allow update: if isManagement() && isValidId(id);
       allow delete: if isAdmin() && isValidId(id);
     }
 
-    // --- Contratos (só Gerente e Administrador; consultor/RH não vêem valores) ---
+    // --- Contratos ---
     match /contracts/{id} {
-      allow list: if isManager();
+      allow list: if isStaff();
       // Leitura pública por ID só de contrato aprovado/ativo: é o link de assinatura
       // remota (/assinar/ID). O ID é aleatório e longo (não dá para adivinhar).
-      allow get: if isValidId(id) && (isManager() || existing().status in ['approved', 'active', 'ativo', 'completed', 'concluido']);
-      allow create: if isManager() && isValidId(id);
-      allow update: if isValidId(id) && (isManager() || (
+      allow get: if isValidId(id) && (isStaff() || existing().status in ['approved', 'active', 'ativo', 'completed', 'concluido']);
+      allow create: if isManagement() && isValidId(id);
+      allow update: if isValidId(id) && (isManagement() || (
         existing().status == 'approved' &&
         incoming().status == 'active' &&
         incoming().signatureBase64 is string && incoming().signatureBase64.size() <= 500000 &&
@@ -397,8 +388,8 @@ service cloud.firestore {
         incoming().signedAt is string &&
         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'signatureBase64', 'signedByName', 'signedAt', 'updatedAt'])
       ));
-      // Antes qualquer consultor (e depois o RH) podia excluir contratos.
-      allow delete: if isManager() && isValidId(id);
+      // Antes qualquer consultor podia excluir contratos.
+      allow delete: if isManagement() && isValidId(id);
     }
 
     // --- Pragas e doenças ---

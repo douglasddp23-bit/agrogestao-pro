@@ -79,6 +79,8 @@ export default function Dashboard() {
   
   const activeRoleDash = user?.effectiveRole ?? user?.role;
   const isManagement = activeRoleDash === 'admin' || activeRoleDash === 'hr' || activeRoleDash === 'manager';
+  // Financeiro e contratos: só Gerente/Administrador (firestore.rules)
+  const canSeeFinance = activeRoleDash === 'admin' || activeRoleDash === 'manager';
 
   const [stats, setStats] = useState({
     pendingAnalyses: 0,
@@ -331,9 +333,9 @@ export default function Dashboard() {
       handleFirestoreError(error, OperationType.LIST, 'field_visits');
     }));
 
-    // 2. Financials (só gestão lê o financeiro — ver firestore.rules)
+    // 2. Financials (só Gerente/Admin lê o financeiro — ver firestore.rules)
     const qFinancials = query(collection(db, 'financials'), orderBy('createdAt', 'desc'), limit(100));
-    if (isManagement) unsubs.push(onSnapshot(qFinancials, (snap) => {
+    if (canSeeFinance) unsubs.push(onSnapshot(qFinancials, (snap) => {
       const today = todayLocalDateString();
       const all = snap.docs.map(d => ({ id: d.id, ...d.data() } as FinancialRecord));
       setFinancialRecords(all);
@@ -358,7 +360,7 @@ export default function Dashboard() {
 
     // 4. Contracts
     const qContracts = query(collection(db, 'contracts'), orderBy('createdAt', 'desc'), limit(100));
-    unsubs.push(onSnapshot(qContracts, (snap) => {
+    if (canSeeFinance) unsubs.push(onSnapshot(qContracts, (snap) => {
       const today = todayLocalDateString();
       const in30 = new Date(Date.now() + 30 * 864e5).toISOString().split('T')[0];
       const all = snap.docs.map(d => ({ id: d.id, ...d.data() } as Contract));
@@ -547,7 +549,7 @@ export default function Dashboard() {
     };
     // Só o uid importa aqui: com [user], qualquer mudança no perfil (ex.: tema
     // claro/escuro) derrubava e refazia as 14 consultas do painel.
-  }, [user?.uid, isManagement]);
+  }, [user?.uid, isManagement, canSeeFinance]);
 
   const fetchNews = async () => {
     const CACHE_KEY = 'ag_news_cache';

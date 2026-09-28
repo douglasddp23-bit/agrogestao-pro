@@ -184,7 +184,8 @@ export function validateEmail(email: string) {
 }
 
 export function formatPhone(value: string) {
-  const numbers = value.replace(/\D/g, '');
+  // Telefone é opcional no cadastro: sem ele a ficha do cliente quebrava.
+  const numbers = (value || '').replace(/\D/g, '');
   if (numbers.length <= 10) {
     return numbers.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3').substring(0, 14);
   } else {
@@ -242,7 +243,7 @@ export function shrinkImage(dataUrl: string, maxSize: number): Promise<string> {
 }
 
 export function formatCPF(value: string) {
-  const numbers = value.replace(/\D/g, '').substring(0, 11);
+  const numbers = (value || '').replace(/\D/g, '').substring(0, 11);
   if (numbers.length <= 3) return numbers;
   if (numbers.length <= 6) return `${numbers.slice(0, 3)}.${numbers.slice(3)}`;
   if (numbers.length <= 9) return `${numbers.slice(0, 3)}.${numbers.slice(3, 6)}.${numbers.slice(6)}`;

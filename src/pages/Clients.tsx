@@ -915,18 +915,22 @@ export default function Clients() {
     }, (error) => console.error(error));
     unsubscribes.push(unsubVisits);
 
-    // 2. Contratos
-    const unsubConts = onSnapshot(query(collection(db, 'contracts')), (snap) => {
-      dbConts = snap.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .filter((c: any) => c.clientId === selectedClientDetail.id);
-      publishMergedEvents();
-    }, (error) => console.error(error));
-    unsubscribes.push(unsubConts);
-
-    // 5. Financeiro — só a gestão lê valores (firestore.rules); consultor não vê o bloco.
+    // Contratos e financeiro: só Gerente/Administrador lêem (firestore.rules);
+    // para os demais cargos esses blocos simplesmente não aparecem na ficha.
     const activeRoleForTimeline = (user?.effectiveRole ?? user?.role) as string;
-    if (['admin', 'manager', 'hr'].includes(activeRoleForTimeline)) {
+    const canSeeFinance = ['admin', 'manager'].includes(activeRoleForTimeline);
+
+    // 2. Contratos
+    if (canSeeFinance) {
+      const unsubConts = onSnapshot(query(collection(db, 'contracts'), where('clientId', '==', selectedClientDetail.id)), (snap) => {
+        dbConts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        publishMergedEvents();
+      }, (error) => console.error(error));
+      unsubscribes.push(unsubConts);
+    }
+
+    // 5. Financeiro
+    if (canSeeFinance) {
       const unsubFins = onSnapshot(query(collection(db, 'financials'), where('clientId', '==', selectedClientDetail.id)), (snap) => {
         dbFins = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         publishMergedEvents();
@@ -1545,13 +1549,13 @@ export default function Clients() {
                       <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
                         <p className="text-[10px] font-black uppercase text-slate-400 mb-1">Total de Endereços</p>
                         <p className="text-xl font-display font-bold text-slate-800">
-                          {selectedClientDetail.properties.length + 1} <span className="text-xs font-medium text-slate-400">Locais</span>
+                          {(selectedClientDetail.properties || []).length + 1} <span className="text-xs font-medium text-slate-400">Locais</span>
                         </p>
                       </div>
                       <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
                         <p className="text-[10px] font-black uppercase text-slate-400 mb-1">Propriedades</p>
                         <p className="text-xl font-display font-bold text-slate-800">
-                          {selectedClientDetail.properties.length} <span className="text-xs font-medium text-slate-400">Unid.</span>
+                          {(selectedClientDetail.properties || []).length} <span className="text-xs font-medium text-slate-400">Unid.</span>
                         </p>
                       </div>
                     </div>
@@ -1624,9 +1628,16 @@ export default function Clients() {
                            <MapPin className="w-4 h-4 text-emerald-600" /> Endereço Principal
                         </h4>
                         <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                          <p className="text-sm font-bold text-slate-700">{selectedClientDetail.address.street}, {selectedClientDetail.address.number}</p>
-                          <p className="text-xs text-slate-500">{selectedClientDetail.address.neighborhood} — {selectedClientDetail.address.city}/{selectedClientDetail.address.state}</p>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase mt-2">CEP: {selectedClientDetail.address.cep}</p>
+                          {/* Endereço é opcional (cadastro simplificado): sem ele a ficha quebrava */}
+                          {selectedClientDetail.address ? (
+                            <>
+                              <p className="text-sm font-bold text-slate-700">{selectedClientDetail.address.street}, {selectedClientDetail.address.number}</p>
+                              <p className="text-xs text-slate-500">{selectedClientDetail.address.neighborhood} — {selectedClientDetail.address.city}/{selectedClientDetail.address.state}</p>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase mt-2">CEP: {selectedClientDetail.address.cep}</p>
+                            </>
+                          ) : (
+                            <p className="text-sm text-slate-400">Endereço não informado</p>
+                          )}
                         </div>
                       </section>
 
@@ -1635,7 +1646,7 @@ export default function Clients() {
                            <LandPlot className="w-4 h-4 text-emerald-600" /> Detalhes das Propriedades
                         </h4>
                         <div className="space-y-3">
-                          {selectedClientDetail.properties.map((prop, idx) => (
+                          {(selectedClientDetail.properties || []).map((prop, idx) => (
                             <div key={idx} className="flex justify-between items-center p-4 bg-white border border-slate-100 rounded-2xl hover:border-emerald-200 transition-all">
                               <div>
                                 <p className="text-sm font-bold text-slate-800">{prop.name}</p>
