@@ -1,0 +1,559 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null && request.auth.uid != null;
+    }
+
+    function isVerified() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    
+    function getAuthEmail() {
+      return (request.auth != null && request.auth.token != null && request.auth.token.email != null)
+        ? request.auth.token.email.toLowerCase()
+        : '';
+    }
+
+    function getRole() {
+      return (request.auth != null
+        && request.auth.token != null
+        && 'role' in request.auth.token)
+        ? request.auth.token.role
+        : 'none';
+    }
+
+    function getUser(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data;
+    }
+    
+    function hasUserDoc() {
+      return request.auth != null && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    // Always true in sandbox to support virtual session fallback operations
+    function isNotBlocked() { 
+      return true;
+    }
+    
+    function isPrimaryAdmin() {
+      return request.auth != null && request.auth.token != null && request.auth.token.isPrimaryAdmin == true;
+    }
+    
+    function isAdmin() {
+      return getRole() == 'admin' || getAuthEmail() == 'admin@agrogestao.com.br' || isPrimaryAdmin();
+    }
+    
+    function isHR() {
+      return getRole() in ['admin', 'hr'] || getAuthEmail() == 'admin@agrogestao.com.br' || isPrimaryAdmin();
+    }
+    
+    function isManager() {
+      return getRole() in ['admin', 'manager'] || getAuthEmail() == 'admin@agrogestao.com.br' || isPrimaryAdmin();
+    }
+    
+    function isManagement() {
+      return getRole() in ['admin', 'hr', 'manager'] || getAuthEmail() == 'admin@agrogestao.com.br' || isPrimaryAdmin();
+    }
+    
+    function isStaff() {
+      return getRole() in ['admin', 'consultant', 'staff', 'hr', 'manager'] || getAuthEmail() == 'admin@agrogestao.com.br' || isPrimaryAdmin();
+    }
+
+    // --- User Credentials (hash de senha) ---
+    // Coleção separada só para o hash da senha (bcrypt). Nunca é lida ou
+    // escrita pelo app do navegador/desktop — só pelo servidor, que usa o
+    // Admin SDK e ignora estas regras. O "allow read, write: if false" aqui
+    // é redundante com o bloqueio global do topo do arquivo, mas deixamos
+    // explícito para documentar a intenção.
+    match /user_credentials/{userId} {
+      allow read, write: if false;
+    }
+
+    // --- Users ---
+    match /users/{userId} {
+      // O documento de usuário (nome, cargo, e-mail, etc.) continua legível
+      // por qualquer colega logado — é usado no chat, na agenda, na lista de
+      // técnicos etc. O que NÃO fica mais aqui é o hash da senha: isso vive
+      // em user_credentials/{uid} (acima), que ninguém consegue ler pelo
+      // aplicativo.
+      allow read: if isSignedIn();
+      // O servidor copia o "role" deste documento para o token de login
+      // (/api/sync-role-claim), então ninguém pode escolher o próprio cargo:
+      // no primeiro acesso só entra como consultor (ou com o cargo que o
+      // token já tem), e depois não pode alterar role/blocked de si mesmo.
+      // [PROPOSTA 3] RH/Gerente não pode mais dar cargo de Gerente/Administrador (nem a si mesmo):
+      // só o Administrador define esses cargos. Mesma regra da tela Usuários (canCreateRole).
+      allow create: if isSignedIn() && (
+        isAdmin() ||
+        (isManagement() && incoming().get('role', 'consultant') in ['consultant', 'hr']) ||
+        (request.auth.uid == userId && incoming().get('role', 'consultant') in ['consultant', getRole()])
+      );
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        (isManagement() && request.auth.uid != userId &&
+          (!incoming().diff(existing()).affectedKeys().hasAny(['role']) || incoming().get('role', '') in ['consultant', 'hr'])) ||
+        (request.auth.uid == userId && !incoming().diff(existing()).affectedKeys().hasAny(['role', 'blocked']))
+      );
+      allow delete: if isSignedIn() && isManagement();
+    }
+
+    // --- Login Logs ---
+    match /login_logs/{logId} {
+      allow create: if isSignedIn() && (
+        incoming().email == getAuthEmail() || 
+        incoming().get('uid', '') == request.auth.uid
+      );
+      allow list: if isAdmin();
+      allow get: if isAdmin() && isValidId(logId);
+    }
+
+    // --- Clients ---
+    match /clients/{clientId} {
+      allow list: if isStaff();
+      allow get: if isStaff() && isValidId(clientId);
+      allow create: if isStaff() && isValidId(clientId) && isValidClient(incoming());
+      // Antes só o criador original do cadastro (ou admin) podia editar —
+      // mas a tela de Clientes libera o botão de editar pra qualquer
+      // Gerente/Admin (PERMISSIONS.canEditClient), então um gerente que
+      // tentasse editar um cliente cadastrado por outra pessoa (inclusive
+      // registros antigos sem "createdBy") tomava "missing or insufficient
+      // permissions" do Firestore mesmo tendo permissão na interface.
+      allow update: if isStaff() && isValidId(clientId) && isManager() && isValidClientUpdate(incoming());
+      allow delete: if isAdmin() && isValidId(clientId);
+    }
+
+    function isValidClient(data) {
+      return data.keys().hasAll(['name', 'cpf', 'clientType', 'createdBy'])
+             && data.name is string && data.name.size() < 200
+             && data.cpf is string && data.cpf.size() <= 20
+             && isNotBlocked() && data.createdBy == request.auth.uid;
+    }
+
+    // Mesma validação de forma que isValidClient, mas sem exigir que quem
+    // está editando seja o mesmo uid que criou o registro — o "createdBy"
+    // de um cliente é permanente (quem cadastrou originalmente), não quem
+    // está editando agora; edição já é controlada por isManager() acima.
+    function isValidClientUpdate(data) {
+      // "createdBy" não é exigido aqui (diferente de isValidClient) — um
+      // cliente cadastrado antes desse campo existir não deveria ficar
+      // impossível de editar só por não ter essa chave.
+      return data.keys().hasAll(['name', 'cpf', 'clientType'])
+             && data.name is string && data.name.size() < 200
+             && data.cpf is string && data.cpf.size() <= 20
+             && isNotBlocked();
+    }
+
+    // --- Analyses ---
+    match /analyses/{analysisId} {
+      allow list: if isStaff();
+      allow get: if isStaff() && isValidId(analysisId);
+      allow create: if isStaff() && isValidId(analysisId) && isValidAnalysis(incoming());
+      allow update: if isStaff() && isValidId(analysisId) && (isAdmin() || (incoming().assignedTo == request.auth.uid && isValidAnalysis(incoming())));
+      allow delete: if isAdmin() && isValidId(analysisId);
+    }
+
+    function isValidAnalysis(data) {
+      return data.keys().hasAll(['clientId', 'type', 'status'])
+             && data.type in ['soil', 'water', 'fertility', 'foliar', 'topography', 'irrigation', 'documentation', 'credit', 'environmental_xray']
+             && data.status is string && isNotBlocked();
+    }
+
+    // --- Messages ---
+    match /messages/{messageId} {
+      allow list: if isSignedIn() && (resource.data.recipientId == request.auth.uid || resource.data.senderId == request.auth.uid || isStaff());
+      allow get: if isSignedIn() && (resource.data.recipientId == request.auth.uid || resource.data.senderId == request.auth.uid || isManagement());
+      allow create: if isNotBlocked() && isValidId(messageId) && incoming().senderId == request.auth.uid;
+      allow update: if isNotBlocked() && isValidId(messageId) && (
+        (resource.data.get('isDraft', false) == true && resource.data.senderId == request.auth.uid && incoming().senderId == request.auth.uid) ||
+        ((resource.data.recipientId == request.auth.uid || resource.data.senderId == request.auth.uid) && 
+         incoming().diff(existing()).affectedKeys().hasOnly(['isRead', 'reactions', 'trashBy', 'starredBy']))
+      );
+      allow delete: if isNotBlocked() && isValidId(messageId) && (resource.data.senderId == request.auth.uid || resource.data.recipientId == request.auth.uid);
+    }
+    
+    // --- Email Templates ---
+    match /email_templates/{templateId} {
+      allow list: if isNotBlocked();
+      allow get: if isNotBlocked() && isValidId(templateId);
+      allow create: if isStaff() && isValidId(templateId) && isValidTemplate(incoming());
+      allow update: if isStaff() && isValidId(templateId) && existing().createdBy == request.auth.uid && isValidTemplate(incoming());
+      allow delete: if isAdmin() && isValidId(templateId);
+    }
+    
+    function isValidTemplate(data) {
+      return data.keys().hasAll(['title', 'subject', 'content', 'createdBy'])
+             && data.title is string && data.title.size() > 0
+             && data.subject is string && data.subject.size() > 0
+             && data.content is string && data.content.size() > 0
+             && isNotBlocked() && data.createdBy == request.auth.uid;
+    }
+
+    // --- Attendance ---
+    match /attendance/{logId} {
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isStaff());
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isStaff());
+      allow create: if isNotBlocked() && isValidId(logId) && incoming().userId == request.auth.uid && (incoming().timestamp is string || incoming().timestamp == request.time);
+    }
+
+    // [PROPOSTA 1] Lembretes Pessoais do Painel: não havia regra (tudo bloqueado). Cada um só vê/edita os seus.
+    match /personal_reminders/{reminderId} {
+      allow read, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(reminderId) && incoming().userId == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid && incoming().userId == request.auth.uid;
+    }
+
+    // --- Irrigation Projects ---
+    match /irrigation_projects/{projectId} {
+      allow list: if isStaff();
+      allow get: if isStaff() && isValidId(projectId);
+      allow create: if isStaff() && isValidId(projectId) && incoming().createdBy == request.auth.uid;
+      allow update: if isStaff() && isValidId(projectId) && (isAdmin() || incoming().createdBy == request.auth.uid);
+      allow delete: if isAdmin() && isValidId(projectId);
+    }
+
+    // --- Topography Services ---
+    match /topography_services/{serviceId} {
+      allow list: if isStaff();
+      allow get: if isStaff() && isValidId(serviceId);
+      allow create: if isStaff() && isValidId(serviceId) && incoming().createdBy == request.auth.uid;
+      allow update: if isStaff() && isValidId(serviceId) && (isAdmin() || incoming().createdBy == request.auth.uid);
+      allow delete: if isAdmin() && isValidId(serviceId);
+    }
+
+    // --- Regularization Services ---
+    match /regularization_services/{serviceId} {
+      allow list: if isStaff();
+      allow get: if isStaff() && isValidId(serviceId);
+      allow create: if isStaff() && isValidId(serviceId) && incoming().createdBy == request.auth.uid;
+      allow update: if isStaff() && isValidId(serviceId) && (isAdmin() || incoming().createdBy == request.auth.uid);
+      allow delete: if isAdmin() && isValidId(serviceId);
+    }
+
+    // --- Logs ---
+    // Usado como trilha de auditoria (registro de "quem fez o quê") por
+    // várias telas (RH, Auditoria Global, histórico de um registro
+    // específico) — o código já chamava isso de "audit_logs" em alguns
+    // lugares; padronizamos tudo pra esta coleção única.
+    match /logs/{logId} {
+      allow list: if isStaff() && request.query.limit <= 300;
+      allow get: if isStaff() && isValidId(logId);
+      allow create: if isNotBlocked() && isValidId(logId);
+    }
+
+    // --- Notifications ---
+    match /notifications/{notificationId} {
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isStaff());
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isStaff());
+      allow create: if isStaff() && isValidId(notificationId); 
+      allow update: if isNotBlocked() && isValidId(notificationId) && resource.data.userId == request.auth.uid && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['read'])
+      );
+      allow delete: if isNotBlocked() && isValidId(notificationId) && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // --- Vacation Requests ---
+    match /vacations/{vacationId} {
+      allow list: if isNotBlocked() && (resource.data.userId == request.auth.uid || isManagement());
+      allow get: if isNotBlocked() && isValidId(vacationId) && (resource.data.userId == request.auth.uid || isManagement());
+      allow create: if isNotBlocked() && isValidId(vacationId) && incoming().userId == request.auth.uid;
+      allow update: if isManagement() && isValidId(vacationId);
+      allow delete: if isAdmin() || (isNotBlocked() && isValidId(vacationId) && resource.data.userId == request.auth.uid && resource.data.status == 'pending');
+    }
+
+    // --- Leaves (Licenças/Afastamentos) ---
+    match /leaves/{leaveId} {
+      allow list: if isNotBlocked() && (resource.data.userId == request.auth.uid || isManagement());
+      allow get: if isNotBlocked() && isValidId(leaveId) && (resource.data.userId == request.auth.uid || isManagement());
+      allow create: if isNotBlocked() && isValidId(leaveId) && incoming().userId == request.auth.uid;
+      allow update: if isManagement() && isValidId(leaveId);
+      allow delete: if isManagement() && isValidId(leaveId);
+    }
+
+    // --- Payrolls (Folha de Pagamento) ---
+    // Dado sensível (salário): só RH/gestão pode criar/editar, e cada
+    // colaborador só enxerga o próprio contracheque.
+    match /payrolls/{payrollId} {
+      // [PROPOSTA 2] cada colaborador consegue listar os PRÓPRIOS holerites (Meu Perfil / Minha Folha).
+      allow list: if isManagement() || resource.data.employeeId == request.auth.uid;
+      allow get: if isValidId(payrollId) && (resource.data.employeeId == request.auth.uid || isManagement());
+      allow create: if isManagement() && isValidId(payrollId);
+      allow update: if isManagement() && isValidId(payrollId);
+      allow delete: if isManagement() && isValidId(payrollId);
+    }
+
+    // --- Expense Reports (Reembolso de Despesas) ---
+    match /expense_reports/{expenseId} {
+      allow list: if isStaff();
+      allow get: if isStaff() && isValidId(expenseId);
+      allow create: if isNotBlocked() && isValidId(expenseId) && incoming().createdBy == request.auth.uid;
+      allow update: if isNotBlocked() && isValidId(expenseId) && (isManagement() || existing().createdBy == request.auth.uid);
+      allow delete: if isManagement() && isValidId(expenseId);
+    }
+
+    // --- Contract Templates ---
+    match /contract_templates/{templateId} {
+      allow list: if isStaff();
+      allow get: if isStaff() && isValidId(templateId);
+      allow create: if isManagement() && isValidId(templateId);
+      allow update: if isManagement() && isValidId(templateId);
+      allow delete: if isAdmin() && isValidId(templateId);
+    }
+
+    // --- Rural Property Valuations (Laudos de Avaliação Rural) ---
+    match /rural_valuations/{valuationId} {
+      allow list: if isStaff();
+      allow get: if isStaff() && isValidId(valuationId);
+      allow create: if isStaff() && isValidId(valuationId) && incoming().createdBy == request.auth.uid;
+      allow update: if isStaff() && isValidId(valuationId) && (isManagement() || existing().createdBy == request.auth.uid);
+      allow delete: if isManagement() && isValidId(valuationId);
+    }
+
+    // --- Judicial Expertise (Perícias Judiciais) ---
+    match /judicial_expertises/{expertiseId} {
+      allow list: if isStaff();
+      allow get: if isStaff() && isValidId(expertiseId);
+      allow create: if isStaff() && isValidId(expertiseId) && incoming().createdBy == request.auth.uid;
+      allow update: if isStaff() && isValidId(expertiseId) && (isManagement() || existing().createdBy == request.auth.uid);
+      allow delete: if isManagement() && isValidId(expertiseId);
+    }
+
+    // --- Meetings ---
+    match /meetings/{meetingId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn() && isValidId(meetingId);
+      allow create: if isStaff() && isValidId(meetingId) && incoming().hostId == request.auth.uid;
+      allow update: if isNotBlocked() && isValidId(meetingId) && (
+        (existing().hostId == request.auth.uid) ||
+        (request.auth.uid in existing().get('participants', [])) ||
+        (incoming().diff(existing()).affectedKeys().hasOnly(['participants', 'status', 'endedAt']))
+      );
+      allow delete: if (isAdmin() || (isNotBlocked() && existing().hostId == request.auth.uid)) && isValidId(meetingId);
+    }
+
+    // --- Meeting Messages ---
+    match /meeting_messages/{messageId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn() && isValidId(messageId);
+      allow create: if isNotBlocked() && isValidId(messageId) && incoming().senderId == request.auth.uid;
+    }
+
+    // --- Broadcasts ---
+    match /broadcasts/{broadcastId} {
+      allow list: if isStaff();
+      allow get: if isStaff() && isValidId(broadcastId);
+      allow create: if isStaff() && isValidId(broadcastId) && isValidBroadcast(incoming());
+    }
+
+    function isValidBroadcast(data) {
+      return data.keys().hasAll(['message', 'type', 'channel', 'recipientCount', 'sentAt'])
+             && data.message is string && data.message.size() > 0
+             && data.type in ['promo', 'invite', 'info']
+             && data.channel in ['whatsapp', 'email']
+             && data.recipientCount is number
+             && data.sentAt == request.time;
+    }
+
+    // --- Documents ---
+    match /documents/{docId} {
+      allow list: if isStaff() && (resource.data.clientId is string);
+      allow get: if isStaff() && isValidId(docId);
+      allow create: if isStaff() && isValidId(docId) && idValidDoc(incoming());
+      // Antes só admin podia atualizar — mas qualquer colaborador que gera
+      // ou atualiza um laudo (avaliação rural, perícia judicial etc.)
+      // precisa poder atualizar o registro do documento no dossiê do
+      // cliente, não só o admin.
+      allow update: if isStaff() && isValidId(docId) && idValidDoc(incoming());
+      allow delete: if isAdmin() || (isStaff() && isValidId(docId));
+    }
+
+    function idValidDoc(data) {
+      return data.keys().hasAll(['clientId', 'name', 'type', 'url', 'uploadedBy', 'uploadedAt'])
+             && data.name is string && data.name.size() > 0
+             && isNotBlocked();
+    }
+
+    // --- Imoveis ---
+    match /imoveis/{imovelId} {
+      allow list: if isStaff();
+      allow get: if isStaff() && isValidId(imovelId);
+      allow create: if isNotBlocked() && isValidId(imovelId) && incoming().userId == request.auth.uid;
+      allow update: if isNotBlocked() && isValidId(imovelId) && (isAdmin() || resource.data.userId == request.auth.uid);
+      allow delete: if isAdmin() && isValidId(imovelId);
+    }
+
+    // ─── VISITAS DE CAMPO ─────────────────────────────────────────────
+    match /field_visits/{visitId} {
+      allow list: if isStaff();
+      allow get: if isStaff() && isValidId(visitId);
+      allow create: if isStaff() && isValidId(visitId) && incoming().technicianId == request.auth.uid;
+      allow update: if isStaff() && isValidId(visitId) && (
+        isManagement() || existing().technicianId == request.auth.uid
+      );
+      allow delete: if isManagement() && isValidId(visitId);
+    }
+
+    // ─── FINANCEIRO ───────────────────────────────────────────────────
+    match /financials/{id} {
+      allow list: if isStaff();
+      allow get: if isStaff() && isValidId(id);
+      allow create: if isManagement() && isValidId(id);
+      allow update: if isManagement() && isValidId(id);
+      allow delete: if isAdmin() && isValidId(id);
+    }
+
+    // ─── CONTRATOS ────────────────────────────────────────────────────
+    match /contracts/{id} {
+      allow list: if isStaff();
+      allow get: if (isStaff() || (resource.data.status in ['approved', 'active', 'ativo', 'completed', 'concluido'])) && isValidId(id);
+      allow create: if isManagement() && isValidId(id);
+      allow update: if (isManagement() || (
+        resource.data.status == 'approved' &&
+        request.resource.data.status == 'active' &&
+        request.resource.data.signatureBase64 is string &&
+        request.resource.data.signedByName is string &&
+        request.resource.data.signedAt is string &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'signatureBase64', 'signedByName', 'signedAt', 'updatedAt'])
+      )) && isValidId(id);
+      allow delete: if isStaff() && isValidId(id);
+    }
+
+    // ─── PRAGAS E DOENÇAS ─────────────────────────────────────────────
+    match /pest_disease/{id} {
+      allow list: if isStaff();
+      allow get: if isStaff() && isValidId(id);
+      allow create: if isStaff() && isValidId(id) && incoming().reportedById == request.auth.uid;
+      allow update: if isStaff() && isValidId(id) && (isManagement() || existing().reportedById == request.auth.uid);
+      allow delete: if isManagement() && isValidId(id);
+    }
+
+    // ─── ESTOQUE ──────────────────────────────────────────────────────
+    match /inventory_items/{id} {
+      allow list: if isStaff();
+      allow get: if isStaff() && isValidId(id);
+      allow create: if isManagement() && isValidId(id);
+      allow update: if isManagement() && isValidId(id);
+      allow delete: if isAdmin() && isValidId(id);
+    }
+
+    match /inventory_movements/{id} {
+      allow list: if isStaff();
+      allow get: if isStaff() && isValidId(id);
+      allow create: if isStaff() && isValidId(id);
+      allow delete: if isAdmin() && isValidId(id);
+    }
+
+    // ─── RAIO-X AMBIENTAL ─────────────────────────────────────────────
+    match /environmental_xray/{id} {
+      allow list: if isStaff();
+      allow get: if isStaff() && isValidId(id);
+      allow create: if isStaff() && isValidId(id);
+      allow update: if isStaff() && isValidId(id);
+      allow delete: if isManagement() && isValidId(id);
+    }
+
+    // ─── VEÍCULOS ─────────────────────────────────────────────────────
+    match /vehicles/{id} {
+      allow list: if isStaff();
+      allow get: if isStaff() && isValidId(id);
+      allow create: if isManagement() && isValidId(id);
+      allow update: if isManagement() && isValidId(id);
+      allow delete: if isAdmin() && isValidId(id);
+    }
+
+    match /vehicle_trips/{id} {
+      allow list: if isStaff();
+      allow get: if isStaff() && isValidId(id);
+      allow create: if isStaff() && isValidId(id) && incoming().driverId == request.auth.uid;
+      allow update: if isStaff() && isValidId(id) && (
+        isManagement() || existing().driverId == request.auth.uid
+      );
+      allow delete: if isManagement() && isValidId(id);
+    }
+
+    // --- Agenda Events ---
+    match /agenda_events/{eventId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn() && isValidId(eventId);
+      allow create: if isNotBlocked() && isValidId(eventId) && isValidAgendaEvent(incoming());
+      allow update: if isNotBlocked() && isValidId(eventId) && (isAdmin() || (incoming().createdBy == request.auth.uid && isValidAgendaEvent(incoming())));
+      allow delete: if (isAdmin() || (isNotBlocked() && existing().createdBy == request.auth.uid)) && isValidId(eventId);
+    }
+
+    function isValidAgendaEvent(data) {
+      return data.keys().hasAll(['title', 'type', 'date', 'createdBy'])
+             && data.title is string && data.title.size() > 0 && data.title.size() <= 200
+             && data.type in ['reuniao', 'visita', 'ligacao', 'entrega', 'outro']
+             && data.date is string && data.date.size() > 0
+             && data.createdBy == request.auth.uid;
+    }
+
+    // --- Appointments ---
+    match /appointments/{appointmentId} {
+      allow list: if isStaff();
+      allow get: if isStaff() && isValidId(appointmentId);
+      allow create: if isStaff() && isValidId(appointmentId) && isValidAppointment(incoming());
+      allow update: if isStaff() && isValidId(appointmentId) && (
+        isManagement() || 
+        (existing().createdBy == request.auth.uid && isValidAppointment(incoming()))
+      );
+      allow delete: if (isManagement() || existing().createdBy == request.auth.uid) && isValidId(appointmentId);
+    }
+
+    function isValidAppointment(data) {
+      return data.keys().hasAll(['clientId', 'clientName', 'technicianId', 'technicianName', 'serviceType', 'date', 'time', 'status', 'createdBy', 'createdAt', 'notifiedEmail', 'notifiedWhatsapp'])
+             && data.clientId is string && data.clientId.size() > 0
+             && data.clientName is string && data.clientName.size() > 0
+             && data.technicianId is string && data.technicianId.size() > 0
+             && data.technicianName is string && data.technicianName.size() > 0
+             && data.serviceType is string && data.serviceType.size() > 0
+             && data.date is string && data.date.size() > 0
+             && data.time is string && data.time.size() > 0
+             && data.status in ['scheduled', 'confirmed', 'completed', 'cancelled']
+             && data.createdBy is string && data.createdBy.size() > 0
+             && data.createdAt is string && data.createdAt.size() > 0
+             && data.notifiedEmail is bool
+             && data.notifiedWhatsapp is bool;
+    }
+
+    // --- Settings / Branding ---
+    match /settings/{settingId} {
+      allow read: if isSignedIn();
+      allow write: if isManagement();
+    }
+
+    // --- Communication Channels ---
+    match /channels/{channelId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn() && isValidId(channelId);
+      allow create: if isSignedIn() && isValidId(channelId) && incoming().createdBy == request.auth.uid;
+      allow update: if isSignedIn() && isValidId(channelId) && (existing().createdBy == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() && isValidId(channelId) && (existing().createdBy == request.auth.uid || isAdmin());
+    }
+
+    // --- Channel Messages ---
+    match /channel_messages/{messageId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn() && isValidId(messageId);
+      allow create: if isNotBlocked() && isValidId(messageId) && incoming().senderId == request.auth.uid;
+      allow update: if isNotBlocked() && isValidId(messageId) && existing().senderId == request.auth.uid && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['reactions', 'content'])
+      );
+      allow delete: if isNotBlocked() && isValidId(messageId) && (existing().senderId == request.auth.uid || isAdmin());
+    }
+  }
+}

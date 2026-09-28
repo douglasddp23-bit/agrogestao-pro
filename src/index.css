@@ -1,0 +1,594 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  
+  --radius-3xl: 24px;
+  --radius-4xl: 32px;
+}
+
+@layer base {
+  body {
+    @apply font-sans text-slate-800 bg-gradient-to-br from-emerald-100 via-sky-50 to-emerald-50 min-h-screen overflow-hidden select-none;
+  }
+}
+
+html, body {
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+/* Smooth theme transitions across surfaces */
+.glass, .glass-card, .glass-input, aside, header, main, section, [role="dialog"], .modal-container {
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.glass {
+  @apply bg-white/40 backdrop-blur-md border border-white/50 shadow-sm;
+}
+
+.glass-card {
+  @apply bg-white/60 backdrop-blur-md border border-white/80 shadow-sm rounded-3xl;
+}
+
+.glass-input {
+  @apply bg-white/60 backdrop-blur-sm border border-white/80 rounded-xl outline-none focus:ring-2 ring-emerald-500/20 text-sm px-4 py-2;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-300/50 rounded-full hover:bg-slate-400/50 transition-colors;
+}
+
+/* --- Dark Mode Premium Integration Overrides --- */
+html.dark body {
+  color: #f1f5f9;
+  background: radial-gradient(circle at top right, #022c22 0%, #030712 100%) !important;
+}
+
+html.dark .glass {
+  background-color: rgba(15, 23, 42, 0.45) !important;
+  border-color: rgba(71, 85, 105, 0.4) !important;
+  color: #cbd5e1 !important;
+}
+
+html.dark .glass-card {
+  background-color: rgba(15, 23, 42, 0.65) !important;
+  border-color: rgba(71, 85, 105, 0.5) !important;
+  color: #e2e8f0 !important;
+}
+
+html.dark .glass-input {
+  background-color: rgba(30, 41, 59, 0.6) !important;
+  border-color: rgba(71, 85, 105, 0.6) !important;
+  color: #f8fafc !important;
+}
+
+/* Override default full background color of main layout */
+html.dark .bg-slate-50 {
+  background-color: transparent !important;
+}
+
+/* Sidebar list hovers */
+html.dark .hover\:bg-white\/50:hover {
+  background-color: rgba(30, 41, 59, 0.5) !important;
+}
+
+/* Standard pages: modify components with hardcoded bright colors to behave beautifully */
+html.dark .bg-white {
+  background-color: #0f172a !important;
+  border-color: #1e293b !important;
+  color: #f1f5f9 !important;
+}
+
+html.dark .border-slate-100,
+html.dark .border-slate-200,
+html.dark .border-slate-300 {
+  border-color: #1e293b !important;
+}
+
+/* Standard text replacement for text slate/gray */
+html.dark .text-slate-900 { color: #f8fafc !important; }
+html.dark .text-slate-800 { color: #f1f5f9 !important; }
+html.dark .text-slate-700 { color: #cbd5e1 !important; }
+html.dark .text-slate-600 { color: #94a3b8 !important; }
+html.dark .text-slate-500 { color: #64748b !important; }
+html.dark .text-slate-400 { color: #475569 !important; }
+
+/* Invert dashboard cards or similar styling */
+html.dark .bg-slate-100 {
+  background-color: #1e293b !important;
+}
+
+html.dark .bg-emerald-50 {
+  background-color: rgba(4, 120, 87, 0.1) !important;
+  border-color: rgba(4, 120, 87, 0.3) !important;
+}
+html.dark .bg-emerald-50 * {
+  color: #a7f3d0 !important;
+}
+
+html.dark .bg-sky-50 {
+  background-color: rgba(2, 132, 199, 0.1) !important;
+  border-color: rgba(2, 132, 199, 0.3) !important;
+}
+html.dark .bg-sky-50 * {
+  color: #bae6fd !important;
+}
+
+html.dark .bg-amber-50 {
+  background-color: rgba(217, 119, 6, 0.1) !important;
+  border-color: rgba(217, 119, 6, 0.3) !important;
+}
+html.dark .bg-amber-50 * {
+  color: #fde68a !important;
+}
+
+html.dark .bg-rose-50 {
+  background-color: rgba(225, 29, 72, 0.1) !important;
+  border-color: rgba(225, 29, 72, 0.3) !important;
+}
+html.dark .bg-rose-50 * {
+  color: #fecdd3 !important;
+}
+
+html.dark .divide-y > * + * {
+  border-color: #1e293b !important;
+}
+
+/* Fundos brancos translúcidos (bg-white/NN) e gradientes claros: no escuro viravam
+   cinza-claro com texto branco por cima (ilegível). O espaço/início antes de "bg-"
+   evita pegar variantes como hover:bg-white/50 e focus:bg-white. */
+html.dark [class^="bg-white/"], html.dark [class*=" bg-white/"] {
+  background-color: rgba(30, 41, 59, 0.55) !important;
+  border-color: rgba(71, 85, 105, 0.45) !important;
+}
+html.dark [class*=" from-emerald-50"], html.dark [class^="from-emerald-50"],
+html.dark [class*=" from-white"], html.dark [class^="from-white"],
+html.dark [class*=" from-slate-50"], html.dark [class^="from-slate-50"],
+html.dark [class*=" to-white"] {
+  background-image: none !important;
+  background-color: rgba(15, 23, 42, 0.65) !important;
+}
+html.dark [class^="bg-slate-50/"], html.dark [class*=" bg-slate-50/"],
+html.dark [class^="bg-slate-100/"], html.dark [class*=" bg-slate-100/"] {
+  background-color: rgba(30, 41, 59, 0.4) !important;
+}
+html.dark [class*=" border-white/"], html.dark [class^="border-white/"] {
+  border-color: rgba(71, 85, 105, 0.45) !important;
+}
+html.dark .bg-slate-200,
+html.dark .bg-slate-300 {
+  background-color: #334155 !important;
+}
+
+/* Etiquetas/selos em tom 100 (status): fundo translúcido e texto claro */
+html.dark .bg-emerald-100 { background-color: rgba(16, 185, 129, 0.18) !important; }
+html.dark .bg-amber-100 { background-color: rgba(245, 158, 11, 0.18) !important; }
+html.dark .bg-rose-100 { background-color: rgba(244, 63, 94, 0.18) !important; }
+html.dark .text-emerald-700, html.dark .text-emerald-800, html.dark .text-emerald-900 { color: #6ee7b7 !important; }
+html.dark .text-amber-700, html.dark .text-amber-800, html.dark .text-amber-900 { color: #fcd34d !important; }
+html.dark .text-rose-700, html.dark .text-rose-800, html.dark .text-rose-900 { color: #fda4af !important; }
+
+/* Specific elements for dark mode */
+html.dark input:not(.glass-input), 
+html.dark select, 
+html.dark textarea {
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+
+html.dark ::placeholder {
+  color: #475569 !important;
+}
+
+/* Table elements */
+html.dark tr {
+  border-color: #1e293b !important;
+}
+html.dark td {
+  color: #cbd5e1 !important;
+  border-color: #1e293b !important;
+}
+html.dark th {
+  color: #94a3b8 !important;
+  background-color: #0f172a !important;
+  border-color: #1e293b !important;
+}
+
+html.dark .shadow-sm {
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.5) !important;
+}
+html.dark .shadow-md {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.5) !important;
+}
+html.dark .shadow-xl {
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.6) !important;
+}
+
+/* Modals & Dialogs in Dark Mode */
+html.dark [role="dialog"],
+html.dark .modal-content,
+html.dark div[class*="fixed inset-0"] > div[class*="bg-white"] {
+  background-color: #0f172a !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(51, 65, 85, 0.6) !important;
+}
+
+html.dark div[class*="fixed inset-0"][class*="bg-slate-900"],
+html.dark div[class*="fixed inset-0"][class*="bg-black"],
+html.dark .modal-backdrop {
+  background-color: rgba(3, 7, 18, 0.82) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+/* Recharts Charts Dark Mode Enhancements */
+html.dark .recharts-cartesian-grid line {
+  stroke: #1e293b !important;
+  stroke-opacity: 0.8 !important;
+}
+
+html.dark .recharts-cartesian-axis-tick text {
+  fill: #94a3b8 !important;
+  font-size: 11px !important;
+}
+
+html.dark .recharts-legend-item-text {
+  color: #cbd5e1 !important;
+  fill: #cbd5e1 !important;
+}
+
+html.dark .recharts-default-tooltip,
+html.dark .recharts-tooltip-wrapper .bg-white {
+  background-color: #0f172a !important;
+  border: 1px solid #334155 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6) !important;
+  color: #f8fafc !important;
+  padding: 8px 12px !important;
+}
+
+html.dark .recharts-tooltip-label {
+  color: #e2e8f0 !important;
+  font-weight: 600 !important;
+}
+
+html.dark .recharts-tooltip-item {
+  color: #cbd5e1 !important;
+}
+
+html.dark .recharts-pie-sector:hover {
+  filter: brightness(1.15);
+}
+
+/* ==========================================================================
+   PRINT STYLES - SUPORTE DE IMPRESSÃO DIRETA DE RELATÓRIOS E DASHBOARDS A4
+   ========================================================================== */
+@media print {
+  /* 1. Configurações Globais de Página A4 e Otimização de Margens */
+  @page {
+    size: A4 portrait;
+    margin: 10mm 12mm 10mm 12mm;
+  }
+
+  *, *::before, *::after {
+    box-shadow: none !important;
+    text-shadow: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    transition: none !important;
+    animation: none !important;
+  }
+
+  /* Mantém cores essenciais de fundo e bordas para badges, barras de gráficos e indicadores */
+  .bg-emerald-500, .bg-emerald-600, .bg-emerald-700,
+  .bg-blue-500, .bg-blue-600, .bg-sky-500,
+  .bg-amber-500, .bg-amber-600,
+  .bg-red-500, .bg-red-600, .bg-rose-500,
+  .bg-indigo-500, .bg-indigo-600,
+  .bg-purple-500, .bg-violet-600,
+  .bg-slate-100, .bg-slate-200, .bg-slate-300,
+  .bg-emerald-50, .bg-blue-50, .bg-amber-50, .bg-red-50, .bg-indigo-50, .bg-sky-50,
+  .recharts-rectangle,
+  .recharts-area,
+  .recharts-pie-sector,
+  .recharts-bar-rectangle,
+  .recharts-line-dot {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Reset de Estrutura Principal */
+  html, body, #root, #root > div {
+    background: #ffffff !important;
+    background-image: none !important;
+    color: #0f172a !important;
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif !important;
+    font-size: 10pt !important;
+    line-height: 1.35 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* 2. Ocultar Elementos Inúteis na Impressão (Navegação, Botoes, Modais, Floating Widgets) */
+  aside,
+  header,
+  nav,
+  iframe,
+  button,
+  footer,
+  form:not(.print-preserve),
+  .quick-tips-tour,
+  .toast,
+  .sonner,
+  [role="status"],
+  [class*="Toaster"],
+  #msg-page-btn,
+  #darkmode-toggle-btn,
+  #profile-trigger,
+  #global-search,
+  .global-search-container,
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea,
+  .no-print,
+  .print\:hidden,
+  /* Botoes e Acoes */
+  [class*="cursor-pointer"]:not(.print-keep),
+  [id*="btn"],
+  [id*="trigger"],
+  .fixed,
+  .sticky,
+  .backdrop-blur-sm,
+  .backdrop-blur-md,
+  /* Floating Widgets & Chatbots */
+  [class*="SyncStatusWidget"],
+  [class*="WeatherWidget"],
+  [class*="AgendaWidget"],
+  [class*="PersonalReminders"],
+  div.lg\:col-span-6.bg-white.rounded-2xl.border.border-slate-200.shadow-sm.flex.flex-col.h-\[525px\] {
+    display: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Classes Utilitárias de Exibição para Impressão */
+  .print-only,
+  .print\:block {
+    display: block !important;
+    visibility: visible !important;
+  }
+  .print\:flex {
+    display: flex !important;
+    visibility: visible !important;
+  }
+  .print\:grid {
+    display: grid !important;
+    visibility: visible !important;
+  }
+
+  /* 3. Expansão de Containers Principais */
+  .flex.h-screen.w-full.p-6.gap-6.bg-slate-50.overflow-hidden,
+  main,
+  section,
+  .overflow-y-auto,
+  .overflow-x-auto,
+  .overflow-auto,
+  .overflow-hidden,
+  .custom-scrollbar {
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #ffffff !important;
+    overflow: visible !important;
+    float: none !important;
+  }
+
+  /* Header do Relatório A4 impresso */
+  .print-header-banner {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    border-bottom: 2px solid #0f172a !important;
+    padding-bottom: 8px !important;
+    margin-bottom: 16px !important;
+    width: 100% !important;
+  }
+
+  /* 4. Organização do Grid em Layout A4 */
+  /* Grids de Indicadores KPI (2 a 4 colunas em linha) */
+  .grid-cols-2,
+  .grid-cols-3,
+  .grid-cols-4,
+  .sm\:grid-cols-2,
+  .sm\:grid-cols-4,
+  .md\:grid-cols-4,
+  .xl\:grid-cols-4 {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 10px !important;
+    width: 100% !important;
+    margin-bottom: 16px !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Layout de 2 colunas para gráficos/seções em paralelo */
+  .grid-cols-1.lg\:grid-cols-2,
+  .grid-cols-1.xl\:grid-cols-2,
+  .md\:grid-cols-2 {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 12px !important;
+    width: 100% !important;
+    margin-bottom: 16px !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Seções gerais em blocos lineares limpos */
+  .grid > *, [class*="grid-cols-"] > * {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* 5. Formatação dos Cards do Dashboard / Relatório */
+  .glass, .glass-card, .bg-white, .bg-white\/40, .bg-white\/60, .border {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    color: #0f172a !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border-radius: 8px !important;
+    padding: 12px 14px !important;
+    margin-bottom: 14px !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Tipografia do Relatório */
+  h1, h2, h3, h4, h5, h6 {
+    color: #0f172a !important;
+    font-weight: 700 !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+    margin-top: 6px !important;
+    margin-bottom: 6px !important;
+  }
+
+  h1 { font-size: 18pt !important; line-height: 1.2 !important; }
+  h2 { font-size: 14pt !important; line-height: 1.25 !important; }
+  h3 { font-size: 11pt !important; line-height: 1.3 !important; }
+  h4 { font-size: 10pt !important; }
+
+  /* Preserva escala dos Ícones Lucide (evita distorção de 255px de SVG) */
+  svg:not(.recharts-surface) {
+    display: inline-block !important;
+    width: 1em !important;
+    height: 1em !important;
+    max-width: 20px !important;
+    max-height: 20px !important;
+    vertical-align: middle !important;
+  }
+
+  /* 6. Redimensionamento e Enquadramento de Gráficos Recharts em A4 */
+  .recharts-responsive-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 220px !important;
+    min-height: 200px !important;
+    max-height: 250px !important;
+    overflow: visible !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .recharts-wrapper {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100% !important;
+    position: relative !important;
+  }
+
+  svg.recharts-surface {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+  }
+
+  .recharts-tooltip-wrapper,
+  .recharts-default-tooltip {
+    display: none !important;
+  }
+
+  .recharts-legend-wrapper {
+    position: relative !important;
+    bottom: 0 !important;
+    margin-top: 8px !important;
+    font-size: 8pt !important;
+  }
+
+  /* 7. Formatação de Tabelas para Relatórios A4 */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin: 10px 0 !important;
+    font-size: 8.5pt !important;
+    page-break-inside: auto !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  th, td {
+    border: 1px solid #cbd5e1 !important;
+    padding: 5px 8px !important;
+    text-align: left !important;
+    vertical-align: middle !important;
+    color: #0f172a !important;
+  }
+
+  th {
+    background-color: #f1f5f9 !important;
+    font-weight: 700 !important;
+    color: #0f172a !important;
+  }
+
+  tr:nth-child(even) {
+    background-color: #f8fafc !important;
+  }
+
+  /* Cores de Texto Consistentes */
+  span, p, div, label, li, a {
+    color: #1e293b !important;
+  }
+
+  /* Quebras de Página Utilitárias */
+  .page-break-before {
+    page-break-before: always !important;
+    break-before: page !important;
+  }
+
+  .page-break-after {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+
+  .avoid-break {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+}
+
+

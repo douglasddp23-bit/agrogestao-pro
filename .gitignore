@@ -1,0 +1,32 @@
+# Dependências (reinstaladas com "npm install")
+node_modules/
+
+# Arquivos gerados pelo build / instalador
+build/
+dist/
+release/
+coverage/
+*.tsbuildinfo
+
+# Segredos — NUNCA versionar
+.env*
+!.env.example
+service-account.json
+*service-account*.json
+firebase-applet-config.json
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Backups locais do Firestore (contêm dados reais de clientes)
+firestore-backups/
+
+# Logs e arquivos do sistema/editor
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

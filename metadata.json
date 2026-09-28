@@ -1,0 +1,16 @@
+{
+  "name": "AgroGestão Pro",
+  "description": "Sistema completo de gestão para agronegócio: perícias judiciais (TJMG/PJe), avaliação de imóveis rurais (ABNT NBR 14.653-3), análises agronômicas, regularização ambiental, contratos e equipe.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "Firebase",
+    "Real-time Dashboard",
+    "HR Management",
+    "Agronomy Services",
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

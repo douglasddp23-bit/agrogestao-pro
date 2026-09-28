@@ -1,0 +1,327 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and metadata",
+      "type": "object",
+      "properties": {
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "consultant", "hr", "staff", "manager"] },
+        "lastClockIn": { "type": "string", "format": "date-time" },
+        "status": { "type": "string" },
+        "blocked": { "type": "boolean" },
+        "photoURL": { "type": "string" },
+        "registrationNumber": { "type": "string" },
+        "darkMode": { "type": "boolean" },
+        "allowedPages": { "type": "array", "items": { "type": "string" } },
+        "assignedAreas": { "type": "array", "items": { "type": "string" } },
+        "isVacationReplacement": { "type": "boolean" },
+        "replacementForId": { "type": "string" },
+        "replacementForName": { "type": "string" },
+        "replacementStartDate": { "type": "string" },
+        "replacementEndDate": { "type": "string" }
+      },
+      "required": ["displayName", "email", "role"]
+    },
+    "Client": {
+      "title": "Client",
+      "description": "Customer/Property record with legal and property details",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "cpf": { "type": "string" },
+        "ownerEmail": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": {
+          "type": "object",
+          "properties": {
+            "cep": { "type": "string" },
+            "street": { "type": "string" },
+            "number": { "type": "string" },
+            "neighborhood": { "type": "string" },
+            "city": { "type": "string" },
+            "state": { "type": "string" }
+          }
+        },
+        "properties": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "areaHectares": { "type": "number" },
+              "latitude": { "type": "number" },
+              "longitude": { "type": "number" }
+            }
+          }
+        },
+        "clientType": { "type": "string", "enum": ["pronaf", "rural_producer"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["name", "cpf", "clientType", "createdBy"]
+    },
+    "ServiceAnalysis": {
+      "title": "Service Analysis",
+      "description": "Analysis records and project base tracking",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "type": { "type": "string", "enum": ["soil", "topography", "irrigation", "documentation", "credit"] },
+        "status": { "type": "string" },
+        "description": { "type": "string" },
+        "resultUrl": { "type": "string" },
+        "assignedTo": { "type": "string" },
+        "value": { "type": "number", "description": "Project total value" },
+        "cost": { "type": "number", "description": "Internal costs" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clientId", "type", "status"]
+    },
+    "InternalEmail": {
+      "title": "Internal Email",
+      "description": "Internal messages between team members",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "recipientId": { "type": "string" },
+        "subject": { "type": "string" },
+        "content": { "type": "string" },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "reactions": {
+          "type": "object",
+          "description": "Emoji reactions from users",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      },
+      "required": ["senderId", "recipientId", "subject", "content"]
+    },
+    "EmailTemplate": {
+      "title": "Email Template",
+      "description": "Pre-defined templates for internal messages",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "subject": { "type": "string" },
+        "content": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "subject", "content", "createdBy"]
+    },
+    "AttendanceLog": {
+      "title": "Attendance Log",
+      "description": "Clock-in/out records for employees",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "type": { "type": "string", "enum": ["in", "out"] },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "location": { "type": "string" }
+      },
+      "required": ["userId", "type", "timestamp"]
+    },
+    "AdminLog": {
+      "title": "Admin Log",
+      "description": "Audit logs for system actions",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "action": { "type": "string" },
+        "type": { "type": "string", "enum": ["admin", "staff", "hr"] },
+        "ip": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "action", "timestamp"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "System notifications for users",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string", "enum": ["info", "success", "warning", "alert"] },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "recipientId": { "type": "string" }
+      },
+      "required": ["title", "message", "type", "createdAt", "recipientId"]
+    },
+    "VacationRequest": {
+      "title": "Vacation Request",
+      "description": "Employee vacation requests",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "startDate": { "type": "string", "format": "date" },
+        "endDate": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "reason": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "userName", "startDate", "endDate", "status", "createdAt"]
+    },
+    "Meeting": {
+      "title": "Meeting",
+      "description": "Online meeting session",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "hostId": { "type": "string" },
+        "hostName": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "ended", "scheduled"] },
+        "scheduledAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "participants": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["title", "hostId", "status", "createdAt"]
+    },
+    "MeetingMessage": {
+      "title": "Meeting Message",
+      "description": "Real-time chat messages within a meeting",
+      "type": "object",
+      "properties": {
+        "meetingId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "content": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["meetingId", "senderId", "senderName", "content", "createdAt"]
+    },
+    "Broadcast": {
+      "title": "Broadcast",
+      "description": "A record of a bulk message sent to multiple clients",
+      "type": "object",
+      "properties": {
+        "subject": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string", "enum": ["promo", "invite", "info"] },
+        "channel": { "type": "string", "enum": ["whatsapp", "email"] },
+        "recipientCount": { "type": "number" },
+        "sentAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["message", "type", "channel", "recipientCount", "sentAt"]
+    },
+    "AppNotification": {
+      "title": "App Notification",
+      "description": "System alerts for users regarding project updates",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string", "enum": ["info", "success", "alert", "update"] },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "link": { "type": "string" }
+      },
+      "required": ["userId", "title", "message", "type", "read", "createdAt"]
+    },
+    "AgendaEvent": {
+      "title": "Agenda Event",
+      "description": "Custom standalone meeting or appointment",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "type": { "type": "string", "enum": ["reuniao", "visita", "ligacao", "entrega", "outro"] },
+        "date": { "type": "string" },
+        "clientId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "responsibleId": { "type": "string" },
+        "responsibleName": { "type": "string" },
+        "externalLink": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["title", "type", "date", "createdBy"]
+    },
+    "Appointment": {
+      "title": "Appointment",
+      "description": "Customer scheduling details for agronomic services",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "technicianId": { "type": "string" },
+        "technicianName": { "type": "string" },
+        "serviceType": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "time": { "type": "string" },
+        "status": { "type": "string", "enum": ["scheduled", "confirmed", "completed", "cancelled"] },
+        "notes": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "notifiedEmail": { "type": "boolean" },
+        "notifiedWhatsapp": { "type": "boolean" }
+      },
+      "required": ["clientId", "clientName", "technicianId", "technicianName", "serviceType", "date", "time", "status", "createdBy", "createdAt", "notifiedEmail", "notifiedWhatsapp"]
+    },
+    "Channel": {
+      "title": "Channel",
+      "description": "A communication channel for projects or departments",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "type": { "type": "string", "enum": ["project", "department", "general"] },
+        "projectId": { "type": "string" },
+        "projectName": { "type": "string" },
+        "department": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "type", "createdBy"]
+    },
+    "ChannelMessage": {
+      "title": "Channel Message",
+      "description": "A message sent inside a channel",
+      "type": "object",
+      "properties": {
+        "channelId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "senderPhotoURL": { "type": "string" },
+        "content": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["channelId", "senderId", "senderName", "content", "createdAt"]
+    }
+  },
+  "firestore": {
+    "users": { "schema": "User", "description": "System users" },
+    "clients": { "schema": "Client", "description": "Agricultural clients and properties" },
+    "analyses": { "schema": "ServiceAnalysis", "description": "Service records" },
+    "messages": { "schema": "InternalEmail", "description": "Internal communication" },
+    "email_templates": { "schema": "EmailTemplate", "description": "Reusable message templates" },
+    "attendance": { "schema": "AttendanceLog", "description": "HR clock logs" },
+    "logs": { "schema": "AdminLog", "description": "System audit logs" },
+    "notifications": { "schema": "Notification", "description": "User notifications" },
+    "vacations": { "schema": "VacationRequest", "description": "Employee vacation requests" },
+    "meetings": { "schema": "Meeting", "description": "Online meetings" },
+    "meeting_messages": { "schema": "MeetingMessage", "description": "Meeting chat messages" },
+    "broadcasts": { "schema": "Broadcast", "description": "Bulk message transmissions" },
+    "notifications": { "schema": "AppNotification", "description": "System notifications for users" },
+    "irrigation_projects": { "schema": "object", "description": "Irrigation design projects" },
+    "topography_services": { "schema": "object", "description": "Topography service records" },
+    "regularization_services": { "schema": "object", "description": "Environmental regularization services" },
+    "agenda_events": { "schema": "AgendaEvent", "description": "Adhoc agenda appointments" },
+    "appointments": { "schema": "Appointment", "description": "Client scheduled service appointments" },
+    "channels": { "schema": "Channel", "description": "Group communication channels" },
+    "channel_messages": { "schema": "ChannelMessage", "description": "Messages inside group channels" }
+  }
+}
