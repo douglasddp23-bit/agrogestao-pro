@@ -859,6 +859,39 @@ export default function Scheduling() {
     }
   };
 
+  // Excluir: gestão (Admin/Gerente) ou quem criou o agendamento — igual à regra do banco.
+  const canDeleteAppointment = (app: Appointment) =>
+    !app.isVirtual && (isManagement || app.createdBy === user?.uid);
+
+  const handleDeleteAppointment = async () => {
+    const app = appointmentToDelete;
+    if (!app) return;
+    setIsDeleteModalOpen(false);
+    setAppointmentToDelete(null);
+    // Some da tela na hora; volta se o banco recusar.
+    setAppointments(prev => prev.filter(a => a.id !== app.id));
+    try {
+      await deleteDoc(doc(db, 'appointments', app.id));
+      toast.success('Agendamento excluído.');
+      try {
+        await logAudit({
+          userId: user?.uid || 'unknown',
+          userName: user?.displayName || 'Usuário',
+          action: 'deleted',
+          collection: 'appointments',
+          recordId: app.id,
+          recordName: `${app.serviceType} - ${app.clientName}`,
+          details: `Agendamento de ${app.date} às ${app.time} (${app.technicianName}) excluído`,
+          previousValues: app as any,
+        });
+      } catch { /* auditoria não pode desfazer a exclusão */ }
+    } catch (error) {
+      console.error('Erro ao excluir agendamento:', error);
+      toast.error('Não foi possível excluir o agendamento. Nada foi alterado.');
+      setAppointments(prev => prev.some(a => a.id === app.id) ? prev : [...prev, app]);
+    }
+  };
+
   // Grid Days Calculations helper
   const totalDays = getDaysInMonth(currentYear, currentMonth);
   const firstDayIndex = getFirstDayOfWeek(currentYear, currentMonth);
@@ -1347,6 +1380,16 @@ export default function Scheduling() {
                             className="py-1.5 px-3 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer flex items-center justify-center gap-1"
                           >
                             <X className="w-3.5 h-3.5" /> Cancelar
+                          </button>
+                        )}
+
+                        {canDeleteAppointment(app) && (
+                          <button
+                            onClick={() => { setAppointmentToDelete(app); setIsDeleteModalOpen(true); }}
+                            className="py-1.5 px-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer flex items-center justify-center gap-1 shadow-sm"
+                            title="Excluir agendamento"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /> Excluir
                           </button>
                         )}
                       </div>
@@ -1872,6 +1915,17 @@ export default function Scheduling() {
           </div>
         )}
       </AnimatePresence>
+
+      <ConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => { setIsDeleteModalOpen(false); setAppointmentToDelete(null); }}
+        onConfirm={handleDeleteAppointment}
+        title="Excluir agendamento?"
+        description={appointmentToDelete
+          ? `O agendamento de ${appointmentToDelete.clientName} em ${appointmentToDelete.date.split('-').reverse().join('/')} às ${appointmentToDelete.time} será apagado definitivamente.${visitByAppointment[appointmentToDelete.id] ? ' A visita de campo já registrada continua guardada.' : ''} Se quiser só desmarcar, use "Cancelar".`
+          : ''}
+        confirmLabel="Excluir"
+      />
     </div>
   );
 }

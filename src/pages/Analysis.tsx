@@ -29,7 +29,8 @@ import {
   LandPlot,
   Sparkles,
   TrendingUp,
-  Edit3
+  Edit3,
+  FlaskConical
 } from 'lucide-react';
 import { collection, onSnapshot, query, orderBy, where, getDocs, addDoc, doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
@@ -40,7 +41,7 @@ import { logAudit } from '../lib/audit';
 import { motion, AnimatePresence } from 'motion/react';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { ClipboardCheck as PageIcon } from 'lucide-react';
-import { handleFirestoreError, OperationType, formatDateTime, cn, formatDate, getStatusConfig, todayLocalDateString } from '../lib/utils';
+import { handleFirestoreError, OperationType, formatDateTime, cn, formatDate, getStatusConfig, todayLocalDateString, parseDateInput } from '../lib/utils';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -789,6 +790,44 @@ export default function Analysis({ typeFilter }: AnalysisProps) {
       return matchesSearch && matchesTech && matchesType && matchesStatus;
     });
 
+  // ─── Mini painel (mesma ideia do da Perícia Judicial) ───
+  // Conta sobre a lista da página (sem os filtros de busca), para mostrar a situação geral.
+  const kpi = (() => {
+    const base = typeFilter
+      ? analyses.filter(a => a.type === typeFilter)
+      : analyses.filter(a => !['credit', 'irrigation', 'topography', 'documentation'].includes(a.type));
+    const isDone = (a: ServiceAnalysis) => (a.status || '').toLowerCase().startsWith('conclu');
+    const isCancelled = (a: ServiceAnalysis) => (a.status || '').toLowerCase().startsWith('cancel');
+    const toDate = (v: any): Date | null =>
+      v?.toDate ? v.toDate() : typeof v?.seconds === 'number' ? new Date(v.seconds * 1000) : parseDateInput(v);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    const open = base.filter(a => !isDone(a) && !isCancelled(a));
+    const byType = (list: ServiceAnalysis[], t: string) => list.filter(a => a.type === t).length;
+    const late = open.filter(a => { const d = parseDateInput(a.scheduledDate); return !!d && d < today; });
+    const done = base.filter(isDone);
+    const doneMonth = done.filter(a => { const d = toDate(a.updatedAt); return !!d && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); });
+    const doneYear = done.filter(a => { const d = toDate(a.updatedAt); return !!d && d.getFullYear() === now.getFullYear(); });
+    // Prazo médio do laudo: da coleta (ou agendamento) até a conclusão, últimos 90 dias
+    const days = done.map(a => {
+      const end = toDate(a.updatedAt);
+      const start = parseDateInput(a.collectionDate) || parseDateInput(a.scheduledDate) || toDate(a.createdAt);
+      if (!end || !start || now.getTime() - end.getTime() > 90 * 864e5) return null;
+      return Math.max(0, (end.getTime() - start.getTime()) / 864e5);
+    }).filter((d): d is number => d !== null);
+    const avgDays = days.length ? Math.round(days.reduce((s, d) => s + d, 0) / days.length) : null;
+    return {
+      open: open.length,
+      openDetail: `Solo ${byType(open, 'soil')} · Água ${byType(open, 'water')} · Foliar ${byType(open, 'foliar')}`,
+      late: late.length,
+      doneMonth: doneMonth.length,
+      doneYear: doneYear.length,
+      avgDays,
+      avgBase: days.length,
+    };
+  })();
+
   const getButtonLabel = () => {
     if (!typeFilter) return "Novo Serviço";
     switch (typeFilter) {
@@ -869,6 +908,63 @@ export default function Analysis({ typeFilter }: AnalysisProps) {
           )}
         </div>
       </header>
+
+      {/* MINI PAINEL DE ANÁLISES */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="glass-card p-5 rounded-3xl border border-white/40 dark:border-slate-800 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Análises em Aberto</p>
+            <h3 className="text-2xl font-display font-extrabold text-slate-800 dark:text-slate-100 mt-1">{kpi.open}</h3>
+            <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 mt-0.5 block">
+              {typeFilter ? 'Aguardando laudo/resultado' : kpi.openDetail}
+            </span>
+          </div>
+          <div className="w-12 h-12 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-2xl flex items-center justify-center">
+            <FlaskConical className="w-6 h-6" />
+          </div>
+        </div>
+
+        <div className="glass-card p-5 rounded-3xl border border-white/40 dark:border-slate-800 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Atrasadas</p>
+            <h3 className={cn("text-2xl font-display font-extrabold mt-1", kpi.late > 0 ? "text-rose-600 dark:text-rose-400" : "text-slate-800 dark:text-slate-100")}>{kpi.late}</h3>
+            <span className={cn("text-[10px] font-medium mt-0.5 block", kpi.late > 0 ? "text-rose-600 dark:text-rose-400" : "text-slate-500 dark:text-slate-400")}>
+              Data agendada já passou
+            </span>
+          </div>
+          <div className="w-12 h-12 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 rounded-2xl flex items-center justify-center">
+            <AlertCircle className="w-6 h-6" />
+          </div>
+        </div>
+
+        <div className="glass-card p-5 rounded-3xl border border-white/40 dark:border-slate-800 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Concluídas no Mês</p>
+            <h3 className="text-2xl font-display font-extrabold text-slate-800 dark:text-slate-100 mt-1">{kpi.doneMonth}</h3>
+            <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 mt-0.5 block">
+              {kpi.doneYear} no ano
+            </span>
+          </div>
+          <div className="w-12 h-12 bg-slate-50 dark:bg-emerald-950/40 text-slate-600 dark:text-slate-400 rounded-2xl flex items-center justify-center">
+            <CheckCircle2 className="w-6 h-6" />
+          </div>
+        </div>
+
+        <div className="glass-card p-5 rounded-3xl border border-white/40 dark:border-slate-800 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Prazo Médio do Laudo</p>
+            <h3 className="text-2xl font-display font-extrabold text-amber-600 dark:text-amber-400 mt-1">
+              {kpi.avgDays === null ? '—' : `${kpi.avgDays} ${kpi.avgDays === 1 ? 'dia' : 'dias'}`}
+            </h3>
+            <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400 mt-0.5 block">
+              {kpi.avgBase ? `Da coleta à conclusão (${kpi.avgBase} nos últimos 90 dias)` : 'Sem conclusões nos últimos 90 dias'}
+            </span>
+          </div>
+          <div className="w-12 h-12 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-2xl flex items-center justify-center">
+            <Clock className="w-6 h-6" />
+          </div>
+        </div>
+      </div>
 
       {showEfficiencyReport ? (
         <EfficiencyReport analyses={analyses} clients={clients} />
