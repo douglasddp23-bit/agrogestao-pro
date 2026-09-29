@@ -576,7 +576,7 @@ export default function MainApp() {
             <img 
               src={branding.companyLogo} 
               alt="Logo" 
-              className="w-10 h-10 object-cover rounded-xl shadow-md border border-slate-100" 
+              className="w-10 h-10 object-contain bg-white p-0.5 rounded-xl shadow-md border border-slate-100 flex-shrink-0" 
             />
           ) : (
             <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-emerald-200">
@@ -594,11 +594,15 @@ export default function MainApp() {
             >
               {branding.companyName}
             </span>
-            <div className="flex items-center gap-1.5 mt-1">
-              <span className={cn("px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border", getRoleBadgeClass(user?.role as UserRole))}>
-                {ROLE_LABELS[user?.role as UserRole] || user?.role}
-              </span>
-            </div>
+            {/* Slogan da empresa (o cargo já aparece no perfil, no topo da tela) */}
+            {branding.companyPhrase && (
+              <p
+                className="mt-0.5 text-[11px] font-medium text-slate-500 leading-snug max-w-[165px] break-words line-clamp-2"
+                title={branding.companyPhrase}
+              >
+                {branding.companyPhrase}
+              </p>
+            )}
           </div>
         </div>
 
