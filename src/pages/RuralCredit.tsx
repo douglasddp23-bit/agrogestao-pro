@@ -276,7 +276,7 @@ export default function RuralCredit() {
       sections.push({
         title: 'Descrição e Conclusões',
         text: (project.description || 'Sem descrição.') +
-          (project.financingType === 'PRONAF' ? '\n\nA proposta completa (Plano de Negócio PRONAF) pode ser impressa na etapa "Resumo e Impressão" do assistente PRONAF.' : ''),
+          (p.pronafData ? '\n\nO resumo da proposta em 2 vias (cliente e empresa) é gerado na etapa "Resumo e PDF" da proposta de crédito.' : ''),
       });
       const pdf = await buildServiceReportPDF({
         documentTitle: 'Relatório de Projeto de Crédito Rural',
@@ -488,7 +488,7 @@ export default function RuralCredit() {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (project.financingType === 'PRONAF') {
+                      if ((project as any).pronafData) {
                         setPronafResumeProject(project);
                         setIsPronafOpen(true);
                       } else {
@@ -540,7 +540,7 @@ export default function RuralCredit() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setOpenMenuId(null);
-                                if (project.financingType === 'PRONAF') {
+                                if ((project as any).pronafData) {
                                   setPronafResumeProject(project);
                                   setIsPronafOpen(true);
                                 } else {

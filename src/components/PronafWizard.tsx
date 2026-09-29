@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { runExclusive } from '../lib/submitGuard';
-import { X, Search, User, CheckCircle2, ArrowRight, ArrowLeft, AlertCircle, Loader2, MapPin, Landmark, Home, ChevronDown, ChevronUp, Tractor, FileCheck2, ClipboardList, Plus, Trash2, Users, Percent, ShieldCheck, Coins } from 'lucide-react';
+import { X, Search, User, CheckCircle2, ArrowRight, ArrowLeft, AlertCircle, Loader2, MapPin, Landmark, Home, ChevronDown, ChevronUp, Tractor, FileCheck2, Plus, Trash2, Users, ShieldCheck, FileDown, Info } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -8,22 +8,24 @@ import { useAuth } from '../contexts/AuthContext';
 import { createNotification } from '../lib/notifications';
 import { Client, ServiceAnalysis } from '../types';
 import { cn, formatCPF, formatCurrency, todayLocalDateString } from '../lib/utils';
+import { getPdfBranding, drawBrandBanner, drawBrandFooter } from '../lib/pdfBranding';
+import { CREDIT_PROGRAMS, BANCOS_FINANCIADORES, SAFRA_REFERENCIA, findCreditProgram, CreditProgram } from '../lib/creditPrograms';
 import { toast } from 'sonner';
 
 // ======================================================================
-// Estrutura de dados da "Planilha PRONAF" que vamos preenchendo aos poucos,
-// etapa por etapa, dentro do sistema — espelhando a ordem da planilha oficial
-// (Cliente > Avaliação de Bens > Proposta de Investimentos > Coordenadas
-// Geodésicas > Atividades > Cronograma). Cada etapa concluída é salva na hora
-// no próprio projeto de Crédito Rural (campo pronafData), então dá pra fechar
-// e continuar depois de onde parou.
+// Proposta de Crédito Rural — assistente em 3 etapas:
+//   1. Banco → Programa (Pronaf A, B, V, Pronamp, demais) → Cliente (CPF ou nome)
+//   2. Proposta simplificada: Dados, Imóvel, Programa de Investimentos e Garantias
+//   3. Resumo + PDF em 2 vias (cliente leva uma; a outra, assinada, fica na empresa
+//      e marca o início do projeto).
+// Tudo fica salvo no projeto de Crédito Rural (coleção "analyses", campo
+// pronafData), então dá para fechar e continuar depois.
 //
-// Simplificações conscientes desta primeira versão (avisadas ao Douglas):
-// - Município é texto livre (com sugestões) em vez de uma lista oficial com
-//   código IBGE + bioma automático — isso não existe em lugar nenhum do
-//   sistema ainda; feito à parte quando for necessário.
-// - A lista de culturas agrícolas é uma sugestão comum (não o cadastro de
-//   ~15 mil códigos do BACEN da planilha original).
+// Simplificação pedida pelo dono (29/09/2026): saíram Objetivo e Finalidade do
+// crédito, Região (semiárido), as marcações (decreto, agroecológica, plano
+// territorial), Bases do Financiamento, Financiamentos Existentes, Indicadores,
+// Textos, Declarações e Autorizações. Propostas antigas continuam abrindo — os
+// campos antigos só deixam de aparecer.
 // ======================================================================
 
 export interface PronafCliente {
@@ -42,45 +44,15 @@ export interface PronafCliente {
 export interface PronafData {
   cliente?: PronafCliente;
   proposta?: PronafProposta;
-  // geodesica?: {...}  -> Fase futura (Coordenadas Geodésicas)
 }
 
-const STEP_LABELS = ['Cliente', 'Proposta', 'Resumo'];
+const STEP_LABELS = ['Banco, programa e cliente', 'Proposta', 'Resumo e PDF'];
 const newId = () => Math.random().toString(36).slice(2, 10);
 const round2 = (n: number) => Math.round(((n || 0) + Number.EPSILON) * 100) / 100;
 const floor2 = (n: number) => Math.floor(((n || 0) + Number.EPSILON) * 100) / 100;
+const normalize = (s: string) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const fmtDate = (iso?: string) => (iso ? new Date(iso + 'T00:00:00').toLocaleDateString('pt-BR') : '—');
 
-// ======================================================================
-// Fase 3 — Proposta / Plano de Negócio, espelhando a aba "Proposta" da
-// planilha do Banco do Nordeste, integrada ao Cliente e à Avaliação de Bens.
-//
-// Simplificações conscientes desta primeira versão (avisadas ao Douglas):
-// - Programa, Agência, Atividade Principal e Unidade/Uso do investimento
-//   são um recorte comum das listas oficiais, não o cadastro completo do
-//   BNB/SICOR (mesmo espírito da lista de culturas da Avaliação de Bens).
-// - "Região" de cada imóvel é escolhida manualmente — o sistema ainda não
-//   tem um mapeamento automático de município → região semi-árido.
-// - Seção 10 (Declarações) traz as opções principais da planilha, mas sem
-//   a lista legal completa de cargos da Pessoa Politicamente Exposta.
-// - A Taxa de Elaboração/Assist. Técnica de itens de irrigação usa uma
-//   base informada manualmente, já que os itens do Programa de
-//   Investimentos ainda não têm uma marcação própria de "irrigação".
-// ======================================================================
-
-export const PROGRAMAS_PRONAF = [
-  { code: '406', label: 'FNE/PRONAF MULHER' },
-  { code: '417', label: 'FNE/PRONAF AGROECOLOGIA' },
-  { code: '698', label: 'FNE/PRONAF COTAS-PARTES' },
-  { code: '427', label: 'FNE/PRONAF ECO' },
-  { code: '377', label: 'FNE/PRONAF FLORESTA' },
-  { code: '407', label: 'FNE/PRONAF JOVEM' },
-  { code: '434', label: 'FNE/PRONAF MAIS ALIMENTOS' },
-  { code: '405', label: 'FNE/PRONAF SEMI-ÁRIDO' },
-  { code: '615', label: 'PRONAF PRODUTIVO ORIENTADO' },
-  { code: '398', label: 'FNE/PRONAF-AGROINDÚSTRIA' },
-];
-const OBJETIVOS_CREDITO = ['Ampliação', 'Expansão', 'Implantação', 'Modernização'];
-const FINALIDADES_CREDITO = ['INVESTIMENTOS FIXOS', 'INVESTIMENTOS MISTOS', 'CUSTEIO VINCULADO'];
 const UNIDADES_INVESTIMENTO = ['HA', 'CAB', 'UN', 'M', 'M2', 'M3', 'KG', 'CX', 'DOSE', 'H/TE', 'DÚZIA'];
 const USOS_INVESTIMENTO = [
   'Aquis/Desenv. Software', 'Capital de Giro', 'Cobertura do Solo', 'Construções Civis',
@@ -89,7 +61,6 @@ const USOS_INVESTIMENTO = [
   'Outras Inv. Financeiras', 'Outras Inversões', 'Ração e Volumoso', 'Sais Minerais',
   'Semoventes', 'Terrenos', 'Treinamento de Pessoal', 'Vacinas e Medicamentos', 'Veículos/Embarcações',
 ];
-const REGIAO_OPTIONS = ['Semi-árido', 'Fora do Semi-árido'];
 const TIPOS_GARANTIA_REAL = ['Alienação Fiduciária', 'Aval', 'Fiança', 'Fundo de Aval', 'Hipoteca', 'Penhor - Agrícola', 'Penhor - Outros', 'Penhor - Pecuário'];
 const MODALIDADE_POR_TIPO: Record<string, string> = {
   'Alienação Fiduciária': 'Alienação Fiduciária de Bem Móvel/Imóvel',
@@ -101,35 +72,22 @@ const MODALIDADE_POR_TIPO: Record<string, string> = {
   'Penhor - Outros': 'Penhor Rural',
   'Penhor - Pecuário': 'Penhor Rural Pecuário',
 };
-const PERIODICIDADE_OPTIONS = ['Anual', 'Semestral', 'Mensal', 'Única no Vencimento'];
-const METODO_CALCULO_OPTIONS = ['Price', 'SAC', 'Sem Método (Parcela Única)'];
 
 export interface ElaboradorInfo { empresa: string; cnpj: string; elaborador: string; cpfElaborador: string; }
 const makeElaborador = (): ElaboradorInfo => ({ empresa: '', cnpj: '', elaborador: '', cpfElaborador: '' });
 
 export interface DadosProposta {
   banco: string;
+  programaId: string;
   dataProposta: string;
-  objetivoCredito: string;
-  programa: string;
   agencia: string;
-  regiao: string;
   atividadePrincipal: string;
-  municipioDecretoEmergencia: boolean;
-  finalidadeCredito: string;
-  producaoAgroecologica: boolean;
-  origemPlanoTerritorial: boolean;
   elaborador: ElaboradorInfo;
 }
 const makeDadosProposta = (): DadosProposta => ({
-  banco: '',
-  dataProposta: todayLocalDateString(),
-  objetivoCredito: '', programa: '', agencia: '', regiao: '',
-  atividadePrincipal: '', municipioDecretoEmergencia: false,
-  finalidadeCredito: 'INVESTIMENTOS FIXOS', producaoAgroecologica: false,
-  origemPlanoTerritorial: false, elaborador: makeElaborador(),
+  banco: '', programaId: '', dataProposta: todayLocalDateString(),
+  agencia: '', atividadePrincipal: '', elaborador: makeElaborador(),
 });
-const BANCOS_FINANCIADORES = ['Banco do Nordeste (BNB)', 'Banco do Brasil', 'Sicredi', 'Sicoob', 'Outro'];
 function calcPrevisaoContrato(dataProposta: string) {
   if (!dataProposta) return '';
   const d = new Date(dataProposta + 'T00:00:00');
@@ -137,11 +95,8 @@ function calcPrevisaoContrato(dataProposta: string) {
   return d.toISOString().split('T')[0];
 }
 
-export interface ImovelVinculado { denominacao: string; municipio: string; uf: string; regiao: string; }
-const makeImovelVinculado = (): ImovelVinculado => ({ denominacao: '', municipio: '', uf: '', regiao: '' });
-
-export interface Imovel4Inversao { denominacao: string; municipio: string; uf: string; regiao: string; }
-const makeImovel4Inversao = (): Imovel4Inversao => ({ denominacao: '', municipio: '', uf: '', regiao: '' });
+export interface ImovelVinculado { denominacao: string; municipio: string; uf: string; areaHa?: number; }
+const makeImovelVinculado = (): ImovelVinculado => ({ denominacao: '', municipio: '', uf: '', areaHa: 0 });
 
 export interface InvestimentoItem {
   id: string;
@@ -250,41 +205,6 @@ function calcTotalGeralInvestimentos(prog: ProgramaInvestimentos) {
   };
 }
 
-export interface BasesFinanciamento {
-  prazoMeses: number;
-  carenciaMeses: number;
-  jurosPctAa: number;
-  rebatePctAa: number;
-  delCrederePctAa: number;
-  periodicidadeReembolso: string;
-  periodicidadeJurosCarencia: string;
-  periodicidadeJurosPrestacao: string;
-  metodoCalculo: string;
-}
-const makeBasesFinanciamento = (): BasesFinanciamento => ({
-  prazoMeses: 0, carenciaMeses: 0, jurosPctAa: 0, rebatePctAa: 0, delCrederePctAa: 0,
-  periodicidadeReembolso: 'Anual', periodicidadeJurosCarencia: 'Anual', periodicidadeJurosPrestacao: 'Anual',
-  metodoCalculo: 'Price',
-});
-
-export interface FinanciamentoExistente {
-  id: string;
-  denominacao: string;
-  agenteFinanceiro: 'BNB' | 'Outros';
-  saldoDevedor: number;
-  mesmaAtividadeConjuge: boolean;
-  pertenceTitular: boolean;
-  jurosPctAa: number;
-  carenciaMeses: number;
-  prazoRestanteMeses: number;
-  dataContratacao: string;
-}
-const makeFinanciamentoExistente = (): FinanciamentoExistente => ({
-  id: newId(), denominacao: '', agenteFinanceiro: 'BNB', saldoDevedor: 0,
-  mesmaAtividadeConjuge: false, pertenceTitular: true, jurosPctAa: 0,
-  carenciaMeses: 0, prazoRestanteMeses: 0, dataContratacao: '',
-});
-
 export interface AvalistaFiador {
   tipo: 'Aval' | 'Fiança' | '';
   nome: string; cpfCnpj: string;
@@ -295,85 +215,45 @@ const makeAvalistaFiador = (): AvalistaFiador => ({ tipo: '', nome: '', cpfCnpj:
 export interface GarantiaReal { id: string; denominacao: string; tipo: string; valor: number; }
 const makeGarantiaReal = (): GarantiaReal => ({ id: newId(), denominacao: '', tipo: 'Hipoteca', valor: 0 });
 
-export interface IndicadoresSociais { empregadosAtual: number; empregadosEstabilizacao: number; }
-const makeIndicadoresSociais = (): IndicadoresSociais => ({ empregadosAtual: 0, empregadosEstabilizacao: 0 });
-function calcInvestimentoPorEmpregado(indicadores: IndicadoresSociais, investimentoTotal: number) {
-  return indicadores.empregadosEstabilizacao > 0 ? investimentoTotal / indicadores.empregadosEstabilizacao : 0;
-}
-
-export interface TextosProposta { comentarios: string; parecerTecnico: string; }
-const makeTextosProposta = (): TextosProposta => ({ comentarios: '', parecerTecnico: '' });
-
-export interface OperacaoExistenteBNB {
-  id: string; bancoCooperativa: string; dataContratoOuRenovacao: string; valorContrato: number;
-  fonteRecursos: string; bonus200: boolean; bonus700: boolean; saldoDevedor: number;
-}
-const makeOperacaoExistenteBNB = (): OperacaoExistenteBNB => ({
-  id: newId(), bancoCooperativa: '', dataContratoOuRenovacao: '', valorContrato: 0,
-  fonteRecursos: '', bonus200: false, bonus700: false, saldoDevedor: 0,
-});
-
-export interface DeclaracoesProposta {
-  respondePorOperacoes: 'nao' | 'sim' | '';
-  operacoesExistentesBNB: OperacaoExistenteBNB[];
-  bonus700Situacao: 'primeira' | 'enesima_sem_bonus' | 'enesima_com_bonus' | '';
-  numeroOperacao: number;
-  renegociacaoMp432: 'nao' | 'amortizou' | '';
-  anoRenegociacao: number;
-  ppe: 'enquadro' | 'nao_enquadro' | '';
-  metodologiaJuros: 'prefixada' | 'posfixada' | '';
-}
-const makeDeclaracoesProposta = (): DeclaracoesProposta => ({
-  respondePorOperacoes: '', operacoesExistentesBNB: [makeOperacaoExistenteBNB()],
-  bonus700Situacao: '', numeroOperacao: 1, renegociacaoMp432: '', anoRenegociacao: new Date().getFullYear(),
-  ppe: '', metodologiaJuros: '',
-});
-
 export interface PronafProposta {
   dados: DadosProposta;
   imoveisVinculados: ImovelVinculado[];
-  imovel4: Imovel4Inversao;
   programaInvestimentos: ProgramaInvestimentos;
-  basesFinanciamento: BasesFinanciamento;
-  financiamentosExistentes: FinanciamentoExistente[];
   avalistas: [AvalistaFiador, AvalistaFiador];
   garantiasReaisExtras: GarantiaReal[];
-  indicadores: IndicadoresSociais;
-  textos: TextosProposta;
-  declaracoes: DeclaracoesProposta;
 }
 const makePronafProposta = (): PronafProposta => ({
   dados: makeDadosProposta(),
   imoveisVinculados: [makeImovelVinculado()],
-  imovel4: makeImovel4Inversao(),
   programaInvestimentos: makeProgramaInvestimentos(),
-  basesFinanciamento: makeBasesFinanciamento(),
-  financiamentosExistentes: [makeFinanciamentoExistente()],
   avalistas: [makeAvalistaFiador(), makeAvalistaFiador()],
   garantiasReaisExtras: [],
-  indicadores: makeIndicadoresSociais(),
-  textos: makeTextosProposta(),
-  declaracoes: makeDeclaracoesProposta(),
 });
 
-function imoveisInversaoRows(proposta: PronafProposta) {
-  const rows: { n: number; denominacao: string; municipioUf: string; regiao: string }[] = [];
-  proposta.imoveisVinculados.forEach((info, idx) => {
-    if ((info.denominacao || '').trim()) rows.push({ n: idx + 1, denominacao: info.denominacao, municipioUf: `${info.municipio}-${info.uf}`, regiao: info.regiao });
-  });
-  const imovel4 = proposta.imovel4;
-  if ((imovel4.denominacao || '').trim() && (imovel4.municipio || '').trim()) rows.push({ n: 4, denominacao: imovel4.denominacao, municipioUf: `${imovel4.municipio}-${imovel4.uf}`, regiao: imovel4.regiao });
-  return rows;
+// Proposta salva no formato antigo (11 seções): aproveita o que ainda existe e
+// completa o que faltar, sem apagar nada do banco.
+function normalizeProposta(raw: any): PronafProposta {
+  const base = makePronafProposta();
+  if (!raw) return base;
+  const imoveis: ImovelVinculado[] = Array.isArray(raw.imoveisVinculados) && raw.imoveisVinculados.length
+    ? raw.imoveisVinculados.map((i: any) => ({ denominacao: i?.denominacao || '', municipio: i?.municipio || '', uf: i?.uf || '', areaHa: Number(i?.areaHa) || 0 }))
+    : base.imoveisVinculados;
+  return {
+    dados: { ...base.dados, ...(raw.dados || {}), elaborador: { ...base.dados.elaborador, ...(raw.dados?.elaborador || {}) } },
+    imoveisVinculados: imoveis,
+    programaInvestimentos: { ...base.programaInvestimentos, ...(raw.programaInvestimentos || {}) },
+    avalistas: Array.isArray(raw.avalistas) && raw.avalistas.length === 2 ? raw.avalistas : base.avalistas,
+    garantiasReaisExtras: Array.isArray(raw.garantiasReaisExtras) ? raw.garantiasReaisExtras : [],
+  };
 }
 
 function resumoGarantias(proposta: PronafProposta) {
   const reaisPreExistentes = proposta.garantiasReaisExtras.reduce((a, g) => a + (g.valor || 0), 0);
   const reaisEvolutivas = subtotalInvestimento(proposta.programaInvestimentos.itens).garantiaEvolutiva;
-  const fidejussorias = 0; // avais/fianças não têm valor monetário próprio na planilha original
-  const total = fidejussorias + reaisPreExistentes + reaisEvolutivas;
+  const total = reaisPreExistentes + reaisEvolutivas;
   const financTotal = calcTotalGeralInvestimentos(proposta.programaInvestimentos).financiamento;
   const pctGarantias = financTotal > 0 ? total / financTotal : 0;
-  return { fidejussorias, reaisPreExistentes, reaisEvolutivas, total, pctGarantias };
+  return { reaisPreExistentes, reaisEvolutivas, total, pctGarantias };
 }
 
 interface PronafWizardProps {
@@ -384,8 +264,7 @@ interface PronafWizardProps {
   onSaved?: () => void;
 }
 
-// ---------- Sub-componentes de UI reutilizados na Proposta e no Resumo ----------
-function SectionAccordion({ id, expanded, onToggle, icon, title, badge, children }: { id: string; expanded: boolean; onToggle: () => void; icon: React.ReactNode; title: string; badge?: string; children: React.ReactNode }) {
+function SectionAccordion({ expanded, onToggle, icon, title, badge, children }: { expanded: boolean; onToggle: () => void; icon: React.ReactNode; title: string; badge?: string; children: React.ReactNode }) {
   return (
     <div className="border border-slate-200 rounded-2xl overflow-hidden">
       <button type="button" onClick={onToggle} className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-colors">
@@ -400,109 +279,112 @@ function SectionAccordion({ id, expanded, onToggle, icon, title, badge, children
   );
 }
 
+function ProgramConditions({ program, compact }: { program: CreditProgram; compact?: boolean }) {
+  const rows: [string, string][] = [
+    ['Quem pode', program.publico],
+    ['Juros', program.juros],
+    ['Limite', program.limite],
+    ['Prazo', program.prazo],
+    ['Carência', program.carencia],
+    ...(program.bonus ? [['Bônus', program.bonus] as [string, string]] : []),
+  ];
+  return (
+    <div className={cn('rounded-xl border border-emerald-200 bg-emerald-50/60', compact ? 'p-3' : 'p-4')}>
+      <p className="text-xs font-bold text-emerald-800 mb-2">{program.nome}{program.nome.includes(program.finalidade) ? '' : ` · ${program.finalidade}`}</p>
+      <div className="grid grid-cols-1 gap-1">
+        {rows.map(([k, v]) => (
+          <p key={k} className="text-[11px] text-slate-700"><span className="font-semibold text-slate-500">{k}:</span> {v}</p>
+        ))}
+      </div>
+      <p className="text-[10px] text-emerald-700 mt-2 flex items-start gap-1"><Info className="w-3 h-3 shrink-0 mt-0.5" /> Referência: {SAFRA_REFERENCIA}. As condições finais são confirmadas pelo banco na contratação.</p>
+    </div>
+  );
+}
+
 export default function PronafWizard({ isOpen, onClose, clients, existingProject, onSaved }: PronafWizardProps) {
   const { user } = useAuth();
   const [step, setStep] = useState(1);
   const [projectId, setProjectId] = useState<string | null>(null);
-  const [cpfInput, setCpfInput] = useState('');
+  const [clientQuery, setClientQuery] = useState('');
   const [foundClient, setFoundClient] = useState<Client | null>(null);
-  const [searchAttempted, setSearchAttempted] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
   const [proposta, setProposta] = useState<PronafProposta>(makePronafProposta());
-  const [expandedPropostaSection, setExpandedPropostaSection] = useState<string | null>('dados');
+  const [expandedSection, setExpandedSection] = useState<string | null>('dados');
+
+  const program = findCreditProgram(proposta.dados.programaId);
 
   useEffect(() => {
     if (!isOpen) return;
+    setExpandedSection('dados');
     if (existingProject) {
-      const pronafData: PronafData = (existingProject as any).pronafData || {};
+      const p: any = existingProject;
+      const pronafData: PronafData = p.pronafData || {};
       setProjectId(existingProject.id);
-      if (pronafData.cliente) {
-        const clienteMatch = clients.find(c => c.id === pronafData.cliente!.clientId) || null;
-        setFoundClient(clienteMatch);
-        setCpfInput(pronafData.cliente.cpfCnpj || '');
-      }
-      if (pronafData.proposta) {
-        // Reabrir uma proposta já iniciada sempre leva de volta pro formulário
-        // editável da Proposta — igual a quando ela foi preenchida da primeira
-        // vez — e não direto pro Resumo, pra dar pra continuar ajustando.
-        const propostaCarregada = pronafData.proposta;
-        if (!propostaCarregada.dados.banco && (existingProject as any).bank) {
-          // Propostas salvas antes do campo "Banco" existir: recupera o banco
-          // que já estava gravado no projeto, pra não aparecer em branco.
-          propostaCarregada.dados = { ...propostaCarregada.dados, banco: (existingProject as any).bank };
-        }
-        setProposta(propostaCarregada);
-        setStep(2);
-      } else if (pronafData.cliente) {
-        const nova = makePronafProposta();
-        nova.dados.banco = (existingProject as any).bank || '';
-        nova.imoveisVinculados[0] = {
-          ...nova.imoveisVinculados[0],
-          denominacao: pronafData.cliente.propriedades?.[0]?.name || '',
-          municipio: pronafData.cliente.municipio || '',
-          uf: pronafData.cliente.uf || '',
-        };
-        setProposta(nova);
-        setStep(2);
-      } else {
-        setStep(1);
-      }
+      const clienteMatch = clients.find(c => c.id === (pronafData.cliente?.clientId || existingProject.clientId)) || null;
+      setFoundClient(clienteMatch);
+      setClientQuery(clienteMatch?.name || pronafData.cliente?.nome || '');
+      const nova = normalizeProposta(pronafData.proposta);
+      if (!nova.dados.banco) nova.dados.banco = p.bank || '';
+      if (!nova.dados.programaId) nova.dados.programaId = p.creditProgramId || '';
+      setProposta(nova);
+      // Sem programa escolhido (propostas antigas), volta para a etapa 1.
+      setStep(pronafData.cliente && nova.dados.programaId ? 2 : 1);
     } else {
       setStep(1);
       setProjectId(null);
-      setCpfInput('');
+      setClientQuery('');
       setFoundClient(null);
-      setSearchAttempted(false);
       setProposta(makePronafProposta());
-      setExpandedPropostaSection('dados');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, existingProject, clients]);
+  }, [isOpen, existingProject?.id]);
 
   const resetAndClose = () => {
     setStep(1);
     setProjectId(null);
-    setCpfInput('');
+    setClientQuery('');
     setFoundClient(null);
-    setSearchAttempted(false);
     setProposta(makePronafProposta());
     onClose();
   };
 
-  const addImovelVinculado = () => setProposta(prev => {
-    if (prev.imoveisVinculados.length >= 3) return prev;
-    return { ...prev, imoveisVinculados: [...prev.imoveisVinculados, makeImovelVinculado()] };
-  });
-  const removeImovelVinculado = (idx: number) => setProposta(prev => {
-    if (prev.imoveisVinculados.length <= 1 || idx !== prev.imoveisVinculados.length - 1) return prev;
-    return { ...prev, imoveisVinculados: prev.imoveisVinculados.filter((_, i) => i !== idx) };
-  });
-  const updateImovelVinculado = (idx: number, patch: Partial<ImovelVinculado>) => setProposta(prev => {
-    const lista = [...prev.imoveisVinculados];
-    lista[idx] = { ...lista[idx], ...patch };
-    return { ...prev, imoveisVinculados: lista };
-  });
+  // Busca por CPF (só números) ou por nome (sem acento/maiúsculas).
+  const clientResults = useMemo(() => {
+    const q = clientQuery.trim();
+    if (q.length < 2 || (foundClient && q === foundClient.name)) return [];
+    const digits = q.replace(/\D/g, '');
+    const onlyCpfChars = /^[\d.\-\s]+$/.test(q);
+    return clients.filter(c => {
+      if (onlyCpfChars) return digits.length >= 3 && (c.cpf || '').replace(/\D/g, '').includes(digits);
+      return normalize(c.name).includes(normalize(q));
+    }).slice(0, 8);
+  }, [clientQuery, clients, foundClient]);
 
-  const handleSearchCpf = (value: string) => {
-    const formatted = formatCPF(value);
-    setCpfInput(formatted);
-    const digits = formatted.replace(/\D/g, '');
+  const handleClientQuery = (value: string) => {
+    const v = /^[\d.\-\s]+$/.test(value) ? formatCPF(value) : value;
+    setClientQuery(v);
+    if (foundClient && v !== foundClient.name) setFoundClient(null);
+    const digits = v.replace(/\D/g, '');
     if (digits.length === 11) {
       const match = clients.find(c => (c.cpf || '').replace(/\D/g, '') === digits);
-      setFoundClient(match || null);
-      setSearchAttempted(true);
-    } else {
-      setFoundClient(null);
-      setSearchAttempted(false);
+      if (match) { setFoundClient(match); setClientQuery(match.name); }
     }
   };
 
+  const pickClient = (c: Client) => { setFoundClient(c); setClientQuery(c.name); };
+
+  const imovelFromProperty = (prop: Client['properties'][number]): ImovelVinculado => ({
+    denominacao: (prop?.name || '').slice(0, 40),
+    municipio: prop?.city || foundClient?.address?.city || '',
+    uf: prop?.state || foundClient?.address?.state || '',
+    areaHa: Number(prop?.areaHectares) || 0,
+  });
+
   const handleConfirmClient = async () => {
     if (!foundClient || !user) return;
-    if (!projectId && !proposta.dados.banco) {
-      toast.error('Selecione o banco financiador antes de continuar.');
-      return;
-    }
+    if (!proposta.dados.banco) { toast.error('Selecione o banco financiador.'); return; }
+    if (!program) { toast.error('Selecione o programa de crédito.'); return; }
     setSaving(true);
     try {
       const pronafCliente: PronafCliente = {
@@ -510,110 +392,107 @@ export default function PronafWizard({ isOpen, onClose, clients, existingProject
         nome: foundClient.name,
         cpfCnpj: foundClient.cpf,
         tipoCliente: 'PF',
-        endereco: `${foundClient.address?.street || ''}, ${foundClient.address?.number || ''}`.trim(),
+        endereco: [foundClient.address?.street, foundClient.address?.number].filter(Boolean).join(', '),
         municipio: foundClient.address?.city || '',
         uf: foundClient.address?.state || '',
         telefone: foundClient.phone || '',
         email: foundClient.ownerEmail || '',
-        propriedades: foundClient.properties || [],
+        propriedades: (foundClient.properties || []).map(p => ({ name: p.name })),
       };
 
-      // Pré-preenche o Imóvel 1 (Seção 2 da Proposta) com os dados do cliente,
-      // pra economizar digitação na próxima etapa (ele pode ajustar depois).
+      // Puxa do cadastro: imóvel (1ª propriedade) e empresa elaboradora/técnico.
+      const branding = getPdfBranding();
       setProposta(prev => {
         const lista = [...prev.imoveisVinculados];
-        lista[0] = {
-          ...lista[0],
-          denominacao: lista[0].denominacao || foundClient.properties?.[0]?.name || '',
-          municipio: lista[0].municipio || foundClient.address?.city || '',
-          uf: lista[0].uf || foundClient.address?.state || '',
+        if (!lista[0]?.denominacao && foundClient.properties?.[0]) lista[0] = imovelFromProperty(foundClient.properties[0]);
+        else if (!lista[0]?.municipio) lista[0] = { ...lista[0], municipio: foundClient.address?.city || '', uf: foundClient.address?.state || '' };
+        const el = prev.dados.elaborador;
+        return {
+          ...prev,
+          imoveisVinculados: lista,
+          dados: {
+            ...prev.dados,
+            elaborador: {
+              ...el,
+              empresa: el.empresa || branding.companyName || '',
+              elaborador: el.elaborador || user.displayName || '',
+            },
+          },
         };
-        return { ...prev, imoveisVinculados: lista };
       });
 
+      const common = {
+        clientId: foundClient.id,
+        clientName: foundClient.name,
+        bank: proposta.dados.banco,
+        financingType: program.nome,
+        creditProgramId: program.id,
+        updatedAt: new Date().toISOString(),
+      };
       if (projectId) {
-        await updateDoc(doc(db, 'analyses', projectId), {
-          'pronafData.cliente': pronafCliente,
-          clientId: foundClient.id,
-          clientName: foundClient.name,
-          updatedAt: new Date().toISOString(),
-        });
+        await updateDoc(doc(db, 'analyses', projectId), { ...common, 'pronafData.cliente': pronafCliente });
       } else {
         const newDoc = await addDoc(collection(db, 'analyses'), {
-          clientId: foundClient.id,
-          clientName: foundClient.name,
+          ...common,
           propertyName: foundClient.properties?.[0]?.name || '',
           type: 'credit',
           status: 'Pendente',
-          description: 'Proposta PRONAF (Procedimento Simplificado)',
+          description: `Proposta de crédito — ${program.nome}`,
           value: 0,
           cost: 0,
-          bank: proposta.dados.banco || 'Banco do Nordeste (BNB)',
-          financingType: 'PRONAF',
           category: 'Agricultura',
           scheduledDate: todayLocalDateString(),
           responsibleTechnician: user?.displayName || '',
           pronafData: { cliente: pronafCliente },
           createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          assignedTo: user?.uid || ''
+          assignedTo: user?.uid || '',
         });
         setProjectId(newDoc.id);
-        await createNotification(user.uid, 'Nova Proposta PRONAF', `Proposta PRONAF iniciada para ${foundClient.name}.`, 'success', 'analysis_credit');
+        await createNotification(user.uid, 'Nova proposta de crédito', `${program.nome} iniciada para ${foundClient.name}.`, 'success', 'analysis_credit');
       }
 
-      toast.success('Cliente confirmado. Seguindo para a Proposta.');
+      toast.success('Cliente confirmado. Agora preencha a proposta.');
       onSaved?.();
       setStep(2);
     } catch (error) {
-      console.error('Erro ao salvar Proposta PRONAF:', error);
+      console.error('Erro ao salvar proposta de crédito:', error);
       toast.error('Não foi possível salvar. Verifique sua conexão e tente novamente.');
     } finally {
       setSaving(false);
     }
   };
 
-
-  // --- updaters da Proposta / Plano de Negócio ---
-  const updateDadosProposta = (patch: Partial<DadosProposta>) => setProposta(prev => ({ ...prev, dados: { ...prev.dados, ...patch } }));
+  // --- updaters ---
+  const updateDados = (patch: Partial<DadosProposta>) => setProposta(prev => ({ ...prev, dados: { ...prev.dados, ...patch } }));
   const updateElaborador = (patch: Partial<ElaboradorInfo>) => setProposta(prev => ({ ...prev, dados: { ...prev.dados, elaborador: { ...prev.dados.elaborador, ...patch } } }));
-  const updateImovel4Proposta = (patch: Partial<Imovel4Inversao>) => setProposta(prev => ({ ...prev, imovel4: { ...prev.imovel4, ...patch } }));
 
-  const updateInvestItem = (idx: number, patch: Partial<InvestimentoItem>) => setProposta(prev => {
-    const itens = [...prev.programaInvestimentos.itens];
-    itens[idx] = { ...itens[idx], ...patch };
-    return { ...prev, programaInvestimentos: { ...prev.programaInvestimentos, itens } };
-  });
-  const addInvestItem = () => setProposta(prev => ({ ...prev, programaInvestimentos: { ...prev.programaInvestimentos, itens: [...prev.programaInvestimentos.itens, makeInvestimentoItem()] } }));
-  const removeInvestItem = (idx: number) => setProposta(prev => {
-    if (prev.programaInvestimentos.itens.length <= 1) return prev;
-    return { ...prev, programaInvestimentos: { ...prev.programaInvestimentos, itens: prev.programaInvestimentos.itens.filter((_, i) => i !== idx) } };
-  });
-  const updateCusteioAgricola = (patch: Partial<CusteioVinculado>) => setProposta(prev => ({ ...prev, programaInvestimentos: { ...prev.programaInvestimentos, custeioAgricola: { ...prev.programaInvestimentos.custeioAgricola, ...patch } } }));
-  const updateCusteioPecuario = (patch: Partial<CusteioVinculado>) => setProposta(prev => ({ ...prev, programaInvestimentos: { ...prev.programaInvestimentos, custeioPecuario: { ...prev.programaInvestimentos.custeioPecuario, ...patch } } }));
-  const updateCustoAssessoria = (patch: Partial<CustoAssessoria>) => setProposta(prev => ({ ...prev, programaInvestimentos: { ...prev.programaInvestimentos, custoAssessoria: { ...prev.programaInvestimentos.custoAssessoria, ...patch } } }));
-  const updateTaxaElaboracao = (patch: Partial<TaxaElaboracaoIrrigacao>) => setProposta(prev => ({ ...prev, programaInvestimentos: { ...prev.programaInvestimentos, taxaElaboracaoIrrigacao: { ...prev.programaInvestimentos.taxaElaboracaoIrrigacao, ...patch } } }));
-  const updateLinhaAdicional = (patch: Partial<LinhaAdicionalCusto>) => setProposta(prev => ({ ...prev, programaInvestimentos: { ...prev.programaInvestimentos, linhaAdicional: { ...prev.programaInvestimentos.linhaAdicional, ...patch } } }));
-
-  const updateBasesFinanciamento = (patch: Partial<BasesFinanciamento>) => setProposta(prev => ({ ...prev, basesFinanciamento: { ...prev.basesFinanciamento, ...patch } }));
-
-  const updateFinanciamentoExistente = (idx: number, patch: Partial<FinanciamentoExistente>) => setProposta(prev => {
-    const lista = [...prev.financiamentosExistentes];
+  const addImovel = () => setProposta(prev => prev.imoveisVinculados.length >= 3 ? prev : ({ ...prev, imoveisVinculados: [...prev.imoveisVinculados, makeImovelVinculado()] }));
+  const removeImovel = (idx: number) => setProposta(prev => prev.imoveisVinculados.length <= 1 ? prev : ({ ...prev, imoveisVinculados: prev.imoveisVinculados.filter((_, i) => i !== idx) }));
+  const updateImovel = (idx: number, patch: Partial<ImovelVinculado>) => setProposta(prev => {
+    const lista = [...prev.imoveisVinculados];
     lista[idx] = { ...lista[idx], ...patch };
-    return { ...prev, financiamentosExistentes: lista };
+    return { ...prev, imoveisVinculados: lista };
   });
-  const addFinanciamentoExistente = () => setProposta(prev => ({ ...prev, financiamentosExistentes: [...prev.financiamentosExistentes, makeFinanciamentoExistente()] }));
-  const removeFinanciamentoExistente = (idx: number) => setProposta(prev => {
-    if (prev.financiamentosExistentes.length <= 1) return prev;
-    return { ...prev, financiamentosExistentes: prev.financiamentosExistentes.filter((_, i) => i !== idx) };
+
+  const setPI = (fn: (pi: ProgramaInvestimentos) => ProgramaInvestimentos) => setProposta(prev => ({ ...prev, programaInvestimentos: fn(prev.programaInvestimentos) }));
+  const updateInvestItem = (idx: number, patch: Partial<InvestimentoItem>) => setPI(pi => {
+    const itens = [...pi.itens];
+    itens[idx] = { ...itens[idx], ...patch };
+    return { ...pi, itens };
   });
+  const addInvestItem = () => setPI(pi => ({ ...pi, itens: [...pi.itens, makeInvestimentoItem()] }));
+  const removeInvestItem = (idx: number) => setPI(pi => pi.itens.length <= 1 ? pi : ({ ...pi, itens: pi.itens.filter((_, i) => i !== idx) }));
+  const updateCusteioAgricola = (patch: Partial<CusteioVinculado>) => setPI(pi => ({ ...pi, custeioAgricola: { ...pi.custeioAgricola, ...patch } }));
+  const updateCusteioPecuario = (patch: Partial<CusteioVinculado>) => setPI(pi => ({ ...pi, custeioPecuario: { ...pi.custeioPecuario, ...patch } }));
+  const updateCustoAssessoria = (patch: Partial<CustoAssessoria>) => setPI(pi => ({ ...pi, custoAssessoria: { ...pi.custoAssessoria, ...patch } }));
+  const updateTaxaElaboracao = (patch: Partial<TaxaElaboracaoIrrigacao>) => setPI(pi => ({ ...pi, taxaElaboracaoIrrigacao: { ...pi.taxaElaboracaoIrrigacao, ...patch } }));
+  const updateLinhaAdicional = (patch: Partial<LinhaAdicionalCusto>) => setPI(pi => ({ ...pi, linhaAdicional: { ...pi.linhaAdicional, ...patch } }));
 
   const updateAvalista = (idx: 0 | 1, patch: Partial<AvalistaFiador>) => setProposta(prev => {
     const avalistas = [...prev.avalistas] as [AvalistaFiador, AvalistaFiador];
     avalistas[idx] = { ...avalistas[idx], ...patch };
     return { ...prev, avalistas };
   });
-
   const updateGarantiaExtra = (idx: number, patch: Partial<GarantiaReal>) => setProposta(prev => {
     const lista = [...prev.garantiasReaisExtras];
     lista[idx] = { ...lista[idx], ...patch };
@@ -622,65 +501,211 @@ export default function PronafWizard({ isOpen, onClose, clients, existingProject
   const addGarantiaExtra = () => setProposta(prev => ({ ...prev, garantiasReaisExtras: [...prev.garantiasReaisExtras, makeGarantiaReal()] }));
   const removeGarantiaExtra = (idx: number) => setProposta(prev => ({ ...prev, garantiasReaisExtras: prev.garantiasReaisExtras.filter((_, i) => i !== idx) }));
 
-  const updateIndicadores = (patch: Partial<IndicadoresSociais>) => setProposta(prev => ({ ...prev, indicadores: { ...prev.indicadores, ...patch } }));
-  const updateTextos = (patch: Partial<TextosProposta>) => setProposta(prev => ({ ...prev, textos: { ...prev.textos, ...patch } }));
-
-  const updateDeclaracoes = (patch: Partial<DeclaracoesProposta>) => setProposta(prev => ({ ...prev, declaracoes: { ...prev.declaracoes, ...patch } }));
-  const updateOperacaoBNB = (idx: number, patch: Partial<OperacaoExistenteBNB>) => setProposta(prev => {
-    const lista = [...prev.declaracoes.operacoesExistentesBNB];
-    lista[idx] = { ...lista[idx], ...patch };
-    return { ...prev, declaracoes: { ...prev.declaracoes, operacoesExistentesBNB: lista } };
-  });
-  const addOperacaoBNB = () => setProposta(prev => {
-    if (prev.declaracoes.operacoesExistentesBNB.length >= 10) return prev;
-    return { ...prev, declaracoes: { ...prev.declaracoes, operacoesExistentesBNB: [...prev.declaracoes.operacoesExistentesBNB, makeOperacaoExistenteBNB()] } };
-  });
-  const removeOperacaoBNB = (idx: number) => setProposta(prev => {
-    if (prev.declaracoes.operacoesExistentesBNB.length <= 1) return prev;
-    return { ...prev, declaracoes: { ...prev.declaracoes, operacoesExistentesBNB: prev.declaracoes.operacoesExistentesBNB.filter((_, i) => i !== idx) } };
-  });
-
   const handleSaveProposta = async () => {
     if (!projectId) return;
-    if (!proposta.dados.dataProposta) {
-      toast.error('Informe a Data da Proposta.');
-      return;
-    }
-    if (!proposta.dados.objetivoCredito || !proposta.dados.programa) {
-      toast.error('Informe o Objetivo do Crédito e o Programa.');
-      return;
-    }
+    if (!proposta.dados.dataProposta) { toast.error('Informe a data da proposta.'); return; }
+    if (!program) { toast.error('Selecione o programa de crédito.'); return; }
+    if (!proposta.dados.banco) { toast.error('Selecione o banco financiador.'); return; }
     setSaving(true);
     try {
       await updateDoc(doc(db, 'analyses', projectId), {
         'pronafData.proposta': proposta,
         value: calcTotalGeralInvestimentos(proposta.programaInvestimentos).investimentoTotal,
-        bank: proposta.dados.banco || 'Banco do Nordeste (BNB)',
+        bank: proposta.dados.banco,
+        financingType: program.nome,
+        creditProgramId: program.id,
+        propertyName: proposta.imoveisVinculados[0]?.denominacao || '',
         updatedAt: new Date().toISOString(),
       });
-      toast.success('Proposta / Plano de Negócio salva.');
+      toast.success('Proposta salva.');
       onSaved?.();
       setStep(3);
     } catch (error) {
-      console.error('Erro ao salvar Proposta:', error);
+      console.error('Erro ao salvar proposta:', error);
       toast.error('Não foi possível salvar. Verifique sua conexão e tente novamente.');
     } finally {
       setSaving(false);
     }
   };
 
-  const handlePrint = () => window.print();
+  // PDF do resumo em 2 vias (Cliente / Empresa), cada uma com campo de assinatura.
+  const handleGeneratePdf = async () => {
+    if (!foundClient || !program) return;
+    setGeneratingPdf(true);
+    try {
+      const { jsPDF } = await import('jspdf');
+      const { default: autoTable } = await import('jspdf-autotable');
+      const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
+      const w = pdf.internal.pageSize.getWidth();
+      const branding = getPdfBranding();
+      const empresa = proposta.dados.elaborador.empresa || branding.companyName || 'a empresa';
+      const tot = calcTotalGeralInvestimentos(proposta.programaInvestimentos);
+      const gar = resumoGarantias(proposta);
+      const EMERALD: [number, number, number] = [5, 150, 105];
+      const DARK: [number, number, number] = [30, 41, 59];
+      const table = (y: number, title: string, body: string[][], opts: any = {}) => {
+        autoTable(pdf, {
+          startY: y,
+          head: opts.head || [[title, '']],
+          body,
+          theme: 'grid',
+          headStyles: { fillColor: opts.headColor || DARK, textColor: 255, fontStyle: 'bold' },
+          columnStyles: opts.columnStyles || { 0: { cellWidth: 52, fontStyle: 'bold', textColor: [71, 85, 105] } },
+          styles: { fontSize: 8, cellPadding: 1.3 },
+          margin: { left: 14, right: 14, top: 16, bottom: 20 },
+          ...opts.extra,
+        });
+        return (pdf as any).lastAutoTable.finalY + 5;
+      };
+      // Tabela "rótulo | valor | rótulo | valor" — deixa cada via caber em 1 página.
+      const kv4 = (y: number, title: string, pairs: [string, string | undefined][], headColor = DARK) => {
+        const body: any[] = [];
+        for (let i = 0; i < pairs.length; i += 2) {
+          const a = pairs[i], b = pairs[i + 1];
+          body.push(b ? [a[0], a[1] || '—', b[0], b[1] || '—'] : [a[0], { content: a[1] || '—', colSpan: 3 }]);
+        }
+        autoTable(pdf, {
+          startY: y,
+          head: [[{ content: title, colSpan: 4 }]],
+          body,
+          theme: 'grid',
+          headStyles: { fillColor: headColor, textColor: 255, fontStyle: 'bold' },
+          columnStyles: { 0: { cellWidth: 30, fontStyle: 'bold', textColor: [71, 85, 105] }, 2: { cellWidth: 30, fontStyle: 'bold', textColor: [71, 85, 105] } },
+          styles: { fontSize: 8, cellPadding: 1.1 },
+          margin: { left: 14, right: 14, top: 16, bottom: 20 },
+        });
+        return (pdf as any).lastAutoTable.finalY + 4;
+      };
+      const ensure = (y: number, need: number) => {
+        if (y + need > 275) { pdf.addPage(); return 18; }
+        return y;
+      };
+
+      const renderVia = (via: string) => {
+        let y = drawBrandBanner(pdf, { height: 26 }) + 9;
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(13); pdf.setTextColor(...DARK);
+        pdf.text('PROPOSTA DE CRÉDITO RURAL — RESUMO', w / 2, y, { align: 'center' });
+        y += 5.5;
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(100, 116, 139);
+        pdf.text(`${via} · ${program.nome} · ${proposta.dados.banco}`, w / 2, y, { align: 'center' });
+        y += 6;
+
+        y = kv4(y, 'Cliente', [
+          ['Nome', foundClient.name], ['CPF', foundClient.cpf],
+          ['Telefone', foundClient.phone], ['Município/UF', foundClient.address?.city ? `${foundClient.address.city}/${foundClient.address.state || ''}` : ''],
+          ['Endereço', [foundClient.address?.street, foundClient.address?.number, foundClient.address?.neighborhood].filter(Boolean).join(', ')],
+        ], EMERALD);
+
+        y = kv4(y, 'Dados da Proposta', [
+          ['Banco', proposta.dados.banco], ['Agência', proposta.dados.agencia],
+          ['Programa', program.nome], ['Finalidade', program.finalidade],
+          ['Data da proposta', fmtDate(proposta.dados.dataProposta)], ['Previsão contrato', fmtDate(calcPrevisaoContrato(proposta.dados.dataProposta))],
+          ['Atividade', proposta.dados.atividadePrincipal], ['Técnico', proposta.dados.elaborador.elaborador],
+          ['Empresa', [proposta.dados.elaborador.empresa, proposta.dados.elaborador.cnpj].filter(Boolean).join(' · CNPJ ')],
+        ]);
+
+        const imoveis = proposta.imoveisVinculados.filter(i => (i.denominacao || '').trim());
+        if (imoveis.length) {
+          y = ensure(y, 20);
+          y = table(y, '', imoveis.map((i, n) => [String(n + 1), i.denominacao, [i.municipio, i.uf].filter(Boolean).join('/') || '—', i.areaHa ? `${i.areaHa} ha` : '—']), {
+            head: [['Nº', 'Imóvel onde serão feitas as inversões', 'Município/UF', 'Área']],
+            columnStyles: { 0: { cellWidth: 10 }, 3: { cellWidth: 24, halign: 'right' } },
+          });
+        }
+
+        const itens = proposta.programaInvestimentos.itens.filter(i => (i.discriminacao || '').trim());
+        const pi = proposta.programaInvestimentos;
+        const extras: string[][] = [];
+        if (pi.custeioAgricola.valor) extras.push(['Custeio agrícola vinculado', '', formatCurrency(pi.custeioAgricola.recProprios || 0), formatCurrency(calcCusteioFinanc(pi.custeioAgricola)), formatCurrency(calcCusteioTotal(pi.custeioAgricola))]);
+        if (pi.custeioPecuario.valor) extras.push(['Custeio pecuário vinculado', '', formatCurrency(pi.custeioPecuario.recProprios || 0), formatCurrency(calcCusteioFinanc(pi.custeioPecuario)), formatCurrency(calcCusteioTotal(pi.custeioPecuario))]);
+        if (calcCustoAssessoriaValor(pi)) extras.push(['Assessoria empresarial e técnica', '', formatCurrency(pi.custoAssessoria.recProprios || 0), formatCurrency(calcCustoAssessoriaFinanc(pi)), formatCurrency(calcCustoAssessoriaTotal(pi))]);
+        if (calcTaxaElaboracaoValor(pi)) extras.push(['Tx. elaboração + assist. técnica (irrigação)', '', formatCurrency(0), formatCurrency(calcTaxaElaboracaoValor(pi)), formatCurrency(calcTaxaElaboracaoValor(pi))]);
+        if (pi.linhaAdicional.valor) extras.push([pi.linhaAdicional.descricao || 'Outros', '', formatCurrency(pi.linhaAdicional.recProprios || 0), formatCurrency(calcLinhaAdicionalFinanc(pi)), formatCurrency(pi.linhaAdicional.valor)]);
+        y = ensure(y, 30);
+        y = table(y, '', [
+          ...itens.map(i => [i.discriminacao, `${i.quantidade || 0} ${i.unidade} × ${formatCurrency(i.valorUnitario)}`, formatCurrency(calcRecursoProprioTotalItem(i)), formatCurrency(calcValorFinanciamentoItem(i)), formatCurrency(calcInvestimentoTotalItem(i))]),
+          ...extras,
+          ...(itens.length || extras.length ? [] : [['Nenhum item informado', '', '', '', '']]),
+        ], {
+          head: [['Programa de investimentos', 'Quantidade', 'Rec. próprios', 'Financiado', 'Total']],
+          columnStyles: { 0: { cellWidth: 62 }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
+          extra: {
+            foot: [['TOTAL', '', formatCurrency(tot.recProprios), formatCurrency(tot.financiamento), formatCurrency(tot.investimentoTotal)]],
+            footStyles: { fillColor: EMERALD, textColor: 255, fontStyle: 'bold', halign: 'right' },
+          },
+        });
+
+        const avs = proposta.avalistas.filter(a => (a.nome || '').trim());
+        const garRows: string[][] = [
+          ...avs.map(a => [`${a.tipo || 'Aval/Fiança'}`, `${a.nome}${a.cpfCnpj ? ' · CPF ' + a.cpfCnpj : ''}${a.conjugeNome ? ' · Cônjuge: ' + a.conjugeNome : ''}`]),
+          ...proposta.garantiasReaisExtras.filter(g => (g.denominacao || '').trim() || g.valor).map(g => [g.tipo, `${g.denominacao || '—'} · ${formatCurrency(g.valor || 0)}`]),
+          ...(gar.reaisEvolutivas ? [['Garantias reais evolutivas', formatCurrency(gar.reaisEvolutivas)]] : []),
+          ['Total de garantias reais', `${formatCurrency(gar.total)} (${(gar.pctGarantias * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% do financiado)`],
+        ];
+        y = ensure(y, 25);
+        y = table(y, '', garRows, { head: [[{ content: 'Garantias', colSpan: 2 }]] });
+
+        y = ensure(y, 30);
+        y = kv4(y, `Condições de referência — ${SAFRA_REFERENCIA} (confirmadas pelo banco na contratação)`, [
+          ['Juros', program.juros], ['Limite', program.limite],
+          ['Prazo', program.prazo], ['Carência', program.carencia],
+          ...(program.bonus ? [['Bônus', program.bonus] as [string, string]] : []),
+        ]);
+
+        // Documentos em 2 colunas de checklist
+        y = ensure(y, 30);
+        const docs = program.documentos;
+        const half = Math.ceil(docs.length / 2);
+        y = table(y, '', Array.from({ length: half }, (_, i) => [`[  ] ${docs[i]}`, docs[i + half] ? `[  ] ${docs[i + half]}` : '']), {
+          head: [[{ content: 'Documentos que o cliente deve providenciar', colSpan: 2 }]],
+          columnStyles: { 0: { cellWidth: (w - 28) / 2 } },
+          extra: { styles: { fontSize: 7.2, cellPadding: 1 } },
+        });
+
+        // Declaração + assinaturas (~44 mm; o rodapé começa em 283 mm)
+        if (y + 44 > 280) { pdf.addPage(); y = 18; }
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.5); pdf.setTextColor(51, 65, 85);
+        const decl = `Declaro que as informações acima são verdadeiras e autorizo ${empresa} a iniciar a elaboração do projeto de crédito rural (${program.nome}) junto ao ${proposta.dados.banco}. Estou ciente de que a aprovação, o valor e as condições finais do financiamento dependem da análise do banco.`;
+        const lines = pdf.splitTextToSize(decl, w - 28);
+        pdf.text(lines, 14, y);
+        y += lines.length * 3.9 + 2;
+        const cidade = foundClient.address?.city || proposta.imoveisVinculados[0]?.municipio || '____________________';
+        pdf.text(`${cidade}, ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}.`, 14, y);
+        y += 15;
+        pdf.setDrawColor(100, 116, 139);
+        pdf.line(18, y, 92, y);
+        pdf.line(w - 92, y, w - 18, y);
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9); pdf.setTextColor(...DARK);
+        pdf.text(foundClient.name || 'Cliente', 55, y + 5, { align: 'center' });
+        pdf.text(proposta.dados.elaborador.elaborador || empresa, w - 55, y + 5, { align: 'center' });
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8);
+        pdf.text(`CPF ${foundClient.cpf || '—'}`, 55, y + 9.5, { align: 'center' });
+        pdf.text(empresa, w - 55, y + 9.5, { align: 'center' });
+      };
+
+      renderVia('VIA DO CLIENTE');
+      pdf.addPage();
+      renderVia('VIA DA EMPRESA');
+      drawBrandFooter(pdf);
+      pdf.save(`Proposta_Credito_${(foundClient.name || 'Cliente').replace(/\s+/g, '_')}.pdf`);
+      toast.success('PDF gerado com 2 vias (cliente e empresa).');
+    } catch (error) {
+      console.error('Erro ao gerar PDF da proposta:', error);
+      toast.error('Não foi possível gerar o PDF.');
+    } finally {
+      setGeneratingPdf(false);
+    }
+  };
 
   if (!isOpen) return null;
 
-  const headerSubtitle =
-    step === 1 ? 'Etapa 1 de 3 · Identificação do Cliente' :
-    step === 2 ? 'Etapa 2 de 3 · Proposta / Plano de Negócio' :
-    'Etapa 3 de 3 · Resumo e Impressão';
-
-  const linhasImovelInversao = imoveisInversaoRows(proposta);
   const totalGeralInvest = calcTotalGeralInvestimentos(proposta.programaInvestimentos);
   const resumoGar = resumoGarantias(proposta);
+  const toggle = (id: string) => setExpandedSection(expandedSection === id ? null : id);
+  const clientProps = foundClient?.properties || [];
+  const canConfirm = !!foundClient && !!proposta.dados.banco && !!program && !saving;
+  const inputCls = 'w-full px-2.5 py-2 rounded-lg border border-slate-200 text-xs';
+  const labelCls = 'text-[10px] font-medium text-slate-500 block mb-0.5';
 
   return (
     <AnimatePresence>
@@ -696,33 +721,30 @@ export default function PronafWizard({ isOpen, onClose, clients, existingProject
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.96, y: 10 }}
           onClick={(e) => e.stopPropagation()}
-          className={cn(
-            "bg-white rounded-2xl shadow-2xl w-full overflow-hidden max-h-[92vh] flex flex-col transition-all",
-            step === 2 || step === 3 ? "max-w-6xl" : "max-w-lg"
-          )}
+          className={cn('bg-white rounded-2xl shadow-2xl w-full overflow-hidden max-h-[92vh] flex flex-col transition-all', step === 1 ? 'max-w-3xl' : 'max-w-6xl')}
         >
           {/* Header */}
           <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 px-6 py-5 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3 text-white">
-              <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center">
-                <Landmark className="w-5 h-5" />
-              </div>
+              <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center"><Landmark className="w-5 h-5" /></div>
               <div>
-                <h2 className="font-semibold text-lg leading-tight">Proposta PRONAF</h2>
-                <p className="text-emerald-100 text-xs">{headerSubtitle}{foundClient ? ` · Cliente: ${(foundClient.name || '').toUpperCase()}` : ''}</p>
+                <h2 className="font-semibold text-lg leading-tight">Proposta de Crédito Rural</h2>
+                <p className="text-emerald-100 text-xs">
+                  Etapa {step} de 3 · {STEP_LABELS[step - 1]}
+                  {step > 1 && program ? ` · ${program.nome}` : ''}
+                  {step > 1 && foundClient ? ` · ${(foundClient.name || '').toUpperCase()}` : ''}
+                </p>
               </div>
             </div>
-            <button onClick={resetAndClose} className="text-white/80 hover:text-white transition-colors">
-              <X className="w-5 h-5" />
-            </button>
+            <button onClick={resetAndClose} className="text-white/80 hover:text-white transition-colors" aria-label="Fechar"><X className="w-5 h-5" /></button>
           </div>
 
           {/* Step indicator */}
           <div className="px-6 pt-4 flex items-center gap-1.5 shrink-0">
             {STEP_LABELS.map((label, idx) => (
               <div key={label} className="flex-1">
-                <div className={cn("h-1.5 rounded-full", idx < step ? "bg-emerald-500" : "bg-slate-200")} />
-                <p className={cn("text-[10px] mt-1 text-center", idx < step ? "text-emerald-700 font-medium" : "text-slate-400")}>{label}</p>
+                <div className={cn('h-1.5 rounded-full', idx < step ? 'bg-emerald-500' : 'bg-slate-200')} />
+                <p className={cn('text-[10px] mt-1 text-center', idx < step ? 'text-emerald-700 font-medium' : 'text-slate-400')}>{label}</p>
               </div>
             ))}
           </div>
@@ -730,197 +752,182 @@ export default function PronafWizard({ isOpen, onClose, clients, existingProject
           {/* Body */}
           <div className="p-6 overflow-y-auto custom-scrollbar">
             {step === 1 && (
-              <>
-                <p className="text-sm text-slate-600 mb-4">
-                  Digite o CPF do cliente. Se ele já estiver cadastrado na aba <strong>Clientes</strong>, os dados são puxados automaticamente — não precisa digitar tudo de novo.
-                </p>
-
-                <label className="text-xs font-medium text-slate-500 mb-1.5 block">Banco Financiador</label>
-                <select
-                  value={proposta.dados.banco}
-                  onChange={(e) => updateDadosProposta({ banco: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 outline-none text-sm font-medium bg-white mb-4"
-                >
-                  <option value="">Selecione o banco...</option>
-                  {BANCOS_FINANCIADORES.map(b => <option key={b} value={b}>{b}</option>)}
-                </select>
-
-                <label className="text-xs font-medium text-slate-500 mb-1.5 block">CPF do Cliente</label>
-                <div className="relative">
-                  <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={cpfInput}
-                    onChange={(e) => handleSearchCpf(e.target.value)}
-                    placeholder="000.000.000-00"
-                    maxLength={14}
-                    autoFocus
-                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 outline-none text-sm font-medium tracking-wide"
-                  />
+              <div className="flex flex-col gap-6">
+                {/* 1. Banco */}
+                <div>
+                  <p className="text-sm font-bold text-slate-700 mb-2">1. Banco financiador</p>
+                  <div className="flex flex-wrap gap-2">
+                    {BANCOS_FINANCIADORES.map(b => (
+                      <button key={b} type="button" onClick={() => updateDados({ banco: b })}
+                        className={cn('px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all',
+                          proposta.dados.banco === b ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm' : 'bg-white border-slate-200 text-slate-600 hover:border-emerald-300')}>
+                        {b}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <AnimatePresence mode="wait">
-                  {foundClient && (
-                    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mt-4 p-4 rounded-xl border border-emerald-200 bg-emerald-50">
-                      <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0"><User className="w-5 h-5" /></div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-slate-800 flex items-center gap-1.5">{foundClient.name}<CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /></p>
-                          <p className="text-xs text-slate-500 mt-0.5">CPF: {foundClient.cpf}</p>
-                          {foundClient.address?.city && <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5"><MapPin className="w-3 h-3" /> {foundClient.address.city}/{foundClient.address.state}</p>}
-                          {foundClient.properties?.length > 0 && <p className="text-xs text-slate-500 mt-0.5">{foundClient.properties.length} propriedade(s) cadastrada(s)</p>}
-                        </div>
-                      </div>
-                    </motion.div>
+
+                {/* 2. Programa */}
+                <div>
+                  <p className="text-sm font-bold text-slate-700 mb-2">2. Programa de crédito</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {CREDIT_PROGRAMS.map(p => (
+                      <button key={p.id} type="button" onClick={() => updateDados({ programaId: p.id })}
+                        className={cn('text-left px-3.5 py-2.5 rounded-xl border transition-all',
+                          proposta.dados.programaId === p.id ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-100' : 'bg-white border-slate-200 hover:border-emerald-300')}>
+                        <p className="text-xs font-bold text-slate-800">{p.nome}</p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">{p.finalidade} · Juros: {p.juros.split(' (')[0].replace(/^Até/, 'até')}</p>
+                      </button>
+                    ))}
+                  </div>
+                  {program && <div className="mt-3"><ProgramConditions program={program} /></div>}
+                </div>
+
+                {/* 3. Cliente */}
+                <div>
+                  <p className="text-sm font-bold text-slate-700 mb-2">3. Cliente</p>
+                  <div className="relative">
+                    <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={clientQuery}
+                      onChange={(e) => handleClientQuery(e.target.value)}
+                      placeholder="Digite o CPF ou o nome do cliente"
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 outline-none text-sm font-medium"
+                    />
+                  </div>
+                  {clientResults.length > 0 && (
+                    <div className="mt-2 rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+                      {clientResults.map(c => (
+                        <button key={c.id} type="button" onClick={() => pickClient(c)} className="w-full text-left px-4 py-2.5 hover:bg-emerald-50 flex items-center justify-between gap-3">
+                          <span className="text-sm font-semibold text-slate-700 truncate">{c.name}</span>
+                          <span className="text-[11px] text-slate-400 shrink-0">{c.cpf || 'sem CPF'}{c.address?.city ? ` · ${c.address.city}` : ''}</span>
+                        </button>
+                      ))}
+                    </div>
                   )}
-                  {searchAttempted && !foundClient && (
-                    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mt-4 p-4 rounded-xl border border-amber-200 bg-amber-50 flex items-start gap-3">
+                  {foundClient && (
+                    <div className="mt-3 p-4 rounded-xl border border-emerald-200 bg-emerald-50 flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0"><User className="w-5 h-5" /></div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-slate-800 flex items-center gap-1.5">{foundClient.name}<CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /></p>
+                        <p className="text-xs text-slate-500 mt-0.5">CPF: {foundClient.cpf || '—'}{foundClient.phone ? ` · Tel.: ${foundClient.phone}` : ''}</p>
+                        {foundClient.address?.city && <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5"><MapPin className="w-3 h-3" /> {foundClient.address.city}/{foundClient.address.state}</p>}
+                        <p className="text-xs text-slate-500 mt-0.5">{clientProps.length} propriedade{clientProps.length === 1 ? '' : 's'} cadastrada{clientProps.length === 1 ? '' : 's'}</p>
+                      </div>
+                    </div>
+                  )}
+                  {!foundClient && clientQuery.trim().length >= 3 && clientResults.length === 0 && (
+                    <div className="mt-3 p-4 rounded-xl border border-amber-200 bg-amber-50 flex items-start gap-3">
                       <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                       <div>
                         <p className="text-sm font-medium text-amber-800">Cliente não encontrado</p>
-                        <p className="text-xs text-amber-700 mt-0.5">Esse CPF ainda não está cadastrado na aba Clientes. Cadastre o cliente primeiro e volte aqui.</p>
+                        <p className="text-xs text-amber-700 mt-0.5">Cadastre o cliente na aba Clientes e volte aqui.</p>
                       </div>
-                    </motion.div>
+                    </div>
                   )}
-                </AnimatePresence>
-              </>
+                </div>
+              </div>
             )}
 
             {step === 2 && (
               <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between bg-emerald-600 text-white rounded-2xl px-5 py-3.5 sticky top-0 z-10 shadow-lg flex-wrap gap-2">
-                  <span className="text-sm font-medium">Investimento Total da Proposta</span>
-                  <div className="flex items-center gap-4 text-xs">
-                    <span>Rec. Próprios: <strong>{formatCurrency(totalGeralInvest.recProprios)}</strong></span>
+                  <span className="text-sm font-medium">Investimento total da proposta</span>
+                  <div className="flex items-center gap-4 text-xs flex-wrap">
+                    <span>Rec. próprios: <strong>{formatCurrency(totalGeralInvest.recProprios)}</strong></span>
                     <span>Financiamento: <strong>{formatCurrency(totalGeralInvest.financiamento)}</strong></span>
                     <span className="text-sm">Total: <strong>{formatCurrency(totalGeralInvest.investimentoTotal)}</strong></span>
                   </div>
                 </div>
 
                 {/* Seção 1 - Dados da Proposta */}
-                <SectionAccordion id="dados" expanded={expandedPropostaSection === 'dados'} onToggle={() => setExpandedPropostaSection(expandedPropostaSection === 'dados' ? null : 'dados')} icon={<Landmark className="w-4 h-4 text-emerald-600" />} title="Seção 1 · Dados da Proposta">
+                <SectionAccordion expanded={expandedSection === 'dados'} onToggle={() => toggle('dados')} icon={<Landmark className="w-4 h-4 text-emerald-600" />} title="Seção 1 · Dados da Proposta">
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                    <div>
-                      <label className="text-[10px] font-medium text-slate-500 block mb-0.5">Cliente</label>
-                      <p className="px-2.5 py-2 rounded-lg bg-slate-50 border border-slate-100 text-xs font-semibold text-slate-600 truncate">{foundClient?.name?.toUpperCase() || '—'}</p>
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-medium text-slate-500 block mb-0.5">Data da Proposta</label>
-                      <input type="date" value={proposta.dados.dataProposta} onChange={(e) => updateDadosProposta({ dataProposta: e.target.value })} className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-xs" />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-medium text-slate-500 block mb-0.5">Previsão do Contrato</label>
-                      <p className="px-2.5 py-2 rounded-lg bg-emerald-50 border border-emerald-100 text-xs font-semibold text-emerald-700">{calcPrevisaoContrato(proposta.dados.dataProposta) ? new Date(calcPrevisaoContrato(proposta.dados.dataProposta) + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</p>
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-medium text-slate-500 block mb-0.5">Objetivo do Crédito</label>
-                      <select value={proposta.dados.objetivoCredito} onChange={(e) => updateDadosProposta({ objetivoCredito: e.target.value })} className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-xs bg-white">
-                        <option value="">Selecione</option>
-                        {OBJETIVOS_CREDITO.map(o => <option key={o} value={o}>{o}</option>)}
-                      </select>
-                    </div>
                     <div className="col-span-2">
-                      <label className="text-[10px] font-medium text-slate-500 block mb-0.5">Programa</label>
-                      <select value={proposta.dados.programa} onChange={(e) => updateDadosProposta({ programa: e.target.value })} className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-xs bg-white">
-                        <option value="">Selecione</option>
-                        {PROGRAMAS_PRONAF.map(p => <option key={p.code} value={p.code}>{p.code} · {p.label}</option>)}
-                      </select>
+                      <label className={labelCls}>Cliente</label>
+                      <p className="px-2.5 py-2 rounded-lg bg-slate-50 border border-slate-100 text-xs font-semibold text-slate-600 truncate">{foundClient?.name?.toUpperCase() || '—'}{foundClient?.cpf ? ` · CPF ${foundClient.cpf}` : ''}</p>
                     </div>
                     <div>
-                      <label className="text-[10px] font-medium text-slate-500 block mb-0.5">Banco Financiador</label>
-                      <select value={proposta.dados.banco} onChange={(e) => updateDadosProposta({ banco: e.target.value })} className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-xs bg-white">
+                      <label className={labelCls}>Data da proposta</label>
+                      <input type="date" value={proposta.dados.dataProposta} onChange={(e) => updateDados({ dataProposta: e.target.value })} className={inputCls} />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Previsão do contrato</label>
+                      <p className="px-2.5 py-2 rounded-lg bg-emerald-50 border border-emerald-100 text-xs font-semibold text-emerald-700">{fmtDate(calcPrevisaoContrato(proposta.dados.dataProposta))}</p>
+                    </div>
+                    <div>
+                      <label className={labelCls}>Banco financiador</label>
+                      <select value={proposta.dados.banco} onChange={(e) => updateDados({ banco: e.target.value })} className={cn(inputCls, 'bg-white')}>
                         <option value="">Selecione</option>
                         {BANCOS_FINANCIADORES.map(b => <option key={b} value={b}>{b}</option>)}
                       </select>
                     </div>
-                    <div>
-                      <label className="text-[10px] font-medium text-slate-500 block mb-0.5">Agência</label>
-                      <input value={proposta.dados.agencia} onChange={(e) => updateDadosProposta({ agencia: e.target.value })} placeholder="Agência" className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-xs" />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-medium text-slate-500 block mb-0.5">Região</label>
-                      <select value={proposta.dados.regiao} onChange={(e) => updateDadosProposta({ regiao: e.target.value })} className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-xs bg-white">
+                    <div className="col-span-2">
+                      <label className={labelCls}>Programa</label>
+                      <select value={proposta.dados.programaId} onChange={(e) => updateDados({ programaId: e.target.value })} className={cn(inputCls, 'bg-white')}>
                         <option value="">Selecione</option>
-                        {REGIAO_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                        {CREDIT_PROGRAMS.map(p => <option key={p.id} value={p.id}>{p.nome} — {p.finalidade}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className="text-[10px] font-medium text-slate-500 block mb-0.5">Atividade Principal</label>
-                      <input value={proposta.dados.atividadePrincipal} onChange={(e) => updateDadosProposta({ atividadePrincipal: e.target.value })} placeholder="Atividade Principal" className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-xs" />
+                      <label className={labelCls}>Agência</label>
+                      <input value={proposta.dados.agencia} onChange={(e) => updateDados({ agencia: e.target.value })} placeholder="Ex.: 1234 — Almenara" className={inputCls} />
                     </div>
-                    <div>
-                      <label className="text-[10px] font-medium text-slate-500 block mb-0.5">Finalidade do Crédito</label>
-                      <select value={proposta.dados.finalidadeCredito} onChange={(e) => updateDadosProposta({ finalidadeCredito: e.target.value })} className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-xs bg-white">
-                        {FINALIDADES_CREDITO.map(f => <option key={f} value={f}>{f}</option>)}
-                      </select>
+                    <div className="col-span-2 md:col-span-4">
+                      <label className={labelCls}>Atividade principal</label>
+                      <input value={proposta.dados.atividadePrincipal} onChange={(e) => updateDados({ atividadePrincipal: e.target.value })} placeholder="Ex.: bovinocultura de leite, cafeicultura, horticultura..." className={inputCls} />
                     </div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-4 mt-1">
-                    <label className="flex items-center gap-1.5 text-xs text-slate-600"><input type="checkbox" checked={proposta.dados.municipioDecretoEmergencia} onChange={(e) => updateDadosProposta({ municipioDecretoEmergencia: e.target.checked })} className="w-3.5 h-3.5 accent-emerald-600" /> Município com Decreto de Emergência?</label>
-                    <label className="flex items-center gap-1.5 text-xs text-slate-600"><input type="checkbox" checked={proposta.dados.producaoAgroecologica} onChange={(e) => updateDadosProposta({ producaoAgroecologica: e.target.checked })} className="w-3.5 h-3.5 accent-emerald-600" /> Produção de Base Agroecológica/Orgânica?</label>
-                    <label className="flex items-center gap-1.5 text-xs text-slate-600"><input type="checkbox" checked={proposta.dados.origemPlanoTerritorial} onChange={(e) => updateDadosProposta({ origemPlanoTerritorial: e.target.checked })} className="w-3.5 h-3.5 accent-emerald-600" /> Proposta com origem em planos de ação territorial?</label>
-                  </div>
-                  <p className="text-[11px] font-semibold text-slate-500 mt-2 mb-1">Empresa Elaboradora (opcional)</p>
+                  {program && <ProgramConditions program={program} compact />}
+                  <p className="text-[11px] font-semibold text-slate-500 -mb-2">Empresa elaboradora</p>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                    <input value={proposta.dados.elaborador.empresa} onChange={(e) => updateElaborador({ empresa: e.target.value })} placeholder="Empresa Elaboradora" className="px-2.5 py-2 rounded-lg border border-slate-200 text-xs" />
-                    <input value={proposta.dados.elaborador.cnpj} onChange={(e) => updateElaborador({ cnpj: e.target.value })} placeholder="CNPJ" className="px-2.5 py-2 rounded-lg border border-slate-200 text-xs" />
-                    <input value={proposta.dados.elaborador.elaborador} onChange={(e) => updateElaborador({ elaborador: e.target.value })} placeholder="Elaborador" className="px-2.5 py-2 rounded-lg border border-slate-200 text-xs" />
-                    <input value={proposta.dados.elaborador.cpfElaborador} onChange={(e) => updateElaborador({ cpfElaborador: formatCPF(e.target.value) })} placeholder="CPF do Elaborador" className="px-2.5 py-2 rounded-lg border border-slate-200 text-xs" />
+                    <input value={proposta.dados.elaborador.empresa} onChange={(e) => updateElaborador({ empresa: e.target.value })} placeholder="Empresa elaboradora" className={inputCls} />
+                    <input value={proposta.dados.elaborador.cnpj} onChange={(e) => updateElaborador({ cnpj: e.target.value })} placeholder="CNPJ" className={inputCls} />
+                    <input value={proposta.dados.elaborador.elaborador} onChange={(e) => updateElaborador({ elaborador: e.target.value })} placeholder="Técnico responsável" className={inputCls} />
+                    <input value={proposta.dados.elaborador.cpfElaborador} onChange={(e) => updateElaborador({ cpfElaborador: formatCPF(e.target.value) })} placeholder="CPF do técnico" className={inputCls} />
                   </div>
                 </SectionAccordion>
 
-                {/* Seção 2 - Imóvel onde serão realizadas as inversões */}
-                <SectionAccordion id="imoveis-inversao" expanded={expandedPropostaSection === 'imoveis-inversao'} onToggle={() => setExpandedPropostaSection(expandedPropostaSection === 'imoveis-inversao' ? null : 'imoveis-inversao')} icon={<Home className="w-4 h-4 text-emerald-600" />} title="Seção 2 · Imóvel onde Serão Realizadas as Inversões">
+                {/* Seção 2 - Imóvel */}
+                <SectionAccordion expanded={expandedSection === 'imoveis'} onToggle={() => toggle('imoveis')} icon={<Home className="w-4 h-4 text-emerald-600" />} title="Seção 2 · Imóvel onde Serão Realizadas as Inversões" badge={proposta.imoveisVinculados.filter(i => i.denominacao).length ? `${proposta.imoveisVinculados.filter(i => i.denominacao).length} imóvel(is)` : undefined}>
+                  <p className="text-[11px] text-slate-500 -mt-1">Os dados vêm do cadastro do cliente. Escolha a propriedade na lista ou ajuste à mão.</p>
                   <div className="flex flex-col gap-2">
                     {proposta.imoveisVinculados.map((info, idx) => (
                       <div key={idx} className="rounded-xl border border-slate-200 p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <p className="text-xs font-semibold text-slate-600">{idx === 0 ? 'Imóvel Principal' : `Imóvel ${idx + 1}`}</p>
-                          {idx > 0 && idx === proposta.imoveisVinculados.length - 1 && (
-                            <button type="button" onClick={() => removeImovelVinculado(idx)} className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-rose-500">
-                              <Trash2 className="w-3.5 h-3.5" /> Remover
-                            </button>
-                          )}
+                        <div className="flex items-center justify-between mb-2 gap-2">
+                          <p className="text-xs font-semibold text-slate-600">{idx === 0 ? 'Imóvel principal' : `Imóvel ${idx + 1}`}</p>
+                          <div className="flex items-center gap-2">
+                            {clientProps.length > 0 && (
+                              <select value="" onChange={(e) => { const p = clientProps[Number(e.target.value)]; if (p) updateImovel(idx, imovelFromProperty(p)); }} className="px-2 py-1 rounded-lg border border-emerald-200 text-[11px] bg-emerald-50 text-emerald-700 font-semibold">
+                                <option value="">Puxar do cadastro...</option>
+                                {clientProps.map((p, i) => <option key={i} value={i}>{p.name}{p.areaHectares ? ` (${p.areaHectares} ha)` : ''}</option>)}
+                              </select>
+                            )}
+                            {idx > 0 && (
+                              <button type="button" onClick={() => removeImovel(idx)} className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-rose-500"><Trash2 className="w-3.5 h-3.5" /> Remover</button>
+                            )}
+                          </div>
                         </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                          <input value={info.denominacao} onChange={(e) => updateImovelVinculado(idx, { denominacao: e.target.value.slice(0, 40) })} placeholder="Denominação" className="col-span-2 px-2.5 py-2 rounded-lg border border-slate-200 text-xs" />
-                          <input value={info.municipio} onChange={(e) => updateImovelVinculado(idx, { municipio: e.target.value })} placeholder="Município" list="municipios-sugestoes" className="px-2.5 py-2 rounded-lg border border-slate-200 text-xs" />
-                          <input value={info.uf} maxLength={2} onChange={(e) => updateImovelVinculado(idx, { uf: e.target.value.toUpperCase() })} placeholder="UF" className="px-2.5 py-2 rounded-lg border border-slate-200 text-xs uppercase" />
-                          <select value={info.regiao} onChange={(e) => updateImovelVinculado(idx, { regiao: e.target.value })} className="px-2.5 py-2 rounded-lg border border-slate-200 text-xs bg-white">
-                            <option value="">Região</option>
-                            {REGIAO_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
-                          </select>
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                          <input value={info.denominacao} onChange={(e) => updateImovel(idx, { denominacao: e.target.value.slice(0, 40) })} placeholder="Denominação" className={cn(inputCls, 'col-span-2')} />
+                          <input value={info.municipio} onChange={(e) => updateImovel(idx, { municipio: e.target.value })} placeholder="Município" className={inputCls} />
+                          <input value={info.uf} maxLength={2} onChange={(e) => updateImovel(idx, { uf: e.target.value.toUpperCase() })} placeholder="UF" className={cn(inputCls, 'uppercase')} />
+                          <input type="number" value={info.areaHa || ''} onChange={(e) => updateImovel(idx, { areaHa: Number(e.target.value) })} placeholder="Área (ha)" className={inputCls} />
                         </div>
                       </div>
                     ))}
                     {proposta.imoveisVinculados.length < 3 && (
-                      <button
-                        type="button"
-                        onClick={addImovelVinculado}
-                        disabled={!proposta.imoveisVinculados[proposta.imoveisVinculados.length - 1]?.denominacao?.trim()}
-                        className="self-start flex items-center gap-1 text-xs font-medium text-emerald-700 hover:text-emerald-800 disabled:text-slate-300 disabled:cursor-not-allowed"
-                      >
+                      <button type="button" onClick={addImovel} disabled={!proposta.imoveisVinculados[proposta.imoveisVinculados.length - 1]?.denominacao?.trim()}
+                        className="self-start flex items-center gap-1 text-xs font-medium text-emerald-700 hover:text-emerald-800 disabled:text-slate-300 disabled:cursor-not-allowed">
                         <Plus className="w-3.5 h-3.5" /> Adicionar outro imóvel
                       </button>
                     )}
                   </div>
-                  <p className="text-[11px] font-semibold text-slate-500 mt-2 mb-1">Imóvel 4 (opcional — usado também nas Seções 8 e 9)</p>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                    <input value={proposta.imovel4.denominacao} onChange={(e) => updateImovel4Proposta({ denominacao: e.target.value })} placeholder="Denominação" className="col-span-2 px-2.5 py-2 rounded-lg border border-slate-200 text-xs" />
-                    <input value={proposta.imovel4.municipio} onChange={(e) => updateImovel4Proposta({ municipio: e.target.value })} placeholder="Município" list="municipios-sugestoes" className="px-2.5 py-2 rounded-lg border border-slate-200 text-xs" />
-                    <input value={proposta.imovel4.uf} maxLength={2} onChange={(e) => updateImovel4Proposta({ uf: e.target.value.toUpperCase() })} placeholder="UF" className="px-2.5 py-2 rounded-lg border border-slate-200 text-xs uppercase" />
-                    <select value={proposta.imovel4.regiao} onChange={(e) => updateImovel4Proposta({ regiao: e.target.value })} className="px-2.5 py-2 rounded-lg border border-slate-200 text-xs bg-white">
-                      <option value="">Região</option>
-                      {REGIAO_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
-                    </select>
-                  </div>
-                  <datalist id="municipios-sugestoes">
-                    {Array.from(new Set(clients.map(c => c.address?.city).filter(Boolean))).map(city => <option key={city} value={city} />)}
-                  </datalist>
                 </SectionAccordion>
 
                 {/* Seção 3 - Programa de Investimentos */}
-                <SectionAccordion id="investimentos" expanded={expandedPropostaSection === 'investimentos'} onToggle={() => setExpandedPropostaSection(expandedPropostaSection === 'investimentos' ? null : 'investimentos')} icon={<Tractor className="w-4 h-4 text-emerald-600" />} title="Seção 3 · Programa de Investimentos" badge={formatCurrency(subtotalInvestimento(proposta.programaInvestimentos.itens).total)}>
+                <SectionAccordion expanded={expandedSection === 'investimentos'} onToggle={() => toggle('investimentos')} icon={<Tractor className="w-4 h-4 text-emerald-600" />} title="Seção 3 · Programa de Investimentos" badge={formatCurrency(totalGeralInvest.investimentoTotal)}>
                   <div className="flex flex-col gap-2">
                     {proposta.programaInvestimentos.itens.map((item, i) => (
                       <div key={item.id} className="rounded-lg border border-slate-200 p-2.5 bg-slate-50">
@@ -934,139 +941,85 @@ export default function PronafWizard({ isOpen, onClose, clients, existingProject
                             {UNIDADES_INVESTIMENTO.map(u => <option key={u} value={u}>{u}</option>)}
                           </select>
                           <select value={item.numImovel} onChange={(e) => updateInvestItem(i, { numImovel: Number(e.target.value) })} className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs bg-white">
-                            <option value={0}>Nº Imóvel: 0</option>
-                            {linhasImovelInversao.map(r => <option key={r.n} value={r.n}>Imóvel {r.n}</option>)}
+                            {proposta.imoveisVinculados.map((im, n) => <option key={n} value={n + 1}>Imóvel {n + 1}{im.denominacao ? ` · ${im.denominacao}` : ''}</option>)}
                           </select>
                           <select value={item.uso} onChange={(e) => updateInvestItem(i, { uso: e.target.value })} className="col-span-2 px-2 py-1.5 rounded-lg border border-slate-200 text-xs bg-white">
                             <option value="">Uso</option>
                             {USOS_INVESTIMENTO.map(u => <option key={u} value={u}>{u}</option>)}
                           </select>
                           <input type="number" value={item.quantidade || ''} onChange={(e) => updateInvestItem(i, { quantidade: Number(e.target.value) })} placeholder="Quant." className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
-                          <input type="number" value={item.valorUnitario || ''} onChange={(e) => updateInvestItem(i, { valorUnitario: Number(e.target.value) })} placeholder="Vr. Unitário" className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
-                          <input type="number" value={item.recProprioUnitario || ''} onChange={(e) => updateInvestItem(i, { recProprioUnitario: Number(e.target.value) })} placeholder="Rec. Próprio Unit." className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
-                          <label className="flex items-center gap-1.5 text-xs text-slate-600"><input type="checkbox" checked={item.componeGarantia} onChange={(e) => updateInvestItem(i, { componeGarantia: e.target.checked })} className="w-3.5 h-3.5 accent-emerald-600" /> Compõe Garantia?</label>
+                          <input type="number" value={item.valorUnitario || ''} onChange={(e) => updateInvestItem(i, { valorUnitario: Number(e.target.value) })} placeholder="Vr. unitário" className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
+                          <input type="number" value={item.recProprioUnitario || ''} onChange={(e) => updateInvestItem(i, { recProprioUnitario: Number(e.target.value) })} placeholder="Rec. próprio unit." className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
+                          <label className="flex items-center gap-1.5 text-xs text-slate-600"><input type="checkbox" checked={item.componeGarantia} onChange={(e) => updateInvestItem(i, { componeGarantia: e.target.checked })} className="w-3.5 h-3.5 accent-emerald-600" /> Compõe garantia?</label>
                         </div>
                         <div className="flex flex-wrap justify-end gap-3 mt-1.5 text-[11px] text-slate-500">
-                          <span>Rec. Próprio: <strong>{formatCurrency(calcRecursoProprioTotalItem(item))}</strong></span>
+                          <span>Rec. próprio: <strong>{formatCurrency(calcRecursoProprioTotalItem(item))}</strong></span>
                           <span>Financiamento: <strong>{formatCurrency(calcValorFinanciamentoItem(item))}</strong></span>
-                          <span>Investimento Total: <strong className="text-emerald-700">{formatCurrency(calcInvestimentoTotalItem(item))}</strong></span>
+                          <span>Total: <strong className="text-emerald-700">{formatCurrency(calcInvestimentoTotalItem(item))}</strong></span>
                         </div>
                       </div>
                     ))}
                     <button type="button" onClick={addInvestItem} className="self-start flex items-center gap-1 text-xs font-medium text-emerald-700 hover:text-emerald-800"><Plus className="w-3.5 h-3.5" /> Adicionar item</button>
                   </div>
-                  <div className="grid grid-cols-3 gap-2 bg-emerald-50 rounded-lg p-2.5 mt-1 text-xs">
-                    <span>Rec. Próprios: <strong>{formatCurrency(subtotalInvestimento(proposta.programaInvestimentos.itens).recProprios)}</strong></span>
-                    <span>Financiamento: <strong>{formatCurrency(subtotalInvestimento(proposta.programaInvestimentos.itens).financiamento)}</strong></span>
-                    <span>Investimento Total: <strong>{formatCurrency(subtotalInvestimento(proposta.programaInvestimentos.itens).total)}</strong></span>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {([['Custeio agrícola vinculado', proposta.programaInvestimentos.custeioAgricola, updateCusteioAgricola], ['Custeio pecuário vinculado', proposta.programaInvestimentos.custeioPecuario, updateCusteioPecuario]] as const).map(([titulo, c, upd]) => (
+                      <div key={titulo} className="rounded-lg border border-slate-100 p-2.5">
+                        <p className="text-[11px] font-semibold text-slate-500 mb-1.5">{titulo}</p>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <input type="number" value={c.valor || ''} onChange={(e) => upd({ valor: Number(e.target.value) })} placeholder="Valor" className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
+                          <input type="number" value={c.recProprios || ''} onChange={(e) => upd({ recProprios: Number(e.target.value) })} placeholder="Rec. próprios" className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
+                        </div>
+                        <p className="text-[11px] text-slate-500 text-right mt-1">Financ.: <strong>{formatCurrency(calcCusteioFinanc(c))}</strong></p>
+                      </div>
+                    ))}
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
-                    <div className="rounded-lg border border-slate-100 p-2.5">
-                      <p className="text-[11px] font-semibold text-slate-500 mb-1.5">Custeio Agrícola vinculado ao investimento</p>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        <input type="number" value={proposta.programaInvestimentos.custeioAgricola.valor || ''} onChange={(e) => updateCusteioAgricola({ valor: Number(e.target.value) })} placeholder="Valor" className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
-                        <input type="number" value={proposta.programaInvestimentos.custeioAgricola.recProprios || ''} onChange={(e) => updateCusteioAgricola({ recProprios: Number(e.target.value) })} placeholder="Rec. Próprios" className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
-                      </div>
-                      <p className="text-[11px] text-slate-500 text-right mt-1">Financ.: <strong>{formatCurrency(calcCusteioFinanc(proposta.programaInvestimentos.custeioAgricola))}</strong></p>
-                    </div>
-                    <div className="rounded-lg border border-slate-100 p-2.5">
-                      <p className="text-[11px] font-semibold text-slate-500 mb-1.5">Custeio Pecuário vinculado ao investimento</p>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        <input type="number" value={proposta.programaInvestimentos.custeioPecuario.valor || ''} onChange={(e) => updateCusteioPecuario({ valor: Number(e.target.value) })} placeholder="Valor" className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
-                        <input type="number" value={proposta.programaInvestimentos.custeioPecuario.recProprios || ''} onChange={(e) => updateCusteioPecuario({ recProprios: Number(e.target.value) })} placeholder="Rec. Próprios" className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
-                      </div>
-                      <p className="text-[11px] text-slate-500 text-right mt-1">Financ.: <strong>{formatCurrency(calcCusteioFinanc(proposta.programaInvestimentos.custeioPecuario))}</strong></p>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end text-xs text-slate-500 mt-1">SUBTOTAL do Financiamento: <span className="font-semibold text-slate-700 ml-1">{formatCurrency(subtotalFinanciamentoGeral(proposta.programaInvestimentos).financiamento)}</span></div>
-
-                  <div className="rounded-lg border border-slate-100 p-2.5 mt-2">
-                    <p className="text-[11px] font-semibold text-slate-500 mb-1.5">Custo de Assessoria Empresarial e Técnica (máx. 2%)</p>
+                  <div className="rounded-lg border border-slate-100 p-2.5">
+                    <p className="text-[11px] font-semibold text-slate-500 mb-1.5">Custo de assessoria empresarial e técnica (máx. 2%)</p>
                     <div className="grid grid-cols-3 gap-1.5">
                       <select value={proposta.programaInvestimentos.custoAssessoria.tipo} onChange={(e) => updateCustoAssessoria({ tipo: e.target.value as 'percentual' | 'valor' })} className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs bg-white">
                         <option value="percentual">Percentual (%)</option>
-                        <option value="valor">Valor Fixo (R$)</option>
+                        <option value="valor">Valor fixo (R$)</option>
                       </select>
                       <input type="number" value={proposta.programaInvestimentos.custoAssessoria.percentualOuValor || ''} onChange={(e) => updateCustoAssessoria({ percentualOuValor: Number(e.target.value) })} placeholder={proposta.programaInvestimentos.custoAssessoria.tipo === 'percentual' ? '%' : 'R$'} className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
-                      <input type="number" value={proposta.programaInvestimentos.custoAssessoria.recProprios || ''} onChange={(e) => updateCustoAssessoria({ recProprios: Number(e.target.value) })} placeholder="Rec. Próprios" className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
+                      <input type="number" value={proposta.programaInvestimentos.custoAssessoria.recProprios || ''} onChange={(e) => updateCustoAssessoria({ recProprios: Number(e.target.value) })} placeholder="Rec. próprios" className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
                     </div>
                     <p className="text-[11px] text-slate-500 text-right mt-1">Valor: <strong>{formatCurrency(calcCustoAssessoriaValor(proposta.programaInvestimentos))}</strong> · Financ.: <strong>{formatCurrency(calcCustoAssessoriaFinanc(proposta.programaInvestimentos))}</strong></p>
                   </div>
 
-                  <div className="rounded-lg border border-slate-100 p-2.5 mt-2">
-                    <p className="text-[11px] font-semibold text-slate-500 mb-1.5">Tx. Elaboração + Assistência Técnica (itens de irrigação)</p>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <input type="number" value={proposta.programaInvestimentos.taxaElaboracaoIrrigacao.percentual || ''} onChange={(e) => updateTaxaElaboracao({ percentual: Number(e.target.value) })} placeholder="Percentual (%)" className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
-                      <input type="number" value={proposta.programaInvestimentos.taxaElaboracaoIrrigacao.baseIrrigacaoValor || ''} onChange={(e) => updateTaxaElaboracao({ baseIrrigacaoValor: Number(e.target.value) })} placeholder="Base dos itens de irrigação (R$)" className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
-                    </div>
-                    <p className="text-[11px] text-slate-500 text-right mt-1">Valor: <strong>{formatCurrency(calcTaxaElaboracaoValor(proposta.programaInvestimentos))}</strong></p>
-                  </div>
-
-                  <div className="rounded-lg border border-slate-100 p-2.5 mt-2">
-                    <p className="text-[11px] font-semibold text-slate-500 mb-1.5">Linha Adicional Livre</p>
-                    <div className="grid grid-cols-3 gap-1.5">
-                      <input value={proposta.programaInvestimentos.linhaAdicional.descricao} onChange={(e) => updateLinhaAdicional({ descricao: e.target.value })} placeholder="Descrição" className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
-                      <input type="number" value={proposta.programaInvestimentos.linhaAdicional.valor || ''} onChange={(e) => updateLinhaAdicional({ valor: Number(e.target.value) })} placeholder="Valor" className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
-                      <input type="number" value={proposta.programaInvestimentos.linhaAdicional.recProprios || ''} onChange={(e) => updateLinhaAdicional({ recProprios: Number(e.target.value) })} placeholder="Rec. Próprios" className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
-                    </div>
-                    <p className="text-[11px] text-slate-500 text-right mt-1">Financ.: <strong>{formatCurrency(calcLinhaAdicionalFinanc(proposta.programaInvestimentos))}</strong></p>
-                  </div>
-
-                  <div className="flex items-center justify-between bg-emerald-600 text-white rounded-xl p-3 mt-2 flex-wrap gap-2">
-                    <span className="text-sm font-semibold">TOTAL GERAL</span>
-                    <div className="flex items-center gap-4 text-xs">
-                      <span>Rec. Próprios: <strong>{formatCurrency(totalGeralInvest.recProprios)}</strong></span>
-                      <span>Financiamento: <strong>{formatCurrency(totalGeralInvest.financiamento)}</strong></span>
-                      <span className="text-sm">Investimento Total: <strong>{formatCurrency(totalGeralInvest.investimentoTotal)}</strong></span>
-                    </div>
-                  </div>
-                </SectionAccordion>
-
-                {/* Seção 4 - Bases do Financiamento */}
-                <SectionAccordion id="bases" expanded={expandedPropostaSection === 'bases'} onToggle={() => setExpandedPropostaSection(expandedPropostaSection === 'bases' ? null : 'bases')} icon={<FileCheck2 className="w-4 h-4 text-emerald-600" />} title="Seção 4 · Bases do Financiamento">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                    <div><label className="text-[10px] font-medium text-slate-500 block mb-0.5">Prazo (meses)</label><input type="number" value={proposta.basesFinanciamento.prazoMeses || ''} onChange={(e) => updateBasesFinanciamento({ prazoMeses: Number(e.target.value) })} className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-xs" /></div>
-                    <div><label className="text-[10px] font-medium text-slate-500 block mb-0.5">Carência (meses)</label><input type="number" value={proposta.basesFinanciamento.carenciaMeses || ''} onChange={(e) => updateBasesFinanciamento({ carenciaMeses: Number(e.target.value) })} className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-xs" /></div>
-                    <div><label className="text-[10px] font-medium text-slate-500 block mb-0.5">Juros (% a.a.)</label><input type="number" value={proposta.basesFinanciamento.jurosPctAa || ''} onChange={(e) => updateBasesFinanciamento({ jurosPctAa: Number(e.target.value) })} className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-xs" /></div>
-                    <div><label className="text-[10px] font-medium text-slate-500 block mb-0.5">Rebate (% a.a.)</label><input type="number" value={proposta.basesFinanciamento.rebatePctAa || ''} onChange={(e) => updateBasesFinanciamento({ rebatePctAa: Number(e.target.value) })} className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-xs" /></div>
-                    <div><label className="text-[10px] font-medium text-slate-500 block mb-0.5">Del Credere (% a.a.)</label><input type="number" value={proposta.basesFinanciamento.delCrederePctAa || ''} onChange={(e) => updateBasesFinanciamento({ delCrederePctAa: Number(e.target.value) })} className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-xs" /></div>
-                    <div><label className="text-[10px] font-medium text-slate-500 block mb-0.5">Periodicidade do Reembolso</label><select value={proposta.basesFinanciamento.periodicidadeReembolso} onChange={(e) => updateBasesFinanciamento({ periodicidadeReembolso: e.target.value })} className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-xs bg-white">{PERIODICIDADE_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
-                    <div><label className="text-[10px] font-medium text-slate-500 block mb-0.5">Periodicidade Juros (Carência)</label><select value={proposta.basesFinanciamento.periodicidadeJurosCarencia} onChange={(e) => updateBasesFinanciamento({ periodicidadeJurosCarencia: e.target.value })} className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-xs bg-white">{PERIODICIDADE_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
-                    <div><label className="text-[10px] font-medium text-slate-500 block mb-0.5">Periodicidade Juros (Prestação)</label><select value={proposta.basesFinanciamento.periodicidadeJurosPrestacao} onChange={(e) => updateBasesFinanciamento({ periodicidadeJurosPrestacao: e.target.value })} className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-xs bg-white">{PERIODICIDADE_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
-                    <div><label className="text-[10px] font-medium text-slate-500 block mb-0.5">Método de Cálculo</label><select value={proposta.basesFinanciamento.metodoCalculo} onChange={(e) => updateBasesFinanciamento({ metodoCalculo: e.target.value })} className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-xs bg-white">{METODO_CALCULO_OPTIONS.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
-                  </div>
-                </SectionAccordion>
-
-                {/* Seção 5 - Financiamentos Existentes */}
-                <SectionAccordion id="financ-existentes" expanded={expandedPropostaSection === 'financ-existentes'} onToggle={() => setExpandedPropostaSection(expandedPropostaSection === 'financ-existentes' ? null : 'financ-existentes')} icon={<AlertCircle className="w-4 h-4 text-emerald-600" />} title="Seção 5 · Financiamentos Existentes">
-                  <div className="flex flex-col gap-1.5">
-                    {proposta.financiamentosExistentes.map((f, i) => (
-                      <div key={f.id} className="rounded-lg border border-slate-200 p-2.5 bg-slate-50">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-[11px] font-semibold text-slate-500">Financiamento {i + 1}</span>
-                          <button type="button" onClick={() => removeFinanciamentoExistente(i)} disabled={proposta.financiamentosExistentes.length <= 1} className="text-slate-300 hover:text-rose-500 disabled:opacity-30 disabled:cursor-not-allowed"><Trash2 className="w-3.5 h-3.5" /></button>
-                        </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5">
-                          <input value={f.denominacao} onChange={(e) => updateFinanciamentoExistente(i, { denominacao: e.target.value })} placeholder="Denominação" className="col-span-2 px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
-                          <select value={f.agenteFinanceiro} onChange={(e) => updateFinanciamentoExistente(i, { agenteFinanceiro: e.target.value as 'BNB' | 'Outros' })} className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs bg-white"><option value="BNB">BNB</option><option value="Outros">Outros</option></select>
-                          <input type="number" value={f.saldoDevedor || ''} onChange={(e) => updateFinanciamentoExistente(i, { saldoDevedor: Number(e.target.value) })} placeholder="Saldo Devedor (R$)" className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
-                          <input type="number" value={f.jurosPctAa || ''} onChange={(e) => updateFinanciamentoExistente(i, { jurosPctAa: Number(e.target.value) })} placeholder="Juros % a.a." className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
-                          <input type="number" value={f.carenciaMeses || ''} onChange={(e) => updateFinanciamentoExistente(i, { carenciaMeses: Number(e.target.value) })} placeholder="Carência (meses)" className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
-                          <input type="number" value={f.prazoRestanteMeses || ''} onChange={(e) => updateFinanciamentoExistente(i, { prazoRestanteMeses: Number(e.target.value) })} placeholder="Prazo Restante (meses)" className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
-                          <input type="date" value={f.dataContratacao} onChange={(e) => updateFinanciamentoExistente(i, { dataContratacao: e.target.value })} className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
-                          <label className="flex items-center gap-1.5 text-xs text-slate-600"><input type="checkbox" checked={f.mesmaAtividadeConjuge} onChange={(e) => updateFinanciamentoExistente(i, { mesmaAtividadeConjuge: e.target.checked })} className="w-3.5 h-3.5 accent-emerald-600" /> Mesma Ativ. do Cônjuge?</label>
-                          <label className="flex items-center gap-1.5 text-xs text-slate-600"><input type="checkbox" checked={f.pertenceTitular} onChange={(e) => updateFinanciamentoExistente(i, { pertenceTitular: e.target.checked })} className="w-3.5 h-3.5 accent-emerald-600" /> Pertence ao Titular?</label>
-                        </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="rounded-lg border border-slate-100 p-2.5">
+                      <p className="text-[11px] font-semibold text-slate-500 mb-1.5">Tx. elaboração + assistência técnica (itens de irrigação)</p>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <input type="number" value={proposta.programaInvestimentos.taxaElaboracaoIrrigacao.percentual || ''} onChange={(e) => updateTaxaElaboracao({ percentual: Number(e.target.value) })} placeholder="Percentual (%)" className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
+                        <input type="number" value={proposta.programaInvestimentos.taxaElaboracaoIrrigacao.baseIrrigacaoValor || ''} onChange={(e) => updateTaxaElaboracao({ baseIrrigacaoValor: Number(e.target.value) })} placeholder="Base irrigação (R$)" className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
                       </div>
-                    ))}
-                    <button type="button" onClick={addFinanciamentoExistente} className="self-start flex items-center gap-1 text-xs font-medium text-emerald-700 hover:text-emerald-800"><Plus className="w-3.5 h-3.5" /> Adicionar financiamento</button>
+                      <p className="text-[11px] text-slate-500 text-right mt-1">Valor: <strong>{formatCurrency(calcTaxaElaboracaoValor(proposta.programaInvestimentos))}</strong></p>
+                    </div>
+                    <div className="rounded-lg border border-slate-100 p-2.5">
+                      <p className="text-[11px] font-semibold text-slate-500 mb-1.5">Outra despesa (linha livre)</p>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        <input value={proposta.programaInvestimentos.linhaAdicional.descricao} onChange={(e) => updateLinhaAdicional({ descricao: e.target.value })} placeholder="Descrição" className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
+                        <input type="number" value={proposta.programaInvestimentos.linhaAdicional.valor || ''} onChange={(e) => updateLinhaAdicional({ valor: Number(e.target.value) })} placeholder="Valor" className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
+                        <input type="number" value={proposta.programaInvestimentos.linhaAdicional.recProprios || ''} onChange={(e) => updateLinhaAdicional({ recProprios: Number(e.target.value) })} placeholder="Rec. próprios" className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
+                      </div>
+                      <p className="text-[11px] text-slate-500 text-right mt-1">Financ.: <strong>{formatCurrency(calcLinhaAdicionalFinanc(proposta.programaInvestimentos))}</strong></p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between bg-emerald-600 text-white rounded-xl p-3 flex-wrap gap-2">
+                    <span className="text-sm font-semibold">TOTAL GERAL</span>
+                    <div className="flex items-center gap-4 text-xs flex-wrap">
+                      <span>Rec. próprios: <strong>{formatCurrency(totalGeralInvest.recProprios)}</strong></span>
+                      <span>Financiamento: <strong>{formatCurrency(totalGeralInvest.financiamento)}</strong></span>
+                      <span className="text-sm">Total: <strong>{formatCurrency(totalGeralInvest.investimentoTotal)}</strong></span>
+                    </div>
                   </div>
                 </SectionAccordion>
 
-                {/* Seção 6 - Garantias Fidejussórias */}
-                <SectionAccordion id="fidejussorias" expanded={expandedPropostaSection === 'fidejussorias'} onToggle={() => setExpandedPropostaSection(expandedPropostaSection === 'fidejussorias' ? null : 'fidejussorias')} icon={<Users className="w-4 h-4 text-emerald-600" />} title="Seção 6 · Garantias Fidejussórias">
+                {/* Seção 4 - Garantias Fidejussórias */}
+                <SectionAccordion expanded={expandedSection === 'fidejussorias'} onToggle={() => toggle('fidejussorias')} icon={<Users className="w-4 h-4 text-emerald-600" />} title="Seção 4 · Garantias Fidejussórias (aval / fiança)">
                   <div className="flex flex-col gap-2">
                     {([0, 1] as const).map(i => (
                       <div key={i} className="rounded-lg border border-slate-200 p-2.5">
@@ -1078,22 +1031,22 @@ export default function PronafWizard({ isOpen, onClose, clients, existingProject
                             <option value="Fiança">Fiança</option>
                           </select>
                           <input value={proposta.avalistas[i].nome} onChange={(e) => updateAvalista(i, { nome: e.target.value })} placeholder="Nome" className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
-                          <input value={proposta.avalistas[i].cpfCnpj} onChange={(e) => updateAvalista(i, { cpfCnpj: formatCPF(e.target.value) })} placeholder="CPF/CNPJ" className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
-                          <input value={proposta.avalistas[i].conjugeNome} onChange={(e) => updateAvalista(i, { conjugeNome: e.target.value })} placeholder="Cônjuge - Nome" className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
-                          <input value={proposta.avalistas[i].conjugeCpf} onChange={(e) => updateAvalista(i, { conjugeCpf: formatCPF(e.target.value) })} placeholder="Cônjuge - CPF" className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
+                          <input value={proposta.avalistas[i].cpfCnpj} onChange={(e) => updateAvalista(i, { cpfCnpj: formatCPF(e.target.value) })} placeholder="CPF" className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
+                          <input value={proposta.avalistas[i].conjugeNome} onChange={(e) => updateAvalista(i, { conjugeNome: e.target.value })} placeholder="Cônjuge — nome" className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
+                          <input value={proposta.avalistas[i].conjugeCpf} onChange={(e) => updateAvalista(i, { conjugeCpf: formatCPF(e.target.value) })} placeholder="Cônjuge — CPF" className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
                         </div>
                       </div>
                     ))}
                   </div>
                 </SectionAccordion>
 
-                {/* Seção 7 - Outras Garantias (reais) */}
-                <SectionAccordion id="garantias-reais" expanded={expandedPropostaSection === 'garantias-reais'} onToggle={() => setExpandedPropostaSection(expandedPropostaSection === 'garantias-reais' ? null : 'garantias-reais')} icon={<ShieldCheck className="w-4 h-4 text-emerald-600" />} title="Seção 7 · Outras Garantias (Reais)" badge={formatCurrency(resumoGar.total)}>
+                {/* Seção 5 - Garantias Reais */}
+                <SectionAccordion expanded={expandedSection === 'garantias-reais'} onToggle={() => toggle('garantias-reais')} icon={<ShieldCheck className="w-4 h-4 text-emerald-600" />} title="Seção 5 · Outras Garantias (Reais)" badge={formatCurrency(resumoGar.total)}>
                   <div className="flex flex-col gap-1.5">
                     {proposta.garantiasReaisExtras.length === 0 && <p className="text-xs text-slate-400 italic">Nenhuma garantia real adicionada ainda.</p>}
                     {proposta.garantiasReaisExtras.map((g, i) => (
                       <div key={g.id} className="grid grid-cols-12 gap-1.5 items-center bg-slate-50 rounded-lg p-1.5">
-                        <input value={g.denominacao} onChange={(e) => updateGarantiaExtra(i, { denominacao: e.target.value })} placeholder="Denominação" className="col-span-4 px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
+                        <input value={g.denominacao} onChange={(e) => updateGarantiaExtra(i, { denominacao: e.target.value })} placeholder="Denominação (ex.: Fazenda X, matrícula 123)" className="col-span-4 px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
                         <select value={g.tipo} onChange={(e) => updateGarantiaExtra(i, { tipo: e.target.value })} className="col-span-3 px-2 py-1.5 rounded-lg border border-slate-200 text-xs bg-white">
                           {TIPOS_GARANTIA_REAL.map(t => <option key={t} value={t}>{t}</option>)}
                         </select>
@@ -1102,227 +1055,61 @@ export default function PronafWizard({ isOpen, onClose, clients, existingProject
                         <button type="button" onClick={() => removeGarantiaExtra(i)} className="col-span-1 flex justify-center text-slate-300 hover:text-rose-500"><Trash2 className="w-3.5 h-3.5" /></button>
                       </div>
                     ))}
-                    <button type="button" onClick={addGarantiaExtra} className="self-start flex items-center gap-1 text-xs font-medium text-emerald-700 hover:text-emerald-800"><Plus className="w-3.5 h-3.5" /> Adicionar outra garantia</button>
+                    <button type="button" onClick={addGarantiaExtra} className="self-start flex items-center gap-1 text-xs font-medium text-emerald-700 hover:text-emerald-800"><Plus className="w-3.5 h-3.5" /> Adicionar garantia</button>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-2 mt-2 text-xs">
-                    <span>Garantias Fidejussórias: <strong>{formatCurrency(resumoGar.fidejussorias)}</strong></span>
-                    <span>Garantias Reais Pré-existentes: <strong>{formatCurrency(resumoGar.reaisPreExistentes)}</strong></span>
-                    <span>Garantias Reais Evolutivas: <strong>{formatCurrency(resumoGar.reaisEvolutivas)}</strong></span>
-                    <span>Total de Garantias: <strong className="text-emerald-700">{formatCurrency(resumoGar.total)}</strong></span>
-                    <span className="col-span-2">% Garantias/Financiamento: <strong>{(resumoGar.pctGarantias * 100).toFixed(2)}%</strong></span>
-                  </div>
-                </SectionAccordion>
-
-                {/* Seção 8 - Indicadores Econômicos e Sociais */}
-                <SectionAccordion id="indicadores" expanded={expandedPropostaSection === 'indicadores'} onToggle={() => setExpandedPropostaSection(expandedPropostaSection === 'indicadores' ? null : 'indicadores')} icon={<Coins className="w-4 h-4 text-emerald-600" />} title="Seção 8 · Indicadores Econômicos e Sociais">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div><label className="text-[10px] font-medium text-slate-500 block mb-0.5">Nº de Empregados - Atual</label><input type="number" value={proposta.indicadores.empregadosAtual || ''} onChange={(e) => updateIndicadores({ empregadosAtual: Number(e.target.value) })} className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-xs" /></div>
-                    <div><label className="text-[10px] font-medium text-slate-500 block mb-0.5">Nº de Empregados - Ano de Estabilização</label><input type="number" value={proposta.indicadores.empregadosEstabilizacao || ''} onChange={(e) => updateIndicadores({ empregadosEstabilizacao: Number(e.target.value) })} className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-xs" /></div>
-                  </div>
-                  <div className="flex justify-between mt-2 text-xs bg-emerald-50 rounded-lg p-2.5">
-                    <span>Investimento Total: <strong>{formatCurrency(totalGeralInvest.investimentoTotal)}</strong></span>
-                    <span>Investimento/Empregado (Estabilização): <strong>{formatCurrency(calcInvestimentoPorEmpregado(proposta.indicadores, totalGeralInvest.investimentoTotal))}</strong></span>
-                  </div>
-                </SectionAccordion>
-
-                {/* Seção 9 - Textos */}
-                <SectionAccordion id="textos" expanded={expandedPropostaSection === 'textos'} onToggle={() => setExpandedPropostaSection(expandedPropostaSection === 'textos' ? null : 'textos')} icon={<ClipboardList className="w-4 h-4 text-emerald-600" />} title="Seção 9 · Textos">
-                  <div>
-                    <label className="text-[10px] font-medium text-slate-500 block mb-0.5">Comentários / Objetivos / Justificativas</label>
-                    <textarea value={proposta.textos.comentarios} onChange={(e) => updateTextos({ comentarios: e.target.value })} rows={3} className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-xs" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-medium text-slate-500 block mb-0.5">Parecer Técnico</label>
-                    <textarea value={proposta.textos.parecerTecnico} onChange={(e) => updateTextos({ parecerTecnico: e.target.value })} rows={4} className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-xs" />
-                  </div>
-                </SectionAccordion>
-
-                {/* Seção 10 - Declarações */}
-                <SectionAccordion id="declaracoes" expanded={expandedPropostaSection === 'declaracoes'} onToggle={() => setExpandedPropostaSection(expandedPropostaSection === 'declaracoes' ? null : 'declaracoes')} icon={<FileCheck2 className="w-4 h-4 text-emerald-600" />} title="Seção 10 · Declarações">
-                  <p className="text-xs font-semibold text-slate-600">Declaro, para todos os fins, e sob as penas da Lei:</p>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="flex items-start gap-2 text-xs text-slate-600"><input type="radio" name="respondePorOperacoes" checked={proposta.declaracoes.respondePorOperacoes === 'nao'} onChange={() => updateDeclaracoes({ respondePorOperacoes: 'nao' })} className="mt-0.5 accent-emerald-600" /> Não respondo(emos) por nenhuma operação de crédito em bancos ou cooperativas do País, inclusive o BNB, realizada com recursos controlados do crédito rural ou dos Fundos Constitucionais (FNO/FNE/FCO).</label>
-                    <label className="flex items-start gap-2 text-xs text-slate-600"><input type="radio" name="respondePorOperacoes" checked={proposta.declaracoes.respondePorOperacoes === 'sim'} onChange={() => updateDeclaracoes({ respondePorOperacoes: 'sim' })} className="mt-0.5 accent-emerald-600" /> Respondo(emos) pelas seguintes operações (autorizo o BNB a confirmar os dados):</label>
-                  </div>
-                  {proposta.declaracoes.respondePorOperacoes === 'sim' && (
-                    <div className="flex flex-col gap-1.5 pl-5">
-                      {proposta.declaracoes.operacoesExistentesBNB.map((op, i) => (
-                        <div key={op.id} className="grid grid-cols-12 gap-1.5 items-center bg-slate-50 rounded-lg p-1.5">
-                          <input value={op.bancoCooperativa} onChange={(e) => updateOperacaoBNB(i, { bancoCooperativa: e.target.value })} placeholder="Banco/Cooperativa" className="col-span-3 px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
-                          <input type="date" value={op.dataContratoOuRenovacao} onChange={(e) => updateOperacaoBNB(i, { dataContratoOuRenovacao: e.target.value })} className="col-span-2 px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
-                          <input type="number" value={op.valorContrato || ''} onChange={(e) => updateOperacaoBNB(i, { valorContrato: Number(e.target.value) })} placeholder="Valor" className="col-span-2 px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
-                          <input value={op.fonteRecursos} onChange={(e) => updateOperacaoBNB(i, { fonteRecursos: e.target.value })} placeholder="Fonte de Recursos" className="col-span-2 px-2 py-1.5 rounded-lg border border-slate-200 text-xs" />
-                          <label className="col-span-1 flex items-center gap-1 text-[10px] text-slate-600"><input type="checkbox" checked={op.bonus200} onChange={(e) => updateOperacaoBNB(i, { bonus200: e.target.checked })} className="w-3 h-3 accent-emerald-600" /> R$200</label>
-                          <label className="col-span-1 flex items-center gap-1 text-[10px] text-slate-600"><input type="checkbox" checked={op.bonus700} onChange={(e) => updateOperacaoBNB(i, { bonus700: e.target.checked })} className="w-3 h-3 accent-emerald-600" /> R$700</label>
-                          <button type="button" onClick={() => removeOperacaoBNB(i)} disabled={proposta.declaracoes.operacoesExistentesBNB.length <= 1} className="col-span-1 flex justify-center text-slate-300 hover:text-rose-500 disabled:opacity-30"><Trash2 className="w-3.5 h-3.5" /></button>
-                        </div>
-                      ))}
-                      {proposta.declaracoes.operacoesExistentesBNB.length < 10 && (
-                        <button type="button" onClick={addOperacaoBNB} className="self-start flex items-center gap-1 text-xs font-medium text-emerald-700 hover:text-emerald-800"><Plus className="w-3.5 h-3.5" /> Adicionar operação</button>
-                      )}
-                    </div>
-                  )}
-
-                  <p className="text-[11px] text-slate-500 border-t border-slate-100 pt-2">Encontro-me quite e em situação de regularidade perante a Justiça Eleitoral.</p>
-
-                  <div>
-                    <p className="text-xs font-semibold text-slate-600 mb-1">Bônus de R$ 700,00, se houver direito:</p>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="flex items-start gap-2 text-xs text-slate-600"><input type="radio" name="bonus700" checked={proposta.declaracoes.bonus700Situacao === 'primeira'} onChange={() => updateDeclaracoes({ bonus700Situacao: 'primeira' })} className="mt-0.5 accent-emerald-600" /> A operação proposta em {proposta.dados.dataProposta ? new Date(proposta.dados.dataProposta + 'T00:00:00').toLocaleDateString('pt-BR') : '[data]'} é a minha primeira operação de investimento no PRONAF-Grupo C e não recebi o bônus de R$ 700,00 anteriormente.</label>
-                      <label className="flex items-start gap-2 text-xs text-slate-600"><input type="radio" name="bonus700" checked={proposta.declaracoes.bonus700Situacao === 'enesima_sem_bonus'} onChange={() => updateDeclaracoes({ bonus700Situacao: 'enesima_sem_bonus' })} className="mt-0.5 accent-emerald-600" /> É a minha {proposta.declaracoes.numeroOperacao}ª operação de investimento no PRONAF-Grupo C e não recebi o bônus de R$ 700,00 em operações anteriores.</label>
-                      <label className="flex items-start gap-2 text-xs text-slate-600"><input type="radio" name="bonus700" checked={proposta.declaracoes.bonus700Situacao === 'enesima_com_bonus'} onChange={() => updateDeclaracoes({ bonus700Situacao: 'enesima_com_bonus' })} className="mt-0.5 accent-emerald-600" /> É a minha {proposta.declaracoes.numeroOperacao}ª operação de investimento e já recebi o bônus de R$ 700,00 em operações anteriores.</label>
-                      {(proposta.declaracoes.bonus700Situacao === 'enesima_sem_bonus' || proposta.declaracoes.bonus700Situacao === 'enesima_com_bonus') && (
-                        <input type="number" min={2} value={proposta.declaracoes.numeroOperacao} onChange={(e) => updateDeclaracoes({ numeroOperacao: Number(e.target.value) })} placeholder="Nº da operação" className="w-32 px-2 py-1.5 rounded-lg border border-slate-200 text-xs ml-6" />
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="text-xs font-semibold text-slate-600 mb-1">Renegociação (MP 432/2008 e Lei 11.775/2008, arts. 15, 29 ou 30):</p>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="flex items-start gap-2 text-xs text-slate-600"><input type="radio" name="renegociacao" checked={proposta.declaracoes.renegociacaoMp432 === 'nao'} onChange={() => updateDeclaracoes({ renegociacaoMp432: 'nao' })} className="mt-0.5 accent-emerald-600" /> Não respondo por operação de investimento renegociada nesses termos.</label>
-                      <label className="flex items-start gap-2 text-xs text-slate-600"><input type="radio" name="renegociacao" checked={proposta.declaracoes.renegociacaoMp432 === 'amortizou'} onChange={() => updateDeclaracoes({ renegociacaoMp432: 'amortizou' })} className="mt-0.5 accent-emerald-600" /> Já amortizei integralmente as prestações vencidas no ano de {proposta.declaracoes.anoRenegociacao} da operação renegociada nesses termos.</label>
-                      {proposta.declaracoes.renegociacaoMp432 === 'amortizou' && (
-                        <input type="number" value={proposta.declaracoes.anoRenegociacao} onChange={(e) => updateDeclaracoes({ anoRenegociacao: Number(e.target.value) })} placeholder="Ano" className="w-28 px-2 py-1.5 rounded-lg border border-slate-200 text-xs ml-6" />
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="text-xs font-semibold text-slate-600 mb-1">Circular BACEN 3.339 — Pessoa Politicamente Exposta:</p>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="flex items-center gap-2 text-xs text-slate-600"><input type="radio" name="ppe" checked={proposta.declaracoes.ppe === 'enquadro'} onChange={() => updateDeclaracoes({ ppe: 'enquadro' })} className="accent-emerald-600" /> ENQUADRO-ME</label>
-                      <label className="flex items-center gap-2 text-xs text-slate-600"><input type="radio" name="ppe" checked={proposta.declaracoes.ppe === 'nao_enquadro'} onChange={() => updateDeclaracoes({ ppe: 'nao_enquadro' })} className="accent-emerald-600" /> NÃO ME ENQUADRO — em nenhuma das situações listadas na lei, atualmente ou nos últimos 5 anos</label>
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="text-xs font-semibold text-slate-600 mb-1">Metodologia de Cálculo da Taxa de Juros (Res. CMN 4.673/2018 e 4.664/2018):</p>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="flex items-center gap-2 text-xs text-slate-600"><input type="radio" name="metodologiaJuros" checked={proposta.declaracoes.metodologiaJuros === 'prefixada'} onChange={() => updateDeclaracoes({ metodologiaJuros: 'prefixada' })} className="accent-emerald-600" /> Taxa de Juros Prefixada</label>
-                      <label className="flex items-center gap-2 text-xs text-slate-600"><input type="radio" name="metodologiaJuros" checked={proposta.declaracoes.metodologiaJuros === 'posfixada'} onChange={() => updateDeclaracoes({ metodologiaJuros: 'posfixada' })} className="accent-emerald-600" /> Taxa de Juros Pós-fixada</label>
-                    </div>
-                  </div>
-                </SectionAccordion>
-
-                {/* Seção 11 - Autorizações e Assinaturas */}
-                <SectionAccordion id="assinaturas" expanded={expandedPropostaSection === 'assinaturas'} onToggle={() => setExpandedPropostaSection(expandedPropostaSection === 'assinaturas' ? null : 'assinaturas')} icon={<Percent className="w-4 h-4 text-emerald-600" />} title="Seção 11 · Autorizações e Assinaturas (somente leitura)">
-                  <div className="text-[11px] text-slate-500 flex flex-col gap-2">
-                    <p>Autorizo o BNB a consultar o SCR/SISBACEN (Central de Risco de Crédito) sobre meus dados.</p>
-                    <p>Declaro sob as penas da lei (art. 299 do Código Penal) que as informações acima correspondem à verdade.</p>
-                    <p>Local: {foundClient?.address?.city || '—'} · Data: {new Date().toLocaleDateString('pt-BR')}</p>
-                    <div className="border-t border-slate-100 pt-2 mt-1">
-                      <p className="font-semibold text-slate-600">Cliente: {foundClient?.name || '—'}</p>
-                      <p>CPF nº {foundClient?.cpf || '—'}</p>
-                    </div>
-                    {proposta.dados.elaborador.elaborador.trim() && (
-                      <div className="border-t border-slate-100 pt-2">
-                        <p className="font-semibold text-slate-600">Elaborador: {proposta.dados.elaborador.elaborador}</p>
-                        <p>CPF nº {proposta.dados.elaborador.cpfElaborador || '—'}</p>
-                      </div>
-                    )}
+                  <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-2 text-xs">
+                    <span>Garantias reais pré-existentes: <strong>{formatCurrency(resumoGar.reaisPreExistentes)}</strong></span>
+                    <span>Garantias reais evolutivas: <strong>{formatCurrency(resumoGar.reaisEvolutivas)}</strong></span>
+                    <span>Total de garantias: <strong className="text-emerald-700">{formatCurrency(resumoGar.total)}</strong></span>
+                    <span>% garantias/financiamento: <strong>{(resumoGar.pctGarantias * 100).toFixed(2)}%</strong></span>
                   </div>
                 </SectionAccordion>
               </div>
             )}
 
             {step === 3 && (
-              <div id="pronaf-print-area" className="flex flex-col gap-4">
+              <div className="flex flex-col gap-4">
                 <div className="flex flex-col items-center text-center py-2">
-                  <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mb-3 print:hidden"><CheckCircle2 className="w-8 h-8" /></div>
-                  <h3 className="font-semibold text-slate-800 text-lg">Resumo da Proposta PRONAF</h3>
-                  <p className="text-sm text-slate-500 mt-1">Cliente: <strong>{foundClient?.name || '—'}</strong> · CPF: {foundClient?.cpf || '—'}</p>
+                  <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mb-3"><CheckCircle2 className="w-8 h-8" /></div>
+                  <h3 className="font-semibold text-slate-800 text-lg">Proposta pronta</h3>
+                  <p className="text-sm text-slate-500 mt-1">Gere o PDF: ele sai com <strong>2 vias</strong> — o cliente leva uma e assina a outra, que fica com a empresa e dá início ao projeto.</p>
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs bg-slate-50 rounded-xl p-3">
+                  <span>Cliente: <strong>{foundClient?.name || '—'}</strong></span>
                   <span>Banco: <strong>{proposta.dados.banco || '—'}</strong></span>
-                  <span>Data da Proposta: <strong>{proposta.dados.dataProposta ? new Date(proposta.dados.dataProposta + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</strong></span>
-                  <span>Objetivo: <strong>{proposta.dados.objetivoCredito || '—'}</strong></span>
-                  <span>Programa: <strong>{PROGRAMAS_PRONAF.find(p => p.code === proposta.dados.programa)?.label || proposta.dados.programa || '—'}</strong></span>
-                  <span>Agência: <strong>{proposta.dados.agencia || '—'}</strong></span>
+                  <span>Programa: <strong>{program?.nome || '—'}</strong></span>
+                  <span>Data: <strong>{fmtDate(proposta.dados.dataProposta)}</strong></span>
+                  <span>Imóvel: <strong>{proposta.imoveisVinculados[0]?.denominacao || '—'}</strong></span>
+                  <span>Financiado: <strong>{formatCurrency(totalGeralInvest.financiamento)}</strong></span>
+                  <span>Total: <strong className="text-emerald-700">{formatCurrency(totalGeralInvest.investimentoTotal)}</strong></span>
+                  <span>Garantias: <strong>{formatCurrency(resumoGar.total)}</strong></span>
                 </div>
 
-                <div className="rounded-xl border border-slate-200 p-3">
-                  <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Imóveis Vinculados</p>
-                  <div className="flex flex-col gap-1 text-xs">
-                    {linhasImovelInversao.length === 0 && <p className="text-slate-400 italic">Nenhum imóvel informado.</p>}
-                    {linhasImovelInversao.map(row => (
-                      <div key={row.n} className="flex justify-between bg-slate-50 rounded-lg px-2 py-1.5">
-                        <span>Imóvel {row.n} · {row.denominacao}</span>
-                        <span className="text-slate-500">{row.municipioUf} {row.regiao ? `· ${row.regiao}` : ''}</span>
-                      </div>
-                    ))}
+                {program && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <ProgramConditions program={program} compact />
+                    <div className="rounded-xl border border-slate-200 p-3">
+                      <p className="text-xs font-bold text-slate-700 mb-2 flex items-center gap-1.5"><FileCheck2 className="w-4 h-4 text-emerald-600" /> Documentos que o cliente deve providenciar</p>
+                      <ul className="flex flex-col gap-1">
+                        {program.documentos.map(d => <li key={d} className="text-[11px] text-slate-600 flex gap-1.5"><span className="text-slate-300">☐</span>{d}</li>)}
+                      </ul>
+                    </div>
                   </div>
-                </div>
-
-                <div className="rounded-xl border border-slate-200 p-3">
-                  <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Programa de Investimentos</p>
-                  <div className="grid grid-cols-3 gap-2 text-xs">
-                    <span>Rec. Próprios: <strong>{formatCurrency(totalGeralInvest.recProprios)}</strong></span>
-                    <span>Financiamento: <strong>{formatCurrency(totalGeralInvest.financiamento)}</strong></span>
-                    <span>Investimento Total: <strong className="text-emerald-700">{formatCurrency(totalGeralInvest.investimentoTotal)}</strong></span>
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-slate-200 p-3">
-                  <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Bases do Financiamento</p>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                    <span>Prazo: <strong>{proposta.basesFinanciamento.prazoMeses} meses</strong></span>
-                    <span>Carência: <strong>{proposta.basesFinanciamento.carenciaMeses} meses</strong></span>
-                    <span>Juros: <strong>{proposta.basesFinanciamento.jurosPctAa}% a.a.</strong></span>
-                    <span>Método: <strong>{proposta.basesFinanciamento.metodoCalculo}</strong></span>
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-slate-200 p-3">
-                  <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Garantias</p>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <span>Fidejussórias: <strong>{formatCurrency(resumoGar.fidejussorias)}</strong></span>
-                    <span>Reais: <strong>{formatCurrency(resumoGar.reaisPreExistentes)}</strong></span>
-                    <span>Evolutivas: <strong>{formatCurrency(resumoGar.reaisEvolutivas)}</strong></span>
-                    <span>Total: <strong className="text-emerald-700">{formatCurrency(resumoGar.total)}</strong></span>
-                    <span className="col-span-2">% Garantias/Financiamento: <strong>{(resumoGar.pctGarantias * 100).toFixed(2)}%</strong></span>
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-slate-200 p-3">
-                  <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Indicadores</p>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <span>Empregados (atual → estabilização): <strong>{proposta.indicadores.empregadosAtual} → {proposta.indicadores.empregadosEstabilizacao}</strong></span>
-                    <span>Investimento/Empregado: <strong>{formatCurrency(calcInvestimentoPorEmpregado(proposta.indicadores, totalGeralInvest.investimentoTotal))}</strong></span>
-                  </div>
-                </div>
-
-                <div className="text-[11px] text-slate-400 border-t border-slate-100 pt-3">
-                  <p>Declaro sob as penas da lei (art. 299 do Código Penal) que as informações acima correspondem à verdade.</p>
-                  <p className="mt-1">Local: {foundClient?.address?.city || '—'} · Data: {new Date().toLocaleDateString('pt-BR')}</p>
-                  <div className="border-t border-slate-100 pt-2 mt-2">
-                    <p className="font-semibold text-slate-600">Cliente: {foundClient?.name || '—'} · CPF nº {foundClient?.cpf || '—'}</p>
-                    {proposta.dados.elaborador.elaborador.trim() && (
-                      <p className="font-semibold text-slate-600 mt-1">Elaborador: {proposta.dados.elaborador.elaborador} · CPF nº {proposta.dados.elaborador.cpfElaborador || '—'}</p>
-                    )}
-                  </div>
-                </div>
+                )}
               </div>
             )}
           </div>
 
-          <style>{`
-            @media print {
-              body * { visibility: hidden; }
-              #pronaf-print-area, #pronaf-print-area * { visibility: visible; }
-              #pronaf-print-area { position: absolute; left: 0; top: 0; width: 100%; }
-            }
-          `}</style>
-
           {/* Footer */}
-          <div className="px-6 pb-6 pt-2 flex items-center justify-between shrink-0 border-t border-slate-100 print:hidden">
+          <div className="px-6 pb-6 pt-3 flex items-center justify-between shrink-0 border-t border-slate-100">
             {step === 1 && (
               <>
                 <button onClick={resetAndClose} className="text-sm text-slate-500 hover:text-slate-700 font-medium">Cancelar</button>
-                <button onClick={() => runExclusive('PronafWizard.handleConfirmClient', () => handleConfirmClient())} disabled={!foundClient || saving || (!projectId && !proposta.dados.banco)} className={cn("flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-all", foundClient && !saving && (projectId || proposta.dados.banco) ? "bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm" : "bg-slate-100 text-slate-400 cursor-not-allowed")}>
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Confirmar e Continuar <ArrowRight className="w-4 h-4" /></>}
+                <button onClick={() => runExclusive('PronafWizard.handleConfirmClient', () => handleConfirmClient())} disabled={!canConfirm}
+                  className={cn('flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-all', canConfirm ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm' : 'bg-slate-100 text-slate-400 cursor-not-allowed')}
+                  title={!proposta.dados.banco ? 'Escolha o banco' : !program ? 'Escolha o programa' : !foundClient ? 'Escolha o cliente' : ''}>
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Confirmar e continuar <ArrowRight className="w-4 h-4" /></>}
                 </button>
               </>
             )}
@@ -1330,18 +1117,18 @@ export default function PronafWizard({ isOpen, onClose, clients, existingProject
               <>
                 <button onClick={() => setStep(1)} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 font-medium"><ArrowLeft className="w-4 h-4" /> Voltar</button>
                 <button onClick={() => runExclusive('PronafWizard.handleSaveProposta', () => handleSaveProposta())} disabled={saving} className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm disabled:opacity-60">
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Salvar e Continuar <ArrowRight className="w-4 h-4" /></>}
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Salvar e ver resumo <ArrowRight className="w-4 h-4" /></>}
                 </button>
               </>
             )}
             {step === 3 && (
               <>
-                <button onClick={() => setStep(2)} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 font-medium"><ArrowLeft className="w-4 h-4" /> Voltar</button>
+                <button onClick={() => setStep(2)} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 font-medium"><ArrowLeft className="w-4 h-4" /> Voltar e editar</button>
                 <div className="flex items-center gap-2">
-                  <button onClick={handlePrint} className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-50">
-                    <FileCheck2 className="w-4 h-4" /> Imprimir
+                  <button onClick={() => runExclusive('PronafWizard.pdf', () => handleGeneratePdf())} disabled={generatingPdf} className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-50 disabled:opacity-60">
+                    {generatingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />} Gerar PDF (2 vias)
                   </button>
-                  <button onClick={resetAndClose} className="px-5 py-2.5 rounded-xl font-medium text-sm bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm">Fechar</button>
+                  <button onClick={resetAndClose} className="px-5 py-2.5 rounded-xl font-medium text-sm bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm">Concluir</button>
                 </div>
               </>
             )}
