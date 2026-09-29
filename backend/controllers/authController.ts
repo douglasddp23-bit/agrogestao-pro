@@ -787,8 +787,10 @@ export async function resetPassword(req: Request, res: Response) {
     }
     const caller = callerOf(req);
     const targetRole = await targetRoleOf(uid);
-    // Admin redefine qualquer senha; RH só de Consultor/RH; Gerente não redefine.
-    if (!(caller.role === 'admin' || (caller.role === 'hr' && (targetRole === 'consultant' || targetRole === 'hr' || targetRole === 'staff')))) {
+    // Admin redefine qualquer senha; RH só de Consultor ("staff" é o nome antigo do
+    // cargo) — nunca de Gerente, outro RH ou Administrador (decisão de 29/09/2026).
+    // Gerente e Consultor não redefinem.
+    if (!(caller.role === 'admin' || (caller.role === 'hr' && (targetRole === 'consultant' || targetRole === 'staff')))) {
       return res.status(403).json({ error: 'Você não tem permissão para redefinir a senha deste usuário.' });
     }
 

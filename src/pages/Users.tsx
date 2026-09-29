@@ -318,6 +318,14 @@ export default function Users() {
     });
   };
 
+  // Redefinir senha: Administrador de qualquer pessoa; RH só de Consultor (decisão de
+  // 29/09/2026) — o servidor confere a mesma regra em /api/admin/reset-password.
+  const canResetPasswordOf = (member: UserProfile) => {
+    const me = user?.effectiveRole ?? user?.role;
+    if (me === 'admin') return true;
+    return me === 'hr' && (member.role === 'consultant' || (member.role as string) === 'staff');
+  };
+
   const handleResetPassword = async (member: UserProfile) => {
     let toastId: any = undefined;
     try {
@@ -690,7 +698,7 @@ export default function Users() {
                             exit={{ opacity: 0, scale: 0.95 }}
                             className="absolute right-0 top-10 w-48 bg-white rounded-xl shadow-xl border border-slate-100 z-10 py-1 overflow-hidden"
                           >
-                            {(user?.effectiveRole ?? user?.role) === 'admin' && (
+                            {canResetPasswordOf(member) && (
                             <button 
                                onClick={() => handleResetPassword(member)}
                                className="w-full px-4 py-2 text-left text-xs font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-2"
@@ -899,7 +907,7 @@ export default function Users() {
                                {member.blocked ? <Unlock className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}
                              </button>
                            )}
-                           {(user?.effectiveRole ?? user?.role) === 'admin' && (
+                           {canResetPasswordOf(member) && (
                            <button 
                              onClick={() => handleResetPassword(member)}
                              className="p-1.5 bg-slate-50 text-slate-600 rounded-lg hover:bg-slate-100 transition-all font-bold"
