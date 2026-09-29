@@ -54,6 +54,8 @@ import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { Wallet as PageIcon } from 'lucide-react';
 import { useInitialSearch } from '../hooks/useInitialSearch';
 import ExportExcelButton from '../components/service/ExportExcelButton';
+import { logAudit } from '../lib/audit';
+import AuditTrail from '../components/AuditTrail';
 
 export default function RuralCredit() {
   const { user } = useAuth();
@@ -164,6 +166,11 @@ export default function RuralCredit() {
     }
   }, [formData.clientId, clients]);
 
+
+  // Histórico de alterações (Auditoria Global e "Histórico" nos detalhes)
+  const audit = (action: string, recordId: string, recordName: string, details: string, extra: Record<string, any> = {}) =>
+    logAudit({ userId: user?.uid || 'unknown', userName: user?.displayName || user?.email || 'Usuário', action, collection: 'analyses', recordId, recordName, details, ...extra });
+
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.clientId) return;
@@ -186,6 +193,7 @@ export default function RuralCredit() {
         });
 
         if (user) {
+          audit('updated', editingId, formData.clientName, `Projeto de crédito editado (${formData.financingType || 'crédito'}, ${formatCurrency(Number(formData.value))}).`, { newValues: { value: Number(formData.value), bank: formData.bank } });
           await createNotification(user.uid, 'Projeto Atualizado', `O projeto de ${formData.clientName} foi editado com sucesso.`, 'update', 'analysis_credit');
         }
       } else {
@@ -338,6 +346,7 @@ export default function RuralCredit() {
         updatedAt: new Date().toISOString()
       });
       toast.success(`Status atualizado para: ${newStatus}`);
+      audit('status_changed', projectId, project?.clientName || '', `Status alterado para ${newStatus}.`, { previousValues: { status: previousStatus }, newValues: { status: newStatus } });
 
       if (user) {
         await createNotification(
@@ -364,6 +373,7 @@ export default function RuralCredit() {
     setProjects(prev => prev.filter(p => p.id !== id));
     try {
       await deleteDoc(doc(db, 'analyses', id));
+      audit('deleted', id, removed?.clientName || '', 'Projeto de crédito excluído.');
       setIsDeleteConfirmOpen(null);
       toast.success('Projeto excluído com sucesso.');
       if (user) {
@@ -1015,6 +1025,7 @@ export default function RuralCredit() {
                  </div>
               </div>
 
+              <AuditTrail recordId={selectedProject.id} collectionName="analyses" />
               <button
                 onClick={() => generateCreditReport(selectedProject)}
                 className="w-full py-3 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all text-xs uppercase tracking-widest mt-4 flex items-center justify-center gap-2"

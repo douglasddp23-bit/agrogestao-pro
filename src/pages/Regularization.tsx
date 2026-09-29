@@ -37,6 +37,7 @@ import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { ShieldCheck as PageIcon } from 'lucide-react';
 import { useInitialSearch } from '../hooks/useInitialSearch';
 import ExportExcelButton from '../components/service/ExportExcelButton';
+import { logAudit } from '../lib/audit';
 
 interface DocService {
   id: string;
@@ -132,6 +133,11 @@ export default function Regularization() {
     };
   }, []);
 
+
+  // Histórico de alterações (Auditoria Global e "Histórico" nos detalhes)
+  const audit = (action: string, recordId: string, recordName: string, details: string, extra: Record<string, any> = {}) =>
+    logAudit({ userId: user?.uid || 'unknown', userName: user?.displayName || user?.email || 'Usuário', action, collection: 'regularization_services', recordId, recordName, details, ...extra });
+
   const handleClientChange = (clientId: string) => {
     setSelectedClientId(clientId);
     const selectedClient = clients.find(c => c.id === clientId);
@@ -195,6 +201,7 @@ export default function Regularization() {
         if (created) internalProtocol = candidate;
       }
       if (!internalProtocol) throw new Error('Não foi possível gerar o número de protocolo.');
+      audit('created', internalProtocol, `${internalProtocol} — ${client?.name || ''}`, `Protocolo ${internalProtocol} aberto${organ ? ' (' + organ + ')' : ''}.`);
       // Automatically integrate with Agenda by creating a notification.
       // Isolado do save principal: se essa notificação falhar, o protocolo já
       // foi criado — não pode aparecer como erro contraditório do mesmo salvamento.
@@ -276,6 +283,8 @@ export default function Regularization() {
         updatedAt: serverTimestamp()
       });
       toast.success(`Status atualizado para: ${newStatus}`);
+      const s0 = services.find(s => s.id === id);
+      audit('status_changed', id, `${s0?.internalProtocol || ''} — ${s0?.clientName || ''}`, `Status alterado para ${newStatus}.`, { previousValues: { status: s0?.status }, newValues: { status: newStatus } });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'regularization_services');
     }
@@ -283,7 +292,9 @@ export default function Regularization() {
 
   const handleDeleteService = async (id: string) => {
     try {
+      const s1 = services.find(s => s.id === id);
       await deleteDoc(doc(db, 'regularization_services', id));
+      audit('deleted', id, `${s1?.internalProtocol || ''} — ${s1?.clientName || ''}`, 'Protocolo excluído.');
       setIsDeleteModalOpen(null);
       toast.success('Protocolo excluído com sucesso.');
     } catch (error) {

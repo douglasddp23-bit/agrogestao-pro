@@ -44,6 +44,8 @@ import {
 } from '../components/service/ServiceFormParts';
 import { useInitialSearch } from '../hooks/useInitialSearch';
 import ExportExcelButton from '../components/service/ExportExcelButton';
+import { logAudit } from '../lib/audit';
+import AuditTrail from '../components/AuditTrail';
 
 // ─── Cálculos (mesmas fórmulas de antes; só saíram do componente para poderem
 //     ser usadas também no PDF de projetos já salvos) ──────────────────────────
@@ -262,6 +264,11 @@ export default function Irrigation() {
     return () => { unsubClients(); unsubProjects(); };
   }, []);
 
+
+  // Histórico de alterações (Auditoria Global e "Histórico" nos detalhes)
+  const audit = (action: string, recordId: string, recordName: string, details: string, extra: Record<string, any> = {}) =>
+    logAudit({ userId: user?.uid || 'unknown', userName: user?.displayName || user?.email || 'Usuário', action, collection: 'irrigation_projects', recordId, recordName, details, ...extra });
+
   const calc = useMemo(
     () => computeIrrigation(hydraulic, pump, demand, soil, appEfficiency),
     [hydraulic, pump, demand, soil, appEfficiency]
@@ -371,6 +378,7 @@ export default function Irrigation() {
         const old = projects.find(p => p.id === editingId) || {};
         saved = { ...old, ...payload, id: editingId };
         toast.success('Projeto de irrigação atualizado!');
+        audit('updated', editingId, `${payload.clientName} — ${payload.propertyName}`, `Projeto de irrigação editado (valor ${priceCalc.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}).`, { newValues: { value: payload.value, type: payload.type, area: payload.inputs.demand.area } });
       } else {
         const ref = await addDoc(collection(db, 'irrigation_projects'), {
           ...payload,
@@ -381,6 +389,7 @@ export default function Irrigation() {
         });
         saved = { ...payload, id: ref.id, status: 'Em Andamento', paymentStatus: 'pendente' };
         toast.success('Projeto de irrigação criado!');
+        audit('created', ref.id, `${payload.clientName} — ${payload.propertyName}`, `Projeto de irrigação criado (${systemLabel(payload.type)}, ${payload.inputs.demand.area} ha).`, { newValues: { value: payload.value } });
         // Aviso na agenda — isolado: se falhar, o projeto já está salvo.
         try {
           if (user) {
@@ -414,6 +423,7 @@ export default function Irrigation() {
       await updateDoc(doc(db, 'irrigation_projects', p.id), { ...patch, updatedAt: serverTimestamp() });
       setViewing((v: any) => (v && v.id === p.id ? { ...v, ...patch } : v));
       toast.success(msg);
+      audit('status_changed', p.id, `${p.clientName} — ${p.propertyName || ''}`, msg, { previousValues: { status: statusOf(p), paymentStatus: p.paymentStatus || 'pendente' }, newValues: patch });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'irrigation_projects');
     }
@@ -421,7 +431,9 @@ export default function Irrigation() {
 
   const handleDeleteProject = async (id: string) => {
     try {
+      const removed = projects.find(p => p.id === id);
       await deleteDoc(doc(db, 'irrigation_projects', id));
+      audit('deleted', id, `${removed?.clientName || ''} — ${removed?.propertyName || ''}`, 'Projeto de irrigação excluído.');
       setIsDeleteModalOpen(null);
       setViewing(null);
       toast.success('Projeto excluído com sucesso.');
@@ -842,6 +854,7 @@ export default function Irrigation() {
                     )}
                   </div>
                 )}
+                <AuditTrail recordId={p.id} collectionName="irrigation_projects" />
                 <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
                   <button onClick={() => downloadPDF(p)} className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2"><FileText className="w-4 h-4" /> Relatório em PDF</button>
                   {canEditProject(p) && <button onClick={() => openEdit(p)} className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2"><Edit3 className="w-4 h-4" /> Editar</button>}

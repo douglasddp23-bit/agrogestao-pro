@@ -22,6 +22,7 @@ import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { Map as PageIcon } from 'lucide-react';
 import { useInitialSearch } from '../hooks/useInitialSearch';
 import ExportExcelButton from '../components/service/ExportExcelButton';
+import { logAudit } from '../lib/audit';
 
 export interface GPSPoint {
   id: string;
@@ -435,6 +436,11 @@ export default function Topography() {
     }
   };
 
+
+  // Histórico de alterações (Auditoria Global e "Histórico" nos detalhes)
+  const audit = (action: string, recordId: string, recordName: string, details: string, extra: Record<string, any> = {}) =>
+    logAudit({ userId: user?.uid || 'unknown', userName: user?.displayName || user?.email || 'Usuário', action, collection: 'topography_services', recordId, recordName, details, ...extra });
+
   const resetForm = () => {
     setEditingId(null); setStep(0);
     setSelectedClientId(''); setPropertyName(''); setAvailableProperties([]); setShowPropertySelect(false);
@@ -521,6 +527,7 @@ export default function Topography() {
         await updateDoc(doc(db, 'topography_services', editingId), { ...payload, updatedAt: serverTimestamp() });
         saved = { ...(services.find((s: any) => s.id === editingId) || {}), ...payload, id: editingId };
         toast.success('Serviço de topografia atualizado!');
+        audit('updated', editingId, `${payload.clientName} — ${payload.propertyName}`, `Serviço de ${serviceLabel} editado.`, { newValues: { value: payload.value, status: payload.status } });
       } else {
         const docRef = await addDoc(collection(db, 'topography_services'), {
           ...payload,
@@ -529,6 +536,7 @@ export default function Topography() {
           createdBy: user?.uid,
         });
         saved = { ...payload, id: docRef.id, paymentStatus: 'pendente' };
+        audit('created', docRef.id, `${payload.clientName} — ${payload.propertyName}`, `Serviço de ${serviceLabel} registrado (${areaSize} ha).`, { newValues: { value: payload.value } });
         toast.success('Serviço de Topografia Registrado!', {
           description: `${serviceLabel} (${areaSize} ha) na propriedade ${propertyName} para o cliente ${client?.name || 'Cliente'}.`,
           duration: 5000,
@@ -564,6 +572,8 @@ export default function Topography() {
     try {
       await updateDoc(doc(db, 'topography_services', id), { paymentStatus, updatedAt: serverTimestamp() });
       toast.success(paymentStatus === 'pago' ? 'Marcado como pago.' : 'Marcado como a receber.');
+      const s1 = services.find((s: any) => s.id === id);
+      audit('status_changed', id, `${s1?.clientName || ''} — ${s1?.propertyName || ''}`, paymentStatus === 'pago' ? 'Pagamento recebido.' : 'Pagamento voltou para a receber.', { newValues: { paymentStatus } });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'topography_services');
     }
@@ -575,6 +585,8 @@ export default function Topography() {
     try {
       await updateDoc(doc(db, 'topography_services', id), { status, updatedAt: serverTimestamp() });
       toast.success(`Status atualizado para: ${status}`);
+      const s0 = services.find((s: any) => s.id === id);
+      audit('status_changed', id, `${s0?.clientName || ''} — ${s0?.propertyName || ''}`, `Situação alterada para ${status}.`, { previousValues: { status: s0?.status || 'Planejado' }, newValues: { status } });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'topography_services');
     }
@@ -666,6 +678,7 @@ export default function Topography() {
     setServices((prev: any[]) => prev.filter((s: any) => s.id !== id));
     try {
       await deleteDoc(doc(db, 'topography_services', id));
+      audit('deleted', id, `${removed?.clientName || ''} — ${removed?.propertyName || ''}`, 'Serviço de topografia excluído.');
       setIsDeleteModalOpen(null);
       toast.success('Serviço excluído com sucesso.');
     } catch (error) {
