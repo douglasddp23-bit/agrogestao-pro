@@ -21,6 +21,7 @@ import {
 import { toast } from 'sonner';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { CalendarDays as PageIcon } from 'lucide-react';
+import { useInitialSearch } from '../hooks/useInitialSearch';
 
 export default function Scheduling() {
   const { user } = useAuth();
@@ -52,6 +53,7 @@ export default function Scheduling() {
   // options: 'all' | 'today' | 'week' | 'pending'
   const [filter, setFilter] = useState<'all' | 'today' | 'week' | 'pending'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  useInitialSearch(setSearchQuery); // termo vindo da Busca Global
   const [selectedCalendarDay, setSelectedCalendarDay] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
   const [editingAppointmentId, setEditingAppointmentId] = useState<string | null>(null);

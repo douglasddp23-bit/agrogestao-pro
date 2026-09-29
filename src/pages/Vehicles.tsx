@@ -33,6 +33,7 @@ import { exportToExcel } from '../lib/exportExcel';
 import { Vehicle, VehicleTrip, FieldVisit } from '../types';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { Car as PageIcon } from 'lucide-react';
+import { useInitialSearch } from '../hooks/useInitialSearch';
 
 export default function Vehicles() {
   const { user } = useAuth();
@@ -46,6 +47,7 @@ export default function Vehicles() {
 
   // Search & Filter
   const [searchTerm, setSearchTerm] = useState('');
+  useInitialSearch(setSearchTerm); // termo vindo da Busca Global
 
   // Modals
   const [isAddVehicleOpen, setIsAddVehicleOpen] = useState(false);

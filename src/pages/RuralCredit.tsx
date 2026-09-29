@@ -52,6 +52,7 @@ import PronafWizard from '../components/PronafWizard';
 import { toast } from 'sonner';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { Wallet as PageIcon } from 'lucide-react';
+import { useInitialSearch } from '../hooks/useInitialSearch';
 
 export default function RuralCredit() {
   const { user } = useAuth();
@@ -59,6 +60,7 @@ export default function RuralCredit() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  useInitialSearch(setSearchTerm); // termo vindo da Busca Global
   const [statusFilter, setStatusFilter] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalStep, setModalStep] = useState(1);

@@ -40,6 +40,7 @@ import { UserRole } from '../types';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { Package as PageIcon } from 'lucide-react';
 import { getPdfBranding } from '../lib/pdfBranding';
+import { useInitialSearch } from '../hooks/useInitialSearch';
 
 interface InventoryItemState {
   id: string;
@@ -93,6 +94,7 @@ export default function Inventory() {
   
   // Search & Filters
   const [searchTerm, setSearchTerm] = useState('');
+  useInitialSearch(setSearchTerm); // termo vindo da Busca Global
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [stockStatusFilter, setStockStatusFilter] = useState('all');
 

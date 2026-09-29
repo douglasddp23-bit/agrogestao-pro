@@ -55,6 +55,7 @@ import { Contract, ContractPayment, ContractAdendum, ContractRevision, Client, F
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { FilePen as PageIcon } from 'lucide-react';
 import { getPdfBranding } from '../lib/pdfBranding';
+import { useInitialSearch } from '../hooks/useInitialSearch';
 
 const statusBadge: Record<string, { label: string; color: string }> = {
   active: { label: 'Ativo', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
@@ -199,6 +200,7 @@ export default function Contracts() {
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
+  useInitialSearch(setSearchTerm); // termo vindo da Busca Global
   const [statusFilter, setStatusFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
 

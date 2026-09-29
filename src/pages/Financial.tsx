@@ -46,6 +46,7 @@ import { FinancialRecord, FinancialStatus, PaymentMethod, FinancialCategory, Cli
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { DollarSign as PageIcon } from 'lucide-react';
 import { getPdfBranding } from '../lib/pdfBranding';
+import { useInitialSearch } from '../hooks/useInitialSearch';
 
 export default function Financial() {
   const { user } = useAuth();
@@ -96,6 +97,7 @@ function FinancialContent() {
 
   // Filtering / Searching State
   const [searchTerm, setSearchTerm] = useState('');
+  useInitialSearch(setSearchTerm); // termo vindo da Busca Global
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [monthFilter, setMonthFilter] = useState('all'); // format: YYYY-MM

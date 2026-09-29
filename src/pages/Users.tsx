@@ -41,10 +41,12 @@ import UserDetailModal from '../components/users/UserDetailModal';
 import NewDelegationModal from '../components/users/NewDelegationModal';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { UsersRound as PageIcon } from 'lucide-react';
+import { useInitialSearch } from '../hooks/useInitialSearch';
 
 export default function Users() {
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
+  useInitialSearch(setSearchTerm); // termo vindo da Busca Global
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [team, setTeam] = useState<UserProfile[]>([]);

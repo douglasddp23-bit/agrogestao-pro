@@ -480,11 +480,12 @@ export default function MainApp() {
   }, [user?.uid]);
 
   const [globalSearch, setGlobalSearch] = useState('');
-  const { results: searchResults, loading: searchLoading } = useGlobalSearch(globalSearch);
+  const { results: searchResults, loading: searchLoading } = useGlobalSearch(globalSearch, (user?.effectiveRole ?? user?.role) as UserRole);
   const [showSearchResults, setShowSearchResults] = useState(false);
 
-  const handleSearchResultClick = (page: Page) => {
-    navigate(`/${page}`);
+  const handleSearchResultClick = (page: Page, filter?: string) => {
+    // A página de destino abre já filtrada pelo termo buscado (ver useInitialSearch)
+    navigate(`/${page}`, { state: { globalSearch: filter && filter !== '—' ? filter : globalSearch } });
     setGlobalSearch('');
     setShowSearchResults(false);
   };
@@ -676,7 +677,7 @@ export default function MainApp() {
               <input 
                 id="global-search"
                 type="text" 
-                placeholder="Busca Global (Produtores, Serviços...)" 
+                placeholder="Buscar em todo o sistema (cliente, CPF, protocolo, processo, placa...)" 
                 value={globalSearch}
                 onFocus={() => setShowSearchResults(true)}
                 onChange={(e) => setGlobalSearch(e.target.value)}
@@ -699,7 +700,7 @@ export default function MainApp() {
                       {searchResults.map(result => (
                         <button 
                           key={result.id}
-                          onClick={() => handleSearchResultClick(result.page as Page)}
+                          onClick={() => handleSearchResultClick(result.page as Page, result.filter)}
                           className="w-full flex items-center gap-4 p-3 hover:bg-emerald-50 rounded-2xl transition-all group border border-transparent hover:border-emerald-100"
                         >
                           <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm group-hover:bg-emerald-100 transition-colors">

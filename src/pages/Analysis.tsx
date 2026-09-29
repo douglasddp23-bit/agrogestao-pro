@@ -51,6 +51,7 @@ import ServiceKpiCards from '../components/service/ServiceKpiCards';
 import AuditTrail from '../components/AuditTrail';
 import { toast } from 'sonner';
 import { getPdfBranding } from '../lib/pdfBranding';
+import { useInitialSearch } from '../hooks/useInitialSearch';
 
 interface AnalysisProps {
   typeFilter?: AnalysisType;
@@ -150,6 +151,7 @@ export default function Analysis({ typeFilter }: AnalysisProps) {
   const [selectedAnalysis, setSelectedAnalysis] = useState<ServiceAnalysis | null>(null);
   const [viewingAnalysis, setViewingAnalysis] = useState<ServiceAnalysis | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  useInitialSearch(setSearchTerm); // termo vindo da Busca Global
   const [technicianFilter, setTechnicianFilter] = useState('all');
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');

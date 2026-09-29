@@ -30,6 +30,7 @@ import AuditTrail from '../components/AuditTrail';
 import { logAudit } from '../lib/audit';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { Landmark as PageIcon } from 'lucide-react';
+import { useInitialSearch } from '../hooks/useInitialSearch';
 
 const PURPOSE_LABELS: Record<string, string> = {
   compra_venda: 'Compra e Venda',
@@ -81,6 +82,7 @@ export default function RuralPropertyValuationPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  useInitialSearch(setSearchQuery); // termo vindo da Busca Global
   
   // Filters
   const [purposeFilter, setPurposeFilter] = useState<string>('todos');

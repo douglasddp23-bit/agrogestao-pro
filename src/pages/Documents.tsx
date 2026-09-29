@@ -39,10 +39,12 @@ import { useLocation } from 'react-router-dom';
 
 import ConfirmationModal from '../components/ConfirmationModal';
 import { getPdfBranding } from '../lib/pdfBranding';
+import { useInitialSearch } from '../hooks/useInitialSearch';
 
 export default function Documents() {
   const location = useLocation();
   const [searchTerm, setSearchTerm] = useState('');
+  useInitialSearch(setSearchTerm); // termo vindo da Busca Global
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [documents, setDocuments] = useState<ClientDocument[]>([]);

@@ -42,6 +42,7 @@ import {
   PricingFields, ResponsibleFields, WizardSteps, computePricing, emptyPricing, registryLabel, responsibleFromProfile,
   ServicePricing, ResponsibleTech,
 } from '../components/service/ServiceFormParts';
+import { useInitialSearch } from '../hooks/useInitialSearch';
 
 // ─── Cálculos (mesmas fórmulas de antes; só saíram do componente para poderem
 //     ser usadas também no PDF de projetos já salvos) ──────────────────────────
@@ -225,6 +226,7 @@ export default function Irrigation() {
   const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  useInitialSearch(setSearchTerm); // termo vindo da Busca Global
   const [statusFilter, setStatusFilter] = useState('all');
   const [viewing, setViewing] = useState<any | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<string | null>(null);

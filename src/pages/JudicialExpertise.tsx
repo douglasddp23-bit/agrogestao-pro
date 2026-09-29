@@ -29,6 +29,7 @@ import AuditTrail from '../components/AuditTrail';
 import { logAudit } from '../lib/audit';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { Scale as PageIcon } from 'lucide-react';
+import { useInitialSearch } from '../hooks/useInitialSearch';
 
 const EXPERTISE_TYPE_LABELS: Record<string, string> = {
   servidao_administrativa: 'Servidão Administrativa',
@@ -79,6 +80,7 @@ export default function JudicialExpertisePage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  useInitialSearch(setSearchQuery); // termo vindo da Busca Global
   
   // Filters
   const [statusFilter, setStatusFilter] = useState<'todos' | 'ativo' | 'concluido' | 'arquivado'>('todos');

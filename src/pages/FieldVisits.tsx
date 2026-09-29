@@ -68,6 +68,7 @@ import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { ClipboardList as PageIcon } from 'lucide-react';
 import { getPdfBranding, drawBrandBanner, drawBrandFooter } from '../lib/pdfBranding';
+import { useInitialSearch } from '../hooks/useInitialSearch';
 
 let DefaultIcon = L.icon({
     iconUrl: iconMarker,
@@ -98,6 +99,7 @@ export default function FieldVisits() {
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
+  useInitialSearch(setSearchTerm); // termo vindo da Busca Global
   const [selectedTechnician, setSelectedTechnician] = useState('');
   const [selectedClientFilter, setSelectedClientFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');

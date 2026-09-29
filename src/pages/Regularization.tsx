@@ -35,6 +35,7 @@ import ServiceKpiCards, { isThisMonth } from '../components/service/ServiceKpiCa
 import ConfirmationModal from '../components/ConfirmationModal';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { ShieldCheck as PageIcon } from 'lucide-react';
+import { useInitialSearch } from '../hooks/useInitialSearch';
 
 interface DocService {
   id: string;
@@ -88,6 +89,7 @@ export default function Regularization() {
   const { user } = useAuth();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  useInitialSearch(setSearchTerm); // termo vindo da Busca Global
   const [clients, setClients] = useState<Client[]>([]);
   const [services, setServices] = useState<DocService[]>([]);
   const [loading, setLoading] = useState(true);

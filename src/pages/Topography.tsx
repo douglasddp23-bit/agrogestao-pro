@@ -20,6 +20,7 @@ import {
 import ConfirmationModal from '../components/ConfirmationModal';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { Map as PageIcon } from 'lucide-react';
+import { useInitialSearch } from '../hooks/useInitialSearch';
 
 export interface GPSPoint {
   id: string;
@@ -231,6 +232,7 @@ export default function Topography() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [step, setStep] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
+  useInitialSearch(setSearchTerm); // termo vindo da Busca Global
   const [statusFilter, setStatusFilter] = useState('all');
   const [pricing, setPricing] = useState<ServicePricing>(emptyPricing());
   const [responsibleTech, setResponsibleTech] = useState<ResponsibleTech>(responsibleFromProfile(user));

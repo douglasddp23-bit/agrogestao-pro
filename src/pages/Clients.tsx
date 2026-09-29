@@ -50,6 +50,7 @@ import { handleFirestoreError, OperationType, cn, validateCPF, validateEmail, fo
 import { toast } from 'sonner';
 import ConfirmationModal from '../components/ConfirmationModal';
 import AuditTrail from '../components/AuditTrail';
+import { useInitialSearch } from '../hooks/useInitialSearch';
 
 type FormStep = 'personal' | 'address' | 'documents' | 'review';
 
@@ -92,6 +93,8 @@ export default function Clients() {
   // Active search and filtering states
   const [searchInput, setSearchInput] = useState('');
   const [confirmedSearchTerm, setConfirmedSearchTerm] = useState('');
+  // Termo vindo da Busca Global: preenche o campo e já pesquisa
+  useInitialSearch((term) => { setSearchInput(term); setConfirmedSearchTerm(term); });
   const [hasSearched, setHasSearched] = useState(false);
   const [sortBy, setSortBy] = useState<'name-asc' | 'name-desc' | 'created-desc' | 'created-asc'>('name-asc');
   const [filterGroup, setFilterGroup] = useState<'all' | 'pronaf' | 'rural_producer'>('all');
