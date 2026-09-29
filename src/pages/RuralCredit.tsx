@@ -41,6 +41,7 @@ import ServiceKpiCards, { formatBRL, isThisMonth } from '../components/service/S
 import ConfirmationModal from '../components/ConfirmationModal';
 import PronafWizard from '../components/PronafWizard';
 import { toast } from 'sonner';
+import { isManagementRole } from '../lib/permissions';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { Wallet as PageIcon } from 'lucide-react';
 import { useInitialSearch } from '../hooks/useInitialSearch';
@@ -204,6 +205,7 @@ export default function RuralCredit() {
           responsibleTechnician: formData.responsibleTechnician,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
+          createdBy: user?.uid || '',
           assignedTo: user?.uid || ''
         });
 
@@ -326,8 +328,17 @@ export default function RuralCredit() {
     setModalStep(1);
   };
 
+  // Editar: Admin/Gerente/RH qualquer projeto; Consultor os que criou ou que são dele
+  // (igual à regra do banco para "analyses"). Excluir continua só com o Administrador.
+  const canEditProject = (p?: ServiceAnalysis | null) =>
+    !!p && (isManagementRole(user?.effectiveRole ?? user?.role) || (p as any).createdBy === user?.uid || (p as any).assignedTo === user?.uid);
+
   const updateStatus = async (projectId: string, newStatus: string) => {
     const project = projects.find(p => p.id === projectId);
+    if (!canEditProject(project)) {
+      toast.error('Você só pode alterar projetos criados por você ou atribuídos a você.');
+      return;
+    }
     const previousStatus = project?.status;
     // Atualização otimista: reflete na tela na hora, sem esperar o listener do Firestore.
     setProjects(prev => prev.map(p => p.id === projectId ? { ...p, status: newStatus as any } : p));
@@ -411,21 +422,12 @@ export default function RuralCredit() {
     'Atividade': p.category || '', 'Status': p.status || '', 'Valor (R$)': (typeof p.value === 'number' ? p.value : Number(p.value) || 0), 'Custo de Execução (R$)': (typeof p.cost === 'number' ? p.cost : Number(p.cost) || 0),
     'Previsão': (p.scheduledDate ? String(p.scheduledDate).split('T')[0].split('-').reverse().join('/') : ''), 'Responsável': p.responsibleTechnician || '',
   }))} />
-          {(user?.effectiveRole ?? user?.role) === 'staff' || (user?.effectiveRole ?? user?.role) === 'consultant' ? (
-            <button
-              disabled
-              className="px-5 py-2.5 rounded-2xl font-bold flex items-center gap-2 shadow-none bg-slate-300 text-slate-500 cursor-not-allowed"
-            >
-              <Plus className="w-5 h-5" /> Apenas Leitura
-            </button>
-          ) : (
-            <button
-              onClick={() => { setPronafResumeProject(null); setIsPronafOpen(true); }}
-              className="px-5 py-2.5 rounded-2xl font-bold flex items-center gap-2 transition-all shadow-lg bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-200"
-            >
-              <Landmark className="w-5 h-5" /> Nova Proposta de Crédito
-            </button>
-          )}
+          <button
+            onClick={() => { setPronafResumeProject(null); setIsPronafOpen(true); }}
+            className="px-5 py-2.5 rounded-2xl font-bold flex items-center gap-2 transition-all shadow-lg bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-200"
+          >
+            <Landmark className="w-5 h-5" /> Nova Proposta de Crédito
+          </button>
           </div>
         </div>
 
@@ -485,7 +487,7 @@ export default function RuralCredit() {
                   {project.status}
                 </div>
                 <div className="flex items-center gap-1">
-                  <button
+                  {canEditProject(project) && <button
                     onClick={(e) => {
                       e.stopPropagation();
                       if ((project as any).pronafData) {
@@ -498,7 +500,7 @@ export default function RuralCredit() {
                     className="p-2 hover:bg-slate-50 text-slate-300 hover:text-slate-500 rounded-xl transition-all"
                   >
                     <FileText className="w-4 h-4" />
-                  </button>
+                  </button>}
                   {(user?.effectiveRole ?? user?.role) === 'admin' && (
                     <button 
                       onClick={(e) => {
@@ -535,7 +537,7 @@ export default function RuralCredit() {
                             transition={{ duration: 0.12 }}
                             className="absolute right-0 top-full mt-1 w-56 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-[100] overflow-hidden"
                           >
-                            <button
+                            {canEditProject(project) && <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -550,7 +552,7 @@ export default function RuralCredit() {
                               className="w-full text-left px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-2"
                             >
                               <FileText className="w-3.5 h-3.5" /> Editar Projeto
-                            </button>
+                            </button>}
                             <button
                               type="button"
                               onClick={(e) => {
@@ -563,8 +565,8 @@ export default function RuralCredit() {
                               <FileDown className="w-3.5 h-3.5" /> Relatório em PDF
                             </button>
 
-                            <div className="px-4 pt-2 pb-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">Alterar Status</div>
-                            {['Pendente', 'Em Execução', 'Em Análise', 'Concluído', 'Cancelado'].map(status => (
+                            {canEditProject(project) && <div className="px-4 pt-2 pb-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">Alterar Status</div>}
+                            {canEditProject(project) && ['Pendente', 'Em Execução', 'Em Análise', 'Concluído', 'Cancelado'].map(status => (
                               <button
                                 type="button"
                                 key={status}
@@ -903,13 +905,13 @@ export default function RuralCredit() {
                   ) : (
                     <button 
                       type="submit"
-                      disabled={!formData.value || !formData.bank || (user?.effectiveRole ?? user?.role) === 'staff' || (user?.effectiveRole ?? user?.role) === 'consultant'}
+                      disabled={!formData.value || !formData.bank}
                       className={cn(
                         "flex-1 py-3 px-6 rounded-xl font-bold transition-all flex items-center justify-center gap-2",
-                        ((user?.effectiveRole ?? user?.role) === 'staff' || (user?.effectiveRole ?? user?.role) === 'consultant') ? "bg-slate-300 text-slate-500 cursor-not-allowed shadow-none" : "bg-emerald-600 text-white hover:bg-emerald-700 shadow-xl shadow-emerald-100"
+                        "bg-emerald-600 text-white hover:bg-emerald-700 shadow-xl shadow-emerald-100 disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none disabled:cursor-not-allowed"
                       )}
                     >
-                      {(user?.effectiveRole ?? user?.role) === 'staff' || (user?.effectiveRole ?? user?.role) === 'consultant' ? 'Apenas Leitura' : (isEditMode ? 'Salvar Alterações' : 'Finalizar e Criar')} <CheckCircle2 className="w-5 h-5" />
+                      {isEditMode ? 'Salvar Alterações' : 'Finalizar e Criar'} <CheckCircle2 className="w-5 h-5" />
                     </button>
                   )}
                 </div>
@@ -993,7 +995,7 @@ export default function RuralCredit() {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-2">
+              <div className={cn("flex flex-col gap-2", !canEditProject(selectedProject) && "hidden")}>
                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Alterar Status</label>
                  <div className="flex gap-2">
                     {['Pendente', 'Em Execução', 'Em Análise', 'Concluído', 'Cancelado'].map(status => (

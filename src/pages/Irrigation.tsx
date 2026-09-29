@@ -220,7 +220,9 @@ async function generateIrrigationPDF(project: any, client?: Client) {
 export default function Irrigation() {
   const { user } = useAuth();
   const role = (user?.effectiveRole ?? user?.role) as string;
-  const readOnly = role === 'staff' || role === 'consultant';
+  // Consultor cadastra e edita os próprios projetos (decisão do dono, 29/09/2026);
+  // excluir continua só com o Administrador.
+  const readOnly = false;
   const isAdmin = role === 'admin';
 
   const [clients, setClients] = useState<Client[]>([]);

@@ -690,7 +690,9 @@ export default function Topography() {
     }
   };
 
-  const readOnly = (user?.effectiveRole ?? user?.role) === 'staff' || (user?.effectiveRole ?? user?.role) === 'consultant';
+  // Consultor cadastra e edita os próprios serviços (decisão do dono, 29/09/2026);
+  // excluir continua só com o Administrador.
+  const readOnly = false;
   const canEditService = (s: any) => !readOnly && (['admin', 'manager', 'hr'].includes((user?.effectiveRole ?? user?.role) as string) || s.createdBy === user?.uid);
 
   // ─── Mini painel ───

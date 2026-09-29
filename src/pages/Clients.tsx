@@ -1806,6 +1806,8 @@ export default function Clients() {
                               value,
                               responsibleTechnician: tech,
                               description: desc,
+                              createdBy: user?.uid || '',
+                              assignedTo: user?.uid || '',
                               createdAt: new Date().toISOString(),
                               updatedAt: new Date().toISOString()
                             };

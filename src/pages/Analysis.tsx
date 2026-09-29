@@ -30,7 +30,7 @@ import { collection, onSnapshot, query, orderBy, where, getDocs, addDoc, doc, up
 import { db, auth } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { ServiceAnalysis, AnalysisType, Client, UserRole } from '../types';
-import { PERMISSIONS } from '../lib/permissions';
+import { PERMISSIONS, isManagementRole } from '../lib/permissions';
 import { logAudit } from '../lib/audit';
 import { motion, AnimatePresence } from 'motion/react';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
@@ -597,7 +597,8 @@ export default function Analysis({ typeFilter }: AnalysisProps) {
     const technicianFilled = (editDetails.responsibleTechnician || '').trim().length > 3;
     const isReadyToConclude = elementsFilled && technicianFilled;
 
-    const isConsultant = (user?.effectiveRole ?? user?.role) === 'consultant' || ((user?.effectiveRole ?? user?.role) as string) === 'staff';
+    // Quem chega aqui pode editar (gestão ou dono); todos os campos valem.
+    const isConsultant = false;
     const updatedData = {
       results: resultsForm,
       waivedFields,
@@ -709,7 +710,10 @@ export default function Analysis({ typeFilter }: AnalysisProps) {
   };
 
   const role = (user?.effectiveRole ?? user?.role) as UserRole;
-  const canEdit = PERMISSIONS.canEdit(role);      // manager+
+  // Editar: Admin/Gerente/RH qualquer análise; Consultor as que criou ou que são dele
+  // (igual à regra do banco). Excluir continua só com o Administrador.
+  const canEditAnalysis = (a?: ServiceAnalysis | null) =>
+    !!a && (isManagementRole(role) || (a as any).createdBy === user?.uid || (a as any).assignedTo === user?.uid);
   const canDelete = PERMISSIONS.canDelete(role);  // admin only
 
   const openEditModal = (analysis: ServiceAnalysis) => {
@@ -860,7 +864,7 @@ export default function Analysis({ typeFilter }: AnalysisProps) {
             <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
             {showEfficiencyReport ? "Lista de Análises" : "Relatório de Eficiência"}
           </button>
-          {!((user?.effectiveRole ?? user?.role) === 'staff' || (user?.effectiveRole ?? user?.role) === 'consultant') && (
+          {(
             <button 
               onClick={() => setIsModalOpen(true)}
               className="bg-emerald-600 text-white px-4 py-2 h-9 rounded-xl text-[10px] font-bold flex items-center gap-2 hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-200 uppercase tracking-widest cursor-pointer"
@@ -959,7 +963,7 @@ export default function Analysis({ typeFilter }: AnalysisProps) {
                       <Printer className="w-4 h-4" />
                     </button>
                   )}
-                  {canEdit && (
+                  {canEditAnalysis(analysis) && (
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
@@ -1183,7 +1187,7 @@ export default function Analysis({ typeFilter }: AnalysisProps) {
               </div>
 
               <div className="p-6 border-t border-slate-100 bg-slate-50 flex flex-wrap gap-3">
-                {canEdit && (
+                {canEditAnalysis(viewingAnalysis) && (
                   <button 
                     onClick={() => {
                       openEditModal(viewingAnalysis);
@@ -1456,11 +1460,10 @@ export default function Analysis({ typeFilter }: AnalysisProps) {
                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Responsável Técnico</label>
                           <input 
                             type="text" 
-                            disabled={(user?.effectiveRole ?? user?.role) === 'consultant' || ((user?.effectiveRole ?? user?.role) as string) === 'staff'}
-                            value={editDetails.responsibleTechnician}
+                                                        value={editDetails.responsibleTechnician}
                             onChange={(e) => setEditDetails({...editDetails, responsibleTechnician: e.target.value})}
                             placeholder="Nome do Técnico / CREA"
-                            className={cn("w-full glass-input bg-white/50", ((user?.effectiveRole ?? user?.role) === 'consultant' || ((user?.effectiveRole ?? user?.role) as string) === 'staff') && "opacity-60 cursor-not-allowed")}
+                            className="w-full glass-input bg-white/50"
                           />
                         </div>
                         <div className="space-y-1.5 flex flex-col gap-1.5">
@@ -1500,21 +1503,19 @@ export default function Analysis({ typeFilter }: AnalysisProps) {
                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Responsável Técnico</label>
                             <input 
                               type="text" 
-                              disabled={(user?.effectiveRole ?? user?.role) === 'consultant' || ((user?.effectiveRole ?? user?.role) as string) === 'staff'}
-                              value={editDetails.responsibleTechnician}
+                                                            value={editDetails.responsibleTechnician}
                               onChange={(e) => setEditDetails({...editDetails, responsibleTechnician: e.target.value})}
                               placeholder="Nome do Técnico / CREA"
-                              className={cn("w-full glass-input bg-white/50", ((user?.effectiveRole ?? user?.role) === 'consultant' || ((user?.effectiveRole ?? user?.role) as string) === 'staff') && "opacity-60 cursor-not-allowed")}
+                              className="w-full glass-input bg-white/50"
                             />
                           </div>
                           <div className="space-y-1.5">
                              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Data Agendada</label>
                              <input 
                                type="date" 
-                               disabled={(user?.effectiveRole ?? user?.role) === 'consultant' || ((user?.effectiveRole ?? user?.role) as string) === 'staff'}
-                               value={editDetails.scheduledDate}
+                                                              value={editDetails.scheduledDate}
                                onChange={(e) => setEditDetails({...editDetails, scheduledDate: e.target.value})}
-                               className={cn("w-full glass-input bg-slate-50/50 border-slate-200", ((user?.effectiveRole ?? user?.role) === 'consultant' || ((user?.effectiveRole ?? user?.role) as string) === 'staff') && "opacity-60 cursor-not-allowed")}
+                               className="w-full glass-input bg-slate-50/50 border-slate-200"
                              />
                           </div>
                        </div>
@@ -1533,7 +1534,7 @@ export default function Analysis({ typeFilter }: AnalysisProps) {
                   )}
                </div>
 
-               {!((user?.effectiveRole ?? user?.role) === 'consultant' || ((user?.effectiveRole ?? user?.role) as string) === 'staff') && (
+               {(
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-white/20">
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Valor do Projeto (R$)</label>

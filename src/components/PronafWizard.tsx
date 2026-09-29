@@ -453,6 +453,7 @@ export default function PronafWizard({ isOpen, onClose, clients, existingProject
           responsibleTechnician: user?.displayName || '',
           pronafData: { cliente: pronafCliente },
           createdAt: new Date().toISOString(),
+          createdBy: user?.uid || '',
           assignedTo: user?.uid || '',
         });
         setProjectId(newDoc.id);

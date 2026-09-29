@@ -139,7 +139,13 @@ service cloud.firestore {
     match /analyses/{analysisId} {
       allow list: if isStaff();
       allow get: if isStaff() && isValidId(analysisId);
-      allow create: if isStaff() && isValidId(analysisId) && isValidAnalysis(incoming());
+      // Consultor cadastra Análises e Crédito Rural (decisão de 29/09/2026), mas só em
+      // nome próprio — assim consegue editar depois; gestão cria para qualquer um.
+      allow create: if isStaff() && isValidId(analysisId) && isValidAnalysis(incoming()) && (
+        isManagement() ||
+        incoming().get('createdBy', '') == request.auth.uid ||
+        incoming().get('assignedTo', '') == request.auth.uid
+      );
       // Gestão edita qualquer uma; técnico edita a que já é dele (ou assume uma sem responsável).
       allow update: if isStaff() && isValidId(analysisId) && isValidAnalysis(incoming()) && (
         isManagement() ||
