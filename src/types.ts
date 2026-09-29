@@ -435,35 +435,6 @@ export interface ContractTemplate {
   updatedAt: string;
 }
 
-// ─── PRAGAS E DOENÇAS ────────────────────────────────────────────────
-export type PestSeverity = 'low' | 'medium' | 'high' | 'critical';
-
-export interface PestDiseaseRecord {
-  id: string;
-  clientId: string;
-  clientName: string;
-  propertyName: string;
-  reportedById: string;
-  reportedByName: string;
-  crop: string;                   // Cultura afetada
-  pestOrDisease: string;          // Nome da praga/doença
-  scientificName?: string;
-  severity: PestSeverity;
-  affectedAreaHectares: number;
-  symptoms: string;
-  recommendedControl: string;
-  appliedControl?: string;
-  applicationDate?: string;
-  followUpDate?: string;
-  photos: FieldVisitPhoto[];      // Reusa o mesmo tipo de foto
-  linkedVisitId?: string;         // Visita de campo que originou o registro
-  status: 'open' | 'monitoring' | 'controlled' | 'closed';
-  latitude?: number;
-  longitude?: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
 // ─── ESTOQUE / INSUMOS ───────────────────────────────────────────────
 export interface InventoryItem {
   id: string;
@@ -536,54 +507,6 @@ export interface VehicleTrip {
   linkedVisitId?: string;         // Visita de campo vinculada
   notes?: string;
   createdAt: string;
-}
-
-// ─── RAIO-X AMBIENTAL ────────────────────────────────────────────────
-export interface EnvironmentalXray {
-  id: string;
-  clientId: string;
-  clientName: string;
-  propertyName: string;
-  technicianId: string;
-  technicianName: string;
-  visitDate: string;
-  totalAreaHa: number;
-  landUse: {
-    preservedAreaPct: number;
-    pastureAreaPct: number;
-    cropAreaPct: number;
-    appAreaPct: number;           // Área de Preservação Permanente
-    legalReserveAreaPct: number;
-  };
-  waterResources: {
-    hasSpringWater: boolean;
-    springCount?: number;
-    hasWaterBodies: boolean;
-    hasWaterGrant: boolean;
-  };
-  legalCompliance: {
-    carRegistered: boolean;
-    itrUpToDate: boolean;
-    ccirUpToDate: boolean;
-    legalReserveRegistered: boolean;
-  };
-  environmentalLiabilities: {
-    illegalDeforestation: boolean;
-    erosion: boolean;
-    soilContamination: boolean;
-    waterContamination: boolean;
-    details?: string;
-  };
-  carbonPotential: {
-    eligibleAreaHa: number;
-    psaEligible: boolean;
-    notes?: string;
-  };
-  technicalOpinion: string;
-  score: number;                  // 0-100 calculado automaticamente
-  status: 'draft' | 'completed';
-  createdAt: string;
-  updatedAt: string;
 }
 
 export interface Appointment {

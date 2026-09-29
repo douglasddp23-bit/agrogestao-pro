@@ -504,7 +504,16 @@ export default function EfficiencyReport({ analyses = [], clients = [] }: Effici
             </span>
           </div>
           <p className="text-xs text-slate-600 leading-relaxed">
-            Com base no agrupamento de <strong>{stats.totalSamples} amostras analisadas</strong>, observa-se uma resposta altamente positiva na produtividade esperada quando a <strong>{currentConfig.label}</strong> se situa na faixa de <strong>{currentConfig.minIdeal} a {currentConfig.maxIdeal} {currentConfig.unit}</strong>. Amostras abaixo desta zona limítrofe apresentam perda potencial estimada em até <strong>25% de sacas por hectare</strong>.
+            {stats.totalSamples < 3 ? (
+              <>Há <strong>{stats.totalSamples}</strong> amostra(s) com {currentConfig.label} informada — são necessárias pelo menos 3 para indicar tendência.</>
+            ) : (() => {
+              const below = scatterData.filter(p => p.x < currentConfig.minIdeal).length;
+              const above = scatterData.filter(p => p.x > currentConfig.maxIdeal).length;
+              const forca = stats.r2Correlation >= 0.6 ? 'forte' : stats.r2Correlation >= 0.3 ? 'moderada' : 'fraca';
+              return (
+                <>Em <strong>{stats.totalSamples} amostras</strong>, a relação entre {currentConfig.label} e a produtividade estimada é <strong>{forca}</strong> (R² = {stats.r2Correlation}). <strong>{below}</strong> amostra(s) estão abaixo da faixa recomendada ({currentConfig.minIdeal}–{currentConfig.maxIdeal} {currentConfig.unit}) e <strong>{above}</strong> acima.</>
+              );
+            })()}
           </p>
         </div>
       </div>

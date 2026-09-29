@@ -621,62 +621,7 @@ Por favor, seja direto e use formatação Markdown limpa e amigável. Não adici
   });
 
   // Secure Server-Side Gemini endpoint for Pest & Disease Agronomic Diagnosis
-  app.post('/api/ai/diagnose-pest', requireAuth, async (req, res) => {
-    const { crop, pestOrDisease, symptoms } = req.body;
-    try {
-      const aiInstance = getGeminiClient();
-      if (!aiInstance) {
-        return res.json({
-          scientificName: pestOrDisease ? `Espécie associada a ${pestOrDisease}` : '',
-          symptoms: symptoms || `Sintomas típicos de ataque de ${pestOrDisease || 'praga'} na cultura de ${crop || 'lavoura'}.`,
-          recommendedControl: `Monitoramento contínuo da densidade populacional, aplicação de defensivo registrado no MAPA para ${crop || 'a cultura'} respeitando período de carência e rotação de ingredientes ativos para prevenir resistência.`,
-          severityAssessment: 'medium'
-        });
-      }
-
-      const prompt = `Você é um Agrônomo Fitossanitarista especialista no agronegócio brasileiro.
-Analise os seguintes dados de campo:
-- Cultura: ${crop || 'Não informada'}
-- Praga / Doença / Patógeno: ${pestOrDisease || 'Não informada'}
-- Sintomas relatados: ${symptoms || 'Não informados'}
-
-Retorne APENAS um objeto JSON com as seguintes chaves (sem markdown, sem texto extra fora do json):
-{
-  "scientificName": "Nome científico binomial em latim",
-  "symptoms": "Descrição técnica clara dos sintomas fitopatológicos ou danos causados",
-  "recommendedControl": "Prescrição técnica de controle: métodos culturais, controle biológico e grupos químicos de defensivos com rotação de MoA",
-  "severityAssessment": "low" | "medium" | "high" | "critical"
-}`;
-
-      const result = await aiInstance.models.generateContent({
-        model: "gemini-2.0-flash",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json"
-        }
-      });
-
-      try {
-        const parsed = JSON.parse(result.text || '{}');
-        res.json(parsed);
-      } catch {
-        res.json({
-          scientificName: '',
-          symptoms: symptoms || '',
-          recommendedControl: result.text || '',
-          severityAssessment: 'medium'
-        });
-      }
-    } catch (err: any) {
-      console.error('Erro no diagnóstico IA de pragas:', err);
-      res.json({
-        scientificName: '',
-        symptoms: symptoms || '',
-        recommendedControl: `Controle integrado de pragas (MIP): monitorar talhão e aplicar produtos registrados respeitando a bula e o receituário agronômico.`,
-        severityAssessment: 'medium'
-      });
-    }
-  });
+  // (Removida /api/ai/diagnose-pest: só a página Pragas e Doenças usava; página retirada em 29/09/2026.)
 
   // (Removidas: /api/delete-user duplicada — a oficial fica em backend/routes com checagem de cargo —
   //  e /api/buscar-car + /api/db-status, que não eram usadas e respondiam sem login.)
