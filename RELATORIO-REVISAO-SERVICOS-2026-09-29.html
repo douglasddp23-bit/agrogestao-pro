@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Revisão dos Serviços</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm 18mm 15mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; color: #1e293b; font-size: 10.5pt; line-height: 1.45; margin: 0; }
+  .banner { background: #10b981; color: #fff; border-radius: 10px; padding: 14px 18px; display: flex; align-items: center; gap: 16px; }
+  .logo { width: 64px; height: 64px; background: #fff; border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
+  .logo img { max-width: 58px; max-height: 58px; }
+  .logo span { color: #10b981; font-weight: 800; font-size: 34px; }
+  .banner h1 { margin: 0; font-size: 17pt; letter-spacing: .3px; }
+  .banner p { margin: 2px 0 0; font-size: 9.5pt; opacity: .95; }
+  .doc-title { text-align: center; margin: 18px 0 4px; font-size: 15pt; font-weight: 800; }
+  .doc-sub { text-align: center; color: #64748b; font-size: 9.5pt; margin-bottom: 14px; }
+  h2 { font-size: 12.5pt; color: #047857; border-bottom: 2px solid #d1fae5; padding-bottom: 3px; margin: 20px 0 8px; page-break-after: avoid; }
+  h3 { font-size: 11pt; margin: 14px 0 6px; page-break-after: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 10px; font-size: 9.5pt; page-break-inside: auto; }
+  th { background: #1e293b; color: #fff; text-align: left; padding: 5px 7px; }
+  td { border-bottom: 1px solid #e2e8f0; padding: 5px 7px; vertical-align: top; }
+  tr { page-break-inside: avoid; }
+  .ok { color: #047857; font-weight: 700; }
+  .fix { color: #b45309; font-weight: 700; }
+  .dec { color: #be123c; font-weight: 700; }
+  .box { border: 1px solid #a7f3d0; background: #ecfdf5; border-radius: 8px; padding: 9px 12px; margin: 8px 0; page-break-inside: avoid; }
+  .warn { border-color: #fecaca; background: #fff1f2; }
+  code, .mono { font-family: Consolas, monospace; font-size: 9pt; background: #f1f5f9; padding: 0 3px; border-radius: 3px; }
+  ul, ol { margin: 4px 0 8px 18px; padding: 0; }
+  li { margin: 2px 0; }
+  .small { font-size: 8.5pt; color: #64748b; }
+  .footer { margin-top: 24px; border-top: 1px solid #e2e8f0; padding-top: 6px; font-size: 8pt; color: #94a3b8; display: flex; justify-content: space-between; }
+  .pb { page-break-before: always; }
+</style>
+</head>
+<body>
+
+<div class="banner">
+  <div class="logo">{{LOGO_HTML}}</div>
+  <div>
+    <h1>{{EMPRESA}}</h1>
+    <p>{{FRASE}}</p>
+  </div>
+</div>
+
+<div class="doc-title">RELATÓRIO DE REVISÃO DAS PÁGINAS DE SERVIÇO</div>
+<div class="doc-sub">Sistema AgroGestão Pro · 29/09/2026 · Testes feitos no aplicativo de verdade com banco de TESTE (nenhum dado real usado)</div>
+
+<div class="box">
+  <strong>Resumo em 1 minuto</strong>
+  <ul>
+    <li>Todos os 6 serviços agora geram o <strong>relatório final em PDF com a logo e o nome da empresa</strong>. Topografia e Crédito Rural não tinham PDF e ganharam um.</li>
+    <li><strong>Irrigação:</strong> corrigido um erro de cálculo. O volume de água ignorava as perdas do método de irrigação e saía de 10% a 25% menor. Também foi incluído o cálculo opcional de turno de rega e de tempo de irrigação. As decisões técnicas que ficam com você estão na seção 1.</li>
+    <li><strong>Regularização:</strong> o número de protocolo agora é gerado sozinho (<span class="mono">RA-2026-0001</span>, <span class="mono">RA-2026-0002</span>…). Dois computadores nunca pegam o mesmo número.</li>
+    <li><strong>Pragas e Doenças</strong> e <strong>Raio-X Ambiental</strong> saíram do sistema. Os dados antigos continuam intactos no banco e nenhum link ficou quebrado.</li>
+    <li>Crédito Rural e Avaliação de Imóveis continuam funcionando. Houve ainda 4 melhorias extras e uma lista de sugestões (seção 7).</li>
+    <li>Cópia de segurança feita antes de tudo: marcador <span class="mono">backup-antes-revisao-servicos</span> no Git.</li>
+  </ul>
+</div>
+
+<h2>1. Irrigação: verificação técnica das fórmulas</h2>
+
+<h3>1.1 O que está correto</h3>
+<table>
+  <tr><th style="width:32%">Cálculo</th><th>Fórmula usada</th><th style="width:14%">Situação</th></tr>
+  <tr><td>Perda de carga (Hazen-Williams)</td><td><span class="mono">hf = 10,65 · L · (Q/C)^1,852 · D^-4,87</span> (Q em m³/s, D em m). Constante correta para o Sistema Internacional.</td><td class="ok">Correto</td></tr>
+  <tr><td>Velocidade na tubulação</td><td><span class="mono">v = Q / (π·D²/4)</span>, com alerta acima de 2,0 m/s.</td><td class="ok">Correto</td></tr>
+  <tr><td>Potência da bomba</td><td><span class="mono">P (cv) = Q (L/s) · HMT (m) / (75 · η)</span>, potência no eixo em cv.</td><td class="ok">Correto</td></tr>
+  <tr><td>Evapotranspiração da cultura</td><td><span class="mono">ETc = ETo · Kc</span> (FAO-56).</td><td class="ok">Correto</td></tr>
+  <tr><td>Volume diário</td><td><span class="mono">Vol (m³/dia) = lâmina (mm) · área (ha) · 10</span>.</td><td class="ok">Correto</td></tr>
+</table>
+
+<h3>1.2 Erro encontrado e corrigido</h3>
+<div class="box warn">
+  <strong>A lâmina bruta não era aplicada.</strong> A tela dizia que o método (gotejamento ou aspersão) afetaria a lâmina bruta, mas o sistema usava só a lâmina líquida (ETc). Com isso, o volume a captar e o dimensionamento saíam de 10% a 25% menores que o necessário.<br>
+  <strong>Correção:</strong> <span class="mono">Lâmina bruta = ETc / Ea</span>. A eficiência Ea já vem preenchida (gotejamento 90%, aspersão 80%) e pode ser ajustada. O memorial em PDF mostra a conta passo a passo.<br>
+  <span class="small">Teste: ETo 6 · Kc 0,9 = 5,4 mm/dia → 5,4 ÷ 0,90 = 6,0 mm/dia → 600 m³/dia em 10 ha. Antes o sistema dava 540 m³/dia.</span>
+</div>
+
+<h3>1.3 Acrescentado (opcional, não muda nada se não for preenchido)</h3>
+<p>Na etapa 3 há agora a opção <em>“Turno de rega e tempo de irrigação”</em>, que usa dados do solo (Bernardo et al., Manual de Irrigação):</p>
+<ul>
+  <li><span class="mono">CRA = (CC − PMP)/10 · Ds · Z</span> (água disponível na zona das raízes, em mm)</li>
+  <li><span class="mono">IRN = CRA · f</span> · <span class="mono">TR = IRN / ETc</span> (arredondado para baixo) · <span class="mono">LB = TR·ETc / Ea</span> · <span class="mono">Ti = LB / Ia</span></li>
+  <li>Se o solo não armazena a água de um dia inteiro, aparece um aviso para dividir a irrigação.</li>
+</ul>
+
+<h3>1.4 Pontos que dependem da sua decisão técnica (não alterados)</h3>
+<table>
+  <tr><th style="width:4%">#</th><th style="width:30%">Ponto</th><th>Por que chama atenção</th></tr>
+  <tr><td>1</td><td>Hazen-Williams em tubos pequenos</td><td>A fórmula é boa para linhas principais (≥ 50 mm). Em laterais de gotejo e tubos de PE pequenos, o padrão técnico é Darcy-Weisbach (fator de atrito por Swamee-Jain) ou Flamant.</td></tr>
+  <tr><td>2</td><td>Laterais com várias saídas</td><td>Não há o fator de Christiansen (F). Se o comprimento digitado for o de uma lateral com gotejadores ou aspersores, a perda sai cerca de 2,5 a 3 vezes maior que a real.</td></tr>
+  <tr><td>3</td><td>Perdas localizadas</td><td>Conexões, registros, filtros e válvulas não entram na conta. Costuma-se somar de 5% a 15% da perda contínua ou usar comprimento equivalente. No gotejamento, o filtro sozinho costuma levar de 3 a 5 mca.</td></tr>
+  <tr><td>4</td><td>Altura manométrica (HMT)</td><td>Faltam a altura de sucção, as perdas na sucção e a verificação de NPSH (risco de cavitação).</td></tr>
+  <tr><td>5</td><td>Potência do motor</td><td>A conta dá a potência no eixo da bomba. Faltam o rendimento do motor, a folga (fator de serviço) e a escolha do motor comercial (5; 7,5; 10 cv…). A tela cita a “NBR 14197” para essa fórmula, e vale conferir a referência: a fórmula é de hidráulica clássica.</td></tr>
+  <tr><td>6</td><td>Velocidade mínima</td><td>Só existe alerta acima de 2,0 m/s. Abaixo de 0,5 m/s há risco de sedimentação, o que importa no gotejamento.</td></tr>
+  <tr><td>7</td><td>Vazão × demanda</td><td>A vazão da bomba (etapa 1) é digitada separada da demanda (etapa 3). Não há a checagem <span class="mono">Q ≥ Volume diário / horas de funcionamento</span>.</td></tr>
+  <tr><td>8</td><td>ETo digitada à mão</td><td>Não há cálculo por Penman-Monteith (FAO-56) nem Hargreaves-Samani a partir de dados de clima. Serve se o técnico trouxer a ETo de uma estação do INMET.</td></tr>
+  <tr><td>9</td><td>Kc único</td><td>Não há Kc por fase (inicial, médio, final) nem Kc dual. No gotejamento falta o coeficiente de localização (Kl), que reduz bastante a demanda de pomares jovens e culturas com pouca cobertura do solo.</td></tr>
+  <tr><td>10</td><td>Gotejamento e área molhada</td><td>O tempo de irrigação usa a intensidade de aplicação digitada. Não considera a porcentagem de área molhada (Pw) nem a vazão e o espaçamento dos emissores.</td></tr>
+  <tr><td>11</td><td>Chuva efetiva</td><td>Não é descontada. É aceitável para dimensionar pelo pico de demanda, mas não para planejar o manejo.</td></tr>
+</table>
+
+<h2 class="pb">2. Relatório final em PDF por serviço</h2>
+<table>
+  <tr><th>Serviço</th><th>Antes</th><th>Agora</th><th>Onde clicar</th></tr>
+  <tr><td>Irrigação</td><td>Tinha PDF, com “AGROGESTÃO” fixo no topo</td><td>Logo + nome da empresa, rodapé com páginas, lâmina bruta e turno de rega</td><td>Etapa 5 → <em>Visualizar e Exportar PDF</em> (ou ao <em>Concluir e Salvar</em>)</td></tr>
+  <tr><td>Topografia</td><td class="dec">Não tinha</td><td>Relatório novo: cliente, dados do serviço, pontos GPS, <strong>área e perímetro calculados pelos marcos de divisa</strong>, diferença para a área declarada, coordenadas, conclusões e assinatura</td><td>Botão <em>PDF</em> no cartão do serviço</td></tr>
+  <tr><td>Regularização Ambiental</td><td>Comprovante com “AGROGESTÃO CONNECT” fixo</td><td>Logo + empresa + protocolo automático. Quando o status é <em>Concluído</em>, vira <strong>Relatório Final</strong> com conclusão e assinatura</td><td>Botão de download no cartão</td></tr>
+  <tr><td>Crédito Rural</td><td class="dec">Não tinha</td><td>Relatório novo: cliente, linha de crédito, banco, valores, itens de investimento (PRONAF), conclusões e assinatura</td><td><em>Ver Detalhes</em> → <em>Relatório em PDF</em> (ou menu ⋮)</td></tr>
+  <tr><td>Avaliação de Imóveis</td><td>Tinha, com “AGROGESTÃO PRO” fixo</td><td>Logo + empresa. Se o valor total digitado não bate com terra nua + benfeitorias, o laudo mostra a diferença como “ajuste do avaliador” (antes a conta não fechava no papel)</td><td><em>Laudo PDF</em></td></tr>
+  <tr><td>Perícia Judicial</td><td>Tinha, com cabeçalho “PODER JUDICIÁRIO”</td><td>Logo + empresa no topo. O juízo (comarca e vara) aparece logo abaixo</td><td><em>Minuta PDF</em></td></tr>
+</table>
+<p class="small">A logo e o nome vêm da tela <em>Configurar Marca</em> (clique no nome da empresa, no alto à esquerda). Se a logo mudar lá, todos os PDFs passam a usar a nova na hora. Sem logo cadastrada, aparece a inicial da empresa.</p>
+
+<h2>3. Regularização: número de protocolo automático</h2>
+<div class="box">
+  <strong>Formato:</strong> <span class="mono">RA-ANO-SEQUÊNCIA</span>, por exemplo <span class="mono">RA-2026-0001</span>. A sequência recomeça a cada ano (<span class="mono">RA-2027-0001</span>).<br>
+  <strong>Como funciona:</strong>
+  <ol>
+    <li>Ao abrir “Novo Protocolo”, a janela já mostra o próximo número.</li>
+    <li>Ao salvar, o sistema pega o maior número do ano já registrado e soma 1.</li>
+    <li>O número vira a própria identidade (ID) do registro no banco. A gravação é feita em transação: se outro computador acabou de usar esse número, o sistema tenta o seguinte sozinho. <strong>Nunca há dois protocolos com o mesmo número.</strong></li>
+    <li>O campo que era “Nº Protocolo” passou a ser <strong>“Nº do Processo no Órgão”</strong>, opcional, para o número que a SEMAD, o IEF, o INCRA etc. fornecem. Os dois aparecem no cartão, na busca e no PDF.</li>
+  </ol>
+  <span class="small">Protocolos antigos continuam como estão, sem número interno, e o PDF deles indica isso. Observação: se o protocolo mais recente do ano for excluído (só o administrador pode excluir), o número dele pode ser reaproveitado pelo próximo. Os do meio da sequência nunca são reaproveitados. Nenhuma mudança nas regras do banco foi necessária.</span><br>
+  <span class="small">Testado: RA-2026-0001 e 0002 pelo administrador e RA-2026-0003 pelo consultor. A busca pelo número funcionou.</span>
+</div>
+
+<h2>4. Análise: unir Regularização Ambiental com Topografia?</h2>
+<table>
+  <tr><th style="width:50%">Vantagens de unir</th><th>Desvantagens de unir</th></tr>
+  <tr>
+    <td><ul>
+      <li>Um lugar só para o processo de regularizar um imóvel. O georreferenciamento costuma fazer parte do CAR, do CCIR e da certificação no SIGEF.</li>
+      <li>Cliente, propriedade e datas digitados uma vez só.</li>
+      <li>Uma situação só para acompanhar (medição feita → protocolo aberto → aprovado).</li>
+    </ul></td>
+    <td><ul>
+      <li>São trabalhos diferentes. A topografia é de campo (equipamento, pontos GPS, ART). A regularização é de papel (documentos, órgão, prazo legal).</li>
+      <li>A topografia também atende outros serviços que não são regularização: projeto de irrigação, desmembramento, demarcação, curvas de nível.</li>
+      <li>As permissões diferem: hoje o consultor abre protocolo, mas não registra topografia.</li>
+      <li>O formulário único ficaria longo e confuso, e a equipe teria de reaprender a tela.</li>
+    </ul></td>
+  </tr>
+</table>
+<div class="box">
+  <strong>Recomendação: não unir as páginas. Ligar uma à outra.</strong> No protocolo de Regularização entraria um campo “Serviço de topografia vinculado” e, quando o item <em>Georreferenciamento</em> estiver marcado, um botão “Criar serviço de topografia” já preenchido com cliente e fazenda. No cartão da Topografia apareceria “Usado no protocolo RA-2026-000X”. Cada equipe continua com a sua tela e o cliente enxerga o processo inteiro. Não foi implementado: aguarda a sua decisão.
+</div>
+
+<h2>5. Crédito Rural e Avaliação de Imóveis: confirmação</h2>
+<ul>
+  <li><strong>Crédito Rural:</strong> nova proposta PRONAF (etapas 1 e 2 salvas), lista, detalhes e o novo relatório em PDF testados. A data de previsão na tela de detalhes aparecia 1 dia adiantada por causa do fuso horário e foi corrigida. O rótulo “Custo AgroGestão” virou “Custo de Execução”.</li>
+  <li><strong>Avaliação de Imóveis:</strong> cadastrar, editar e gerar o laudo em PDF testados. Perícia Judicial também: cadastrar, editar e gerar a minuta em PDF.</li>
+</ul>
+
+<h2>6. Remoção de “Pragas e Doenças” e “Raio-X Ambiental”</h2>
+<ul>
+  <li>Removidos: as duas páginas, os itens do menu, as rotas, as permissões por cargo, a opção “Raio-X Ambiental” no cadastro de serviço do cliente, os ramos do histórico do cliente e o texto do tour de boas-vindas que citava essas páginas.</li>
+  <li><strong>Dados intactos:</strong> as coleções <span class="mono">pest_disease</span> e <span class="mono">environmental_xray</span> e as regras do banco não foram mexidas. Serviços antigos do tipo “Raio-X” continuam aparecendo com o nome certo nas listas.</li>
+  <li><strong>Sem link quebrado:</strong> quem abrir um endereço antigo volta para o Início com o aviso “Esta página foi retirada do sistema”. Testado.</li>
+  <li>Também corrigido: 5 avisos (Irrigação, Topografia, Regularização, Análises e o botão da Topografia) levavam para <span class="mono">/agenda</span>, uma página que não existe. Agora levam para Agendamentos, inclusive os avisos antigos já gravados.</li>
+</ul>
+
+<h2 class="pb">7. Além do pedido</h2>
+<h3>7.1 Implementado (baixo risco, testado)</h3>
+<ul>
+  <li><strong>Topografia:</strong> a situação do serviço (Planejado → Campo Concluído → Pós-Processamento → Entregue) só podia ser escolhida no cadastro e nunca mais mudava. Agora muda no próprio cartão (gestão ou quem registrou).</li>
+  <li><strong>Topografia:</strong> cálculo de área (ha) e perímetro (m) pelos marcos de divisa coletados, no relatório. Teste com um quadrado de 100 m × 100 m: 0,9978 ha e 399,55 m.</li>
+  <li><strong>Regularização:</strong> modo “Relatório Final” no PDF quando o status é Concluído.</li>
+  <li><strong>Avaliação:</strong> o aviso dizia que 3 amostras deixavam o laudo “apto para Grau II/III”. Pela NBR 14.653, 3 dados são o mínimo do Grau I, e os graus II e III exigem mais dados e tratamento estatístico. O texto foi corrigido.</li>
+  <li><strong>Avaliação:</strong> o laudo passa a mostrar a diferença entre o valor total digitado e a soma dos componentes.</li>
+</ul>
+
+<h3>7.2 Sugestões (não implementadas, por decisão sua)</h3>
+<table>
+  <tr><th style="width:18%">Página</th><th>O que falta</th></tr>
+  <tr><td>Perícia Judicial</td><td>Quesitos do juízo e das partes com espaço para a resposta de cada um (hoje só existe o campo de observações). Registro dos assistentes técnicos. Data da vistoria com aviso às partes (CPC art. 474). Fotos no laudo. Cálculo da indenização de servidão (faixa × VTN × coeficiente de depreciação).</td></tr>
+  <tr><td>Avaliação de Imóveis</td><td>As 3 amostras de mercado são só descritivas e não entram no cálculo. O valor da terra nua é digitado. Sugestão: homogeneização por fatores, saneamento da amostra, intervalo de confiança de 80%, campo de arbítrio, enquadramento automático do grau de fundamentação e mais de 3 amostras.</td></tr>
+  <tr><td>Crédito Rural</td><td>Cronograma de reembolso (parcelas, carência, juros), capacidade de pagamento e fluxo de caixa do projeto.</td></tr>
+  <tr><td>Irrigação</td><td>Itens 1 a 11 da seção 1.4. Além disso, a lista mostra só os 5 projetos mais recentes e não há como reabrir ou editar um projeto salvo.</td></tr>
+  <tr><td>Topografia</td><td>O consultor não consegue registrar serviço (botão bloqueado, regra original). Confirmar se é isso mesmo. Importar pontos de arquivo do receptor GNSS (CSV/TXT).</td></tr>
+  <tr><td>Regularização</td><td>Anexar ao protocolo os documentos do checklist (hoje é só marcar) e o vínculo com a Topografia (seção 4).</td></tr>
+</table>
+
+<h2>8. Testes realizados</h2>
+<ul>
+  <li>Aplicativo compilado e rodado de verdade, com banco de teste local contendo registros completos e incompletos.</li>
+  <li>Irrigação: 5 etapas, conferência numérica das contas, projeto salvo (valores novos gravados no banco) e PDF de 4 páginas conferido página a página.</li>
+  <li>Regularização: 3 protocolos (administrador e consultor), busca por número, conclusão e os PDFs de comprovante e de relatório final.</li>
+  <li>Topografia: PDF com área e perímetro e troca de situação. Crédito Rural, Avaliação e Perícia: PDFs gerados e conferidos.</li>
+  <li>Endereços antigos (Pragas, Raio-X, /agenda): redirecionam sem erro.</li>
+  <li>Regressão: todas as abas abertas e clicadas com os 4 cargos (Administrador 23, Gerente 21, Consultor 14, RH 5). <strong>Nenhuma quebra.</strong></li>
+</ul>
+
+<h2>9. Como desfazer, se precisar</h2>
+<p>Antes de qualquer mudança foi criado o marcador <span class="mono">backup-antes-revisao-servicos</span> no Git, que guarda o estado exato do sistema. É possível voltar a ele a qualquer momento.</p>
+
+<div class="footer"><span>{{EMPRESA}} — {{FRASE}}</span><span>Relatório gerado em {{DATA}}</span></div>
+</body>
+</html>

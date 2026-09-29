@@ -22,6 +22,7 @@ import {
 import { toast } from 'sonner';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { drawBrandBanner } from '../lib/pdfBranding';
 import ProcessStatusTimeline from '../components/ProcessStatusTimeline';
 import AuditTrail from '../components/AuditTrail';
 import { logAudit } from '../lib/audit';
@@ -223,16 +224,8 @@ export default function JudicialExpertisePage() {
     const honorariosStatusLabel = HONORARIOS_STATUS_CONFIG[exp.honorariosStatus]?.label || exp.honorariosStatus;
 
     // Header Colors
-    doc.setFillColor(16, 185, 129); // Emerald 500
-    doc.rect(0, 0, 210, 18, 'F');
-
-    doc.setTextColor(255, 255, 255);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.text('PODER JUDICIÁRIO — TRIBUNAL DE JUSTIÇA DE MINAS GERAIS', 105, 8, { align: 'center' });
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`COMARCA DE ${(exp.comarca || 'Jacinto/MG').toUpperCase()} — ${(exp.vara || 'Vara Cível').toUpperCase()}`, 105, 13, { align: 'center' });
+    // Logo + nome da empresa (Configurar Marca); o juízo vai na linha de baixo
+    drawBrandBanner(doc, { height: 20, subtitle: `TJMG — COMARCA DE ${(exp.comarca || 'Jacinto/MG').toUpperCase()} — ${(exp.vara || 'Vara Cível').toUpperCase()}` });
 
     // Title Section
     doc.setTextColor(30, 41, 59);

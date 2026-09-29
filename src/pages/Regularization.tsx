@@ -21,7 +21,7 @@ import {
   Map
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, runTransaction } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { cn, formatDate, formatDateTime, handleFirestoreError, OperationType, todayLocalDateString, parseDateInput } from '../lib/utils';
 import { Client } from '../types';
@@ -29,6 +29,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { drawBrandBanner, drawBrandFooter } from '../lib/pdfBranding';
 
 import ConfirmationModal from '../components/ConfirmationModal';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
@@ -52,9 +53,25 @@ interface DocService {
   };
   notes: string;
   deadline?: string;
-  protocolNumber?: string;
+  protocolNumber?: string;   // número dado pelo órgão (digitado)
+  internalProtocol?: string; // número interno automático RA-AAAA-NNNN
   organ?: string;
   createdAt: any;
+}
+
+// Protocolo interno automático: RA-<ano>-<sequência de 4 dígitos>, reiniciando a
+// cada ano. O próprio número é o ID do documento no banco — dois computadores
+// nunca conseguem gravar o mesmo número (o segundo é empurrado para o próximo).
+const PROTOCOL_PREFIX = 'RA';
+const protocolFor = (year: number, seq: number) => `${PROTOCOL_PREFIX}-${year}-${String(seq).padStart(4, '0')}`;
+function nextProtocolSeq(services: { internalProtocol?: string }[], year: number) {
+  const re = new RegExp(`^${PROTOCOL_PREFIX}-${year}-(\\d+)$`);
+  let max = 0;
+  for (const s of services) {
+    const m = s.internalProtocol?.match(re);
+    if (m) max = Math.max(max, Number(m[1]));
+  }
+  return max + 1;
 }
 
 const DOCUMENT_TYPES = [
@@ -145,21 +162,35 @@ export default function Regularization() {
     setIsSaving(true);
     try {
       const client = clients.find(c => c.id === selectedClientId);
-      await addDoc(collection(db, 'regularization_services'), {
-        clientId: selectedClientId,
-        clientName: client?.name || 'Desconhecido',
-        propertyName,
-        responsible: user?.displayName || 'Técnico',
-        scheduledDate,
-        deadline: deadline || null,
-        protocolNumber: protocolNumber || null,
-        organ: organ || null,
-        status: 'Pendente',
-        documents: selectedDocs,
-        notes,
-        createdAt: serverTimestamp(),
-        createdBy: user?.uid
-      });
+      const year = new Date().getFullYear();
+      let seq = nextProtocolSeq(services, year);
+      let internalProtocol = '';
+      for (let attempt = 0; attempt < 50 && !internalProtocol; attempt++, seq++) {
+        const candidate = protocolFor(year, seq);
+        const ref = doc(db, 'regularization_services', candidate);
+        const created = await runTransaction(db, async (tx) => {
+          if ((await tx.get(ref)).exists()) return false; // número já usado (outro PC) — tenta o próximo
+          tx.set(ref, {
+            clientId: selectedClientId,
+            clientName: client?.name || 'Desconhecido',
+            propertyName,
+            responsible: user?.displayName || 'Técnico',
+            scheduledDate,
+            deadline: deadline || null,
+            protocolNumber: protocolNumber || null,
+            internalProtocol: candidate,
+            organ: organ || null,
+            status: 'Pendente',
+            documents: selectedDocs,
+            notes,
+            createdAt: serverTimestamp(),
+            createdBy: user?.uid
+          });
+          return true;
+        });
+        if (created) internalProtocol = candidate;
+      }
+      if (!internalProtocol) throw new Error('Não foi possível gerar o número de protocolo.');
       // Automatically integrate with Agenda by creating a notification.
       // Isolado do save principal: se essa notificação falhar, o protocolo já
       // foi criado — não pode aparecer como erro contraditório do mesmo salvamento.
@@ -168,18 +199,18 @@ export default function Regularization() {
           await addDoc(collection(db, 'notifications'), {
             userId: user.uid,
             title: 'Protocolo Ambiental Criado',
-            message: `O protocolo de regularização para ${client?.name} foi integrado à agenda para o dia ${scheduledDate.split('-').reverse().join('/')}.`,
+            message: `O protocolo ${internalProtocol} de regularização para ${client?.name} foi integrado à agenda para o dia ${scheduledDate.split('-').reverse().join('/')}.`,
             type: 'success',
             read: false,
             createdAt: new Date().toISOString(),
-            link: '/agenda'
+            link: 'scheduling'
           });
         }
       } catch (notifError) {
         console.warn('Falha ao criar notificação de agenda (protocolo já foi salvo normalmente):', notifError);
       }
 
-      toast.success('Protocolo de regularização criado com sucesso!');
+      toast.success(`Protocolo ${internalProtocol} criado com sucesso!`);
       setIsModalOpen(false);
       resetForm();
     } catch (error) {
@@ -261,38 +292,35 @@ export default function Regularization() {
     const pageWidth = doc.internal.pageSize.getWidth();
 
     // Header
-    doc.setFillColor(16, 185, 129);
-    doc.rect(0, 0, pageWidth, 40, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(22);
-    doc.setFont('helvetica', 'bold');
-    doc.text('AGROGESTÃO CONNECT', 20, 25);
-    doc.setFontSize(10);
-    doc.text('Relatório de Regularização Ambiental e Fundiária', 20, 32);
+    drawBrandBanner(doc, { height: 40, subtitle: 'Relatório de Regularização Ambiental e Fundiária' });
 
     // Body
     doc.setTextColor(30, 41, 59);
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
-    doc.text('PROTOCOLO DE ATENDIMENTO DOCUMENTAL', 20, 55);
+    const isFinal = service.status === 'Concluido';
+    doc.text(isFinal ? 'RELATÓRIO FINAL DE REGULARIZAÇÃO' : 'PROTOCOLO DE ATENDIMENTO DOCUMENTAL', 20, 52);
     
-    doc.setFontSize(10);
+    doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Data de Emissão: ${formatDateTime(new Date())}`, pageWidth - 20, 55, { align: 'right' });
+    doc.text(`Data de Emissão: ${formatDateTime(new Date())}`, 20, 57);
 
     doc.setDrawColor(226, 232, 240);
     doc.line(20, 60, pageWidth - 20, 60);
 
     // Info Table
     autoTable(doc, {
-      startY: 70,
+      startY: 66,
       head: [['Campo', 'Informação']],
       body: [
+        ['Protocolo Interno', service.internalProtocol || '— (registro anterior à numeração automática)'],
+        ...(service.protocolNumber ? [['Processo no Órgão', `${service.protocolNumber}${service.organ ? ` (${service.organ})` : ''}`]] : []),
+        ...(service.deadline ? [['Prazo Legal', formatDate(service.deadline)]] : []),
         ['Cliente', service.clientName],
         ['Propriedade', service.propertyName],
         ['Responsável Técnico', service.responsible],
         ['Data Prevista de Execução', formatDate(service.scheduledDate)],
-        ['Status Atual', service.status],
+        ['Status Atual', service.status === 'Concluido' ? 'Concluído' : service.status],
       ],
       theme: 'plain',
       headStyles: { fontStyle: 'bold', textColor: [100, 100, 100] },
@@ -317,26 +345,44 @@ export default function Regularization() {
       margin: { left: 20, right: 20 }
     });
 
-    if (service.notes) {
-      const notesY = (doc as any).lastAutoTable.finalY + 15;
+    let endY = (doc as any).lastAutoTable.finalY + 15;
+    if (service.notes || isFinal) {
       doc.setFont('helvetica', 'bold');
-      doc.text('OBSERVAÇÕES TÉCNICAS:', 20, notesY);
+      doc.setFontSize(10);
+      doc.text(isFinal ? 'CONCLUSÃO / OBSERVAÇÕES TÉCNICAS:' : 'OBSERVAÇÕES TÉCNICAS:', 20, endY);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
-      const splitNotes = doc.splitTextToSize(service.notes, pageWidth - 40);
-      doc.text(splitNotes, 20, notesY + 7);
+      const text = service.notes || 'Serviço de regularização concluído conforme a documentação listada acima.';
+      const splitNotes = doc.splitTextToSize(text, pageWidth - 40);
+      doc.text(splitNotes, 20, endY + 7);
+      endY += 7 + splitNotes.length * (doc.getFontSize() * doc.getLineHeightFactor() / doc.internal.scaleFactor) + 10;
+    }
+
+    if (isFinal) {
+      // Assinatura do responsável técnico
+      const signY = Math.min(Math.max(endY + 20, 200), doc.internal.pageSize.getHeight() - 45);
+      doc.setDrawColor(100, 116, 139);
+      doc.line(pageWidth / 2 - 45, signY, pageWidth / 2 + 45, signY);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9.5);
+      doc.text(service.responsible || 'Responsável Técnico', pageWidth / 2, signY + 5, { align: 'center' });
     }
 
     doc.setFontSize(8);
     doc.setTextColor(150, 150, 150);
-    doc.text('Este documento serve como comprovante de solicitação de serviços de regularização.', pageWidth / 2, doc.internal.pageSize.getHeight() - 20, { align: 'center' });
+    doc.text(isFinal
+      ? 'Relatório final do serviço de regularização ambiental e fundiária.'
+      : 'Este documento serve como comprovante de solicitação de serviços de regularização.', pageWidth / 2, doc.internal.pageSize.getHeight() - 20, { align: 'center' });
+    drawBrandFooter(doc);
 
-    doc.save(`Regularizacao_${service.clientName.replace(/\s/g, '_')}.pdf`);
+    doc.save(`Regularizacao_${service.internalProtocol ? service.internalProtocol + '_' : ''}${(service.clientName || 'Cliente').replace(/\s/g, '_')}.pdf`);
   };
 
   const filteredServices = services.filter(s => 
     (s.clientName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (s.propertyName || '').toLowerCase().includes(searchTerm.toLowerCase())
+    (s.propertyName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (s.internalProtocol || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (s.protocolNumber || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -392,9 +438,14 @@ export default function Regularization() {
                          <LandPlot className="w-3 h-3" />
                          {service.propertyName}
                       </div>
+                      {service.internalProtocol && (
+                        <div className="text-[10px] font-mono text-emerald-700 font-bold mt-0.5">
+                          {service.internalProtocol}
+                        </div>
+                      )}
                       {service.protocolNumber && (
                         <div className="text-[10px] font-mono text-slate-500 font-semibold mt-0.5">
-                          Prot: {service.protocolNumber} {service.organ ? `(${service.organ})` : ''}
+                          Órgão: {service.protocolNumber} {service.organ ? `(${service.organ})` : ''}
                         </div>
                       )}
                    </div>
@@ -526,6 +577,12 @@ export default function Regularization() {
               </div>
 
               <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                <div className="flex items-center justify-between p-3 bg-emerald-50 border border-emerald-100 rounded-2xl">
+                  <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest">Protocolo interno (automático)</span>
+                  <span className="font-mono text-sm font-bold text-emerald-800">
+                    {protocolFor(new Date().getFullYear(), nextProtocolSeq(services, new Date().getFullYear()))}
+                  </span>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-1.5">
                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Cliente</label>
@@ -631,10 +688,10 @@ export default function Regularization() {
                       />
                    </div>
                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Nº Protocolo / Processo</label>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Nº do Processo no Órgão</label>
                       <input 
                         type="text"
-                        placeholder="Ex: 2026/00492"
+                        placeholder="Opcional — ex: 2026/00492"
                         value={protocolNumber}
                         onChange={(e) => setProtocolNumber(e.target.value)}
                         className="w-full glass-input"

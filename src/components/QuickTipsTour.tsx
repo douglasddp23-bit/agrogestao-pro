@@ -42,11 +42,11 @@ const TOUR_STEPS: TourStep[] = [
   },
   {
     title: "Inteligência & Solo (Laudos)",
-    description: "Registre análises completas de solo, água, foliar e execute o Raio-X Ambiental de propriedades de maneira georreferenciada para apoiar decisões técnicas.",
+    description: "Registre análises completas de solo, água e foliar, e acompanhe os serviços técnicos (irrigação, topografia, regularização, crédito, avaliação e perícia) de cada propriedade.",
     icon: Map,
     iconColor: "text-emerald-600 bg-emerald-50",
     badge: "Módulo de Análises",
-    featureTip: "Dica: Gere relatórios fotográficos de pragas e doenças com controle de severidade no campo."
+    featureTip: "Dica: Ao finalizar um serviço, gere o relatório em PDF com a logo da empresa."
   },
   {
     title: "Agenda & Visitas Técnicas",

@@ -30,3 +30,6 @@ Thumbs.db
 desktop.ini
 .vscode/
 .idea/
+
+# Relatórios gerados (contêm a logo da empresa)
+RELATORIO-*.pdf

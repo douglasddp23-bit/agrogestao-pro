@@ -2,7 +2,7 @@ import {
   LayoutDashboard, Users, ClipboardCheck, Map, Droplet, FileText,
   UsersRound, Clock, Wallet, ShieldCheck, DollarSign, BarChart3,
   Package, ClipboardList, FilePen, Car,
-  CalendarDays, History, Scale, Landmark, Bug, Leaf, MapPinned
+  CalendarDays, History, Scale, Landmark, MapPinned
 } from 'lucide-react';
 import { UserRole } from '../lib/permissions';
 
@@ -29,8 +29,6 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'analysis_credit',        key: 'rural_credit',        label: 'Crédito Rural',          icon: Wallet,          group: 'Serviços' },
   // As 4 telas abaixo já existiam no sistema, mas não tinham item no menu (ficavam inacessíveis).
   { id: 'rural_valuation',        key: 'rural_valuation',     label: 'Avaliação de Imóveis',   icon: Landmark,        group: 'Serviços' },
-  { id: 'pest_disease',           key: 'pest_disease',        label: 'Pragas e Doenças',       icon: Bug,             group: 'Serviços' },
-  { id: 'environmental_xray',     key: 'environmental_xray',  label: 'Raio-X Ambiental',       icon: Leaf,            group: 'Serviços' },
 
   { id: 'financial',              key: 'financial',           label: 'Financeiro',             icon: DollarSign,      group: 'Gestão' },
   { id: 'reports',                key: 'reports',             label: 'Relatórios',             icon: BarChart3,       group: 'Gestão' },

@@ -23,6 +23,7 @@ import {
 import { toast } from 'sonner';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { drawBrandBanner } from '../lib/pdfBranding';
 import ProcessStatusTimeline from '../components/ProcessStatusTimeline';
 import AuditTrail from '../components/AuditTrail';
 import { logAudit } from '../lib/audit';
@@ -286,16 +287,8 @@ export default function RuralPropertyValuationPage() {
     const valorExtenso = numberToWordsBRL(totalVal);
 
     // Header Banner
-    doc.setFillColor(16, 185, 129); // Emerald 500
-    doc.rect(0, 0, 210, 18, 'F');
-
-    doc.setTextColor(255, 255, 255);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.text('AGROGESTÃO PRO — ENGENHARIA E AVALIAÇÕES AGRONÔMICAS', 105, 8, { align: 'center' });
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.text('AVALIAÇÃO DE IMÓVEIS RURAIS — CONFORME NORMA ABNT NBR 14.653-3', 105, 13, { align: 'center' });
+    // Logo + nome da empresa (Configurar Marca)
+    drawBrandBanner(doc, { height: 20, subtitle: 'AVALIAÇÃO DE IMÓVEIS RURAIS — CONFORME NORMA ABNT NBR 14.653-3' });
 
     // Document Title
     doc.setTextColor(30, 41, 59);
@@ -408,9 +401,15 @@ export default function RuralPropertyValuationPage() {
       currentY = 25;
     }
 
+    // O valor total pode ser digitado à mão; se não bater com VTN + benfeitorias,
+    // o laudo mostra a diferença como ajuste do avaliador (antes a conta não fechava).
+    const somaComponentes = (val.landValuePerHa || 0) * val.totalArea + (val.improvementsValue || 0);
+    const ajuste = totalVal - somaComponentes;
+    const temAjuste = Math.abs(ajuste) >= 1;
+    const extra = temAjuste ? 5 : 0;
     doc.setFillColor(240, 253, 244);
     doc.setDrawColor(16, 185, 129);
-    doc.roundedRect(14, currentY, 182, 38, 3, 3, 'FD');
+    doc.roundedRect(14, currentY, 182, 38 + extra, 3, 3, 'FD');
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
@@ -423,17 +422,20 @@ export default function RuralPropertyValuationPage() {
     doc.text(`Valor da Terra Nua (VTN Unitário): ${formatCurrency(val.landValuePerHa || 0)} / hectare`, 20, currentY + 14);
     doc.text(`Valor Total da Terra Nua (${val.totalArea} ha): ${formatCurrency((val.landValuePerHa || 0) * val.totalArea)}`, 20, currentY + 19);
     doc.text(`Valor das Benfeitorias Avaliadas: ${formatCurrency(val.improvementsValue || 0)}`, 20, currentY + 24);
+    if (temAjuste) {
+      doc.text(`Ajuste adotado pelo avaliador (arredondamento / fatores de mercado): ${ajuste > 0 ? '+' : '-'} ${formatCurrency(Math.abs(ajuste))}`, 20, currentY + 29);
+    }
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
     doc.setTextColor(15, 23, 42);
-    doc.text(`VALOR TOTAL DO IMÓVEL: ${formatCurrency(totalVal)}`, 20, currentY + 31);
+    doc.text(`VALOR TOTAL DO IMÓVEL: ${formatCurrency(totalVal)}`, 20, currentY + 31 + extra);
     doc.setFontSize(8);
     doc.setFont('helvetica', 'italic');
     doc.setTextColor(71, 85, 105);
-    doc.text(`(${valorExtenso})`, 20, currentY + 35);
+    doc.text(`(${valorExtenso})`, 20, currentY + 35 + extra);
 
-    currentY += 46;
+    currentY += 46 + extra;
 
     // Observações e Assinatura
     if (val.laudoNotes) {
@@ -1828,7 +1830,7 @@ export default function RuralPropertyValuationPage() {
                             <div>
                               <p className="font-bold">Aviso Normativo — ABNT NBR 14.653-3 ({count}/3 amostras preenchidas)</p>
                               <p className="text-[11px] text-amber-700/90 dark:text-amber-400/90 mt-0.5">
-                                Com menos de 3 dados de mercado contemporâneos, a avaliação técnica enquadra-se no <strong>Grau I de Fundamentação</strong>. Para atingir Grau II ou III, preencha no mínimo 3 dados amostrais homogeneizados.
+                                Com menos de 3 dados de mercado contemporâneos a avaliação não atinge nem o <strong>Grau I de Fundamentação</strong>. Preencha ao menos 3 dados amostrais homogeneizados.
                               </p>
                             </div>
                           </div>
@@ -1837,7 +1839,7 @@ export default function RuralPropertyValuationPage() {
                       return (
                         <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 rounded-2xl flex items-center gap-2 text-xs text-emerald-800 dark:text-emerald-300 mb-2">
                           <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                          <span className="font-medium text-[11px]">Amostragem completa (3/3 amostras). Apto para enquadramento em Grau II/III de Fundamentação.</span>
+                          <span className="font-medium text-[11px]">3 amostras preenchidas — mínimo para o Grau I. Os Graus II e III exigem mais dados de mercado e tratamento estatístico (ver tabela de enquadramento da NBR 14.653-3).</span>
                         </div>
                       );
                     })()}

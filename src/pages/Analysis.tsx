@@ -436,7 +436,7 @@ export default function Analysis({ typeFilter }: AnalysisProps) {
             type: 'success',
             read: false,
             createdAt: new Date().toISOString(),
-            link: '/agenda'
+            link: 'scheduling'
           });
         }
       } catch (notifError) {

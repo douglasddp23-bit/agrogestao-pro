@@ -107,8 +107,6 @@ export const NAV_ACCESS: Record<string, UserRole[]> = {
   topography:            ['consultant', 'manager', 'admin'],
   regularization:        ['consultant', 'manager', 'admin'],
   rural_credit:          ['consultant', 'manager', 'admin'],
-  pest_disease:          ['consultant', 'manager', 'admin'],
-  environmental_xray:    ['consultant', 'manager', 'admin'],
   contracts:             ['manager', 'admin'],
   financial:             ['manager', 'admin'],
   inventory:             ['manager', 'admin'],

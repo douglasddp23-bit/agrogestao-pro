@@ -22,7 +22,8 @@ import {
   X,
   CreditCard,
   Building2,
-  Landmark
+  Landmark,
+  FileDown
 } from 'lucide-react';
 import { 
   collection, 
@@ -42,7 +43,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { createNotification } from '../lib/notifications';
 import { ServiceAnalysis, Client } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn, todayLocalDateString } from '../lib/utils';
+import { cn, todayLocalDateString, formatDate } from '../lib/utils';
+import { buildServiceReportPDF } from '../lib/pdfBranding';
 
 import ConfirmationModal from '../components/ConfirmationModal';
 import PronafWizard from '../components/PronafWizard';
@@ -226,6 +228,70 @@ export default function RuralCredit() {
       });
     } catch (error) {
       console.error("Error saving credit project:", error);
+    }
+  };
+
+  // Relatório final do projeto de crédito (logo + empresa + cliente + dados + resultado)
+  const generateCreditReport = async (project: ServiceAnalysis) => {
+    try {
+      const p: any = project;
+      const client = clients.find(c => c.id === project.clientId);
+      const brl = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+      const proposta = p.pronafData?.proposta;
+      const itens: any[] = proposta?.programaInvestimentos?.itens || [];
+      const sections: { title: string; rows?: [string, string][]; text?: string }[] = [
+        {
+          title: 'Dados do Projeto de Crédito',
+          rows: [
+            ['Linha / tipo de crédito', project.financingType || '—'],
+            ['Banco financiador', project.bank || '—'],
+            ['Atividade', project.category || '—'],
+            ...(proposta?.dados?.finalidadeCredito ? [['Finalidade', proposta.dados.finalidadeCredito] as [string, string]] : []),
+            ...(proposta?.dados?.agencia ? [['Agência', proposta.dados.agencia] as [string, string]] : []),
+            ['Data prevista', project.scheduledDate ? formatDate(project.scheduledDate) : '—'],
+            ['Situação', project.status || '—'],
+          ],
+        },
+        {
+          title: 'Resultado',
+          rows: [
+            ['Valor do projeto', brl(project.value || 0)],
+            ['Custo de elaboração / execução', brl(project.cost || 0)],
+          ],
+        },
+      ];
+      const itensValidos = itens.filter(i => i.discriminacao);
+      if (itensValidos.length) {
+        sections.push({
+          title: 'Itens de Investimento',
+          rows: itensValidos.slice(0, 40).map(i => [
+            i.discriminacao,
+            `${i.quantidade || 0} ${i.unidade || ''} × ${brl(i.valorUnitario || 0)} = ${brl((i.quantidade || 0) * (i.valorUnitario || 0))}`,
+          ] as [string, string]),
+        });
+      }
+      sections.push({
+        title: 'Descrição e Conclusões',
+        text: (project.description || 'Sem descrição.') +
+          (project.financingType === 'PRONAF' ? '\n\nA proposta completa (Plano de Negócio PRONAF) pode ser impressa na etapa "Resumo e Impressão" do assistente PRONAF.' : ''),
+      });
+      const pdf = await buildServiceReportPDF({
+        documentTitle: 'Relatório de Projeto de Crédito Rural',
+        serviceName: project.financingType ? `Crédito Rural — ${project.financingType}` : 'Crédito Rural',
+        client: {
+          name: project.clientName,
+          cpf: client?.cpf,
+          property: project.propertyName,
+          city: client?.address?.city ? `${client.address.city}${client.address.state ? '/' + client.address.state : ''}` : undefined,
+        },
+        sections,
+        responsible: project.responsibleTechnician || user?.displayName || undefined,
+        certification: (user as any)?.professionalCertification,
+      });
+      pdf.save(`Relatorio_Credito_Rural_${(project.clientName || 'Cliente').replace(/\s+/g, '_')}.pdf`);
+    } catch (error) {
+      console.error(error);
+      toast.error('Não foi possível gerar o relatório em PDF.');
     }
   };
 
@@ -509,6 +575,17 @@ export default function RuralCredit() {
                               className="w-full text-left px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-2"
                             >
                               <FileText className="w-3.5 h-3.5" /> Editar Projeto
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenMenuId(null);
+                                generateCreditReport(project);
+                              }}
+                              className="w-full text-left px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-2"
+                            >
+                              <FileDown className="w-3.5 h-3.5" /> Relatório em PDF
                             </button>
 
                             <div className="px-4 pt-2 pb-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">Alterar Status</div>
@@ -923,7 +1000,7 @@ export default function RuralCredit() {
                     </div>
                  </div>
                  <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
-                    <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Custo AgroGestão</div>
+                    <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Custo de Execução</div>
                     <div className="text-lg font-bold text-emerald-700">
                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedProject.cost || 0)}
                     </div>
@@ -937,7 +1014,7 @@ export default function RuralCredit() {
                 </div>
                 <div className="flex items-center gap-3 py-3 border-y border-slate-100">
                   <Calendar className="w-4 h-4 text-emerald-500" />
-                  <span className="text-xs font-bold text-slate-600 uppercase tracking-widest">Previsão: {new Date(selectedProject.scheduledDate || '').toLocaleDateString('pt-BR')}</span>
+                  <span className="text-xs font-bold text-slate-600 uppercase tracking-widest">Previsão: {formatDate(selectedProject.scheduledDate) || 'não informada'}</span>
                 </div>
               </div>
 
@@ -964,9 +1041,15 @@ export default function RuralCredit() {
                  </div>
               </div>
 
+              <button
+                onClick={() => generateCreditReport(selectedProject)}
+                className="w-full py-3 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all text-xs uppercase tracking-widest mt-4 flex items-center justify-center gap-2"
+              >
+                <FileDown className="w-4 h-4" /> Relatório em PDF
+              </button>
               <button 
                 onClick={() => setSelectedProject(null)}
-                className="w-full py-4 glass rounded-2xl font-bold text-slate-600 hover:bg-white transition-all text-xs uppercase tracking-widest mt-4"
+                className="w-full py-4 glass rounded-2xl font-bold text-slate-600 hover:bg-white transition-all text-xs uppercase tracking-widest"
               >
                 Fechar Visualização
               </button>

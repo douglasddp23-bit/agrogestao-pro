@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { runExclusive } from '../lib/submitGuard';
-import { Map, MapPin, Maximize, Compass, Layers, FileCheck, Save, User, CheckCircle2, ChevronRight, Info, Ruler, Satellite, Trash2, Plus, FileCode, Crosshair, Navigation, ChevronDown, ChevronUp, FileSpreadsheet, Activity } from 'lucide-react';
+import { Map, MapPin, Maximize, Compass, Layers, FileCheck, Save, User, CheckCircle2, ChevronRight, Info, Ruler, Satellite, Trash2, Plus, FileCode, Crosshair, Navigation, ChevronDown, ChevronUp, FileSpreadsheet, Activity, FileDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { cn, safeUrl } from '../lib/utils';
@@ -9,7 +9,8 @@ import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, delete
 import { db } from '../lib/firebase';
 import { Client } from '../types';
 import { useAuth } from '../contexts/AuthContext';
-import { handleFirestoreError, OperationType, todayLocalDateString } from '../lib/utils';
+import { handleFirestoreError, OperationType, todayLocalDateString, formatDate } from '../lib/utils';
+import { buildServiceReportPDF } from '../lib/pdfBranding';
 
 import ConfirmationModal from '../components/ConfirmationModal';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
@@ -54,6 +55,34 @@ const getPointTypeLabel = (type: GPSPoint['type']) => {
     default: return 'Outro';
   }
 };
+
+const EQUIPMENT_LABELS: Record<string, string> = {
+  rtk_gnss: 'RTK GNSS',
+  estacao_total: 'Estação Total',
+  drone_laser: 'Drone UAV',
+};
+
+// Área (ha) e perímetro (m) do polígono formado pelos marcos de divisa, na ordem
+// em que foram capturados. Projeção local plana (equiretangular) — boa para
+// propriedades rurais comuns; é uma ESTIMATIVA, não substitui o memorial certificado.
+export function boundaryMetrics(points: GPSPoint[]) {
+  const b = points.filter(p => p.type === 'boundary');
+  if (b.length < 3) return null;
+  const R = 6371008.8;
+  const lat0 = (b.reduce((s, p) => s + p.latitude, 0) / b.length) * Math.PI / 180;
+  const xy = b.map(p => [
+    R * (p.longitude * Math.PI / 180) * Math.cos(lat0),
+    R * (p.latitude * Math.PI / 180),
+  ]);
+  let area2 = 0, perim = 0;
+  for (let i = 0; i < xy.length; i++) {
+    const [x1, y1] = xy[i];
+    const [x2, y2] = xy[(i + 1) % xy.length];
+    area2 += x1 * y2 - x2 * y1;
+    perim += Math.hypot(x2 - x1, y2 - y1);
+  }
+  return { areaHa: Math.abs(area2) / 2 / 10000, perimeterM: perim, vertices: b.length };
+}
 
 const exportPointsToKML = (serviceName: string, points: GPSPoint[]) => {
   let kml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -424,7 +453,7 @@ export default function Topography() {
           type: 'success',
           read: false,
           createdAt: new Date().toISOString(),
-          link: '/agenda'
+          link: 'scheduling'
         });
       }
       
@@ -447,6 +476,94 @@ export default function Topography() {
       handleFirestoreError(error, OperationType.CREATE, 'topography_services');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // Antes o status só podia ser escolhido no cadastro; agora a gestão (ou quem
+  // registrou) acompanha o serviço até "Entregue".
+  const updateServiceStatus = async (id: string, status: string) => {
+    try {
+      await updateDoc(doc(db, 'topography_services', id), { status, updatedAt: serverTimestamp() });
+      toast.success(`Status atualizado para: ${status}`);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'topography_services');
+    }
+  };
+
+  // Relatório final do serviço (logo + empresa + cliente + dados + resultados)
+  const generateServiceReport = async (service: any) => {
+    try {
+      const client = clients.find(c => c.id === service.clientId);
+      const points: GPSPoint[] = service.points || [];
+      const metrics = boundaryMetrics(points);
+      const byType = points.reduce<Record<string, number>>((acc, p) => {
+        const k = getPointTypeLabel(p.type);
+        acc[k] = (acc[k] || 0) + 1;
+        return acc;
+      }, {});
+      const sections: { title: string; rows?: [string, string][]; text?: string }[] = [
+        {
+          title: 'Dados do Serviço',
+          rows: [
+            ['Tipo de serviço', service.serviceLabel || '—'],
+            ['Área declarada', service.areaSize ? `${service.areaSize} ha` : '—'],
+            ['Equipamento', EQUIPMENT_LABELS[service.topoEquipment] || (service.topoEquipment ? 'GPS Geodésico' : '—')],
+            ['Data de execução', service.scheduledDate ? formatDate(service.scheduledDate) : '—'],
+            ['Situação', service.status || 'Planejado'],
+            ['Acompanhante no campo', service.targetRepresentative || '—'],
+            ['ART / TRT', service.technicalLicense || '—'],
+          ],
+        },
+        {
+          title: 'Resultados do Levantamento',
+          rows: [
+            ['Pontos GPS coletados', String(points.length)],
+            ...Object.entries(byType).map(([k, v]) => [`  • ${k}`, String(v)] as [string, string]),
+            ...(metrics ? [
+              ['Área calculada pelos marcos de divisa', `${metrics.areaHa.toLocaleString('pt-BR', { maximumFractionDigits: 4 })} ha`],
+              ['Perímetro calculado', `${metrics.perimeterM.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} m`],
+              ...(service.areaSize && Number(service.areaSize) > 0 ? [[
+                'Diferença p/ área declarada',
+                `${(((metrics.areaHa - Number(service.areaSize)) / Number(service.areaSize)) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} %`,
+              ] as [string, string]] : []),
+            ] as [string, string][] : []),
+            ...(service.mapReportUrl ? [['Mapa / planta (link)', service.mapReportUrl] as [string, string]] : []),
+          ],
+        },
+      ];
+      if (points.length) {
+        sections.push({
+          title: 'Coordenadas Coletadas (WGS84)',
+          rows: points.slice(0, 60).map(p => [
+            `${p.name} (${getPointTypeLabel(p.type)})`,
+            `Lat ${p.latitude.toFixed(7)}  Lng ${p.longitude.toFixed(7)}${p.altitude != null ? `  Alt ${p.altitude.toFixed(1)} m` : ''}  ±${Math.round(p.accuracy)} m`,
+          ] as [string, string]),
+        });
+      }
+      sections.push({
+        title: 'Conclusões e Observações',
+        text: (service.observations ? service.observations + '\n\n' : '') +
+          (metrics
+            ? 'A área e o perímetro acima foram calculados a partir dos marcos de divisa coletados, na ordem de captura. São valores de conferência; para fins cartoriais e de certificação (INCRA/SIGEF) prevalece o memorial descritivo elaborado com equipamento geodésico.'
+            : 'Não há ao menos 3 marcos de divisa coletados para o cálculo de área e perímetro pelo sistema.'),
+      });
+      const pdf = await buildServiceReportPDF({
+        documentTitle: 'Relatório Técnico de Topografia',
+        serviceName: service.serviceLabel || 'Topografia',
+        client: {
+          name: service.clientName,
+          cpf: client?.cpf,
+          property: service.propertyName,
+          city: client?.address?.city ? `${client.address.city}${client.address.state ? '/' + client.address.state : ''}` : undefined,
+        },
+        sections,
+        responsible: service.technicalResponsible || user?.displayName || undefined,
+        certification: (user as any)?.professionalCertification,
+      });
+      pdf.save(`Relatorio_Topografia_${(service.clientName || 'Cliente').replace(/\s+/g, '_')}.pdf`);
+    } catch (error) {
+      console.error(error);
+      toast.error('Não foi possível gerar o relatório em PDF.');
     }
   };
 
@@ -829,7 +946,7 @@ export default function Topography() {
                 disabled={isSaving || (user?.effectiveRole ?? user?.role) === 'staff' || (user?.effectiveRole ?? user?.role) === 'consultant'}
                 onClick={() => {
                   if (saveSuccess) {
-                    navigate('/agenda');
+                    navigate('/scheduling');
                   }
                 }}
                 className={cn(
@@ -957,16 +1074,33 @@ export default function Topography() {
                         <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">
                           Execução: {service.scheduledDate?.split('-').reverse().join('/')}
                         </span>
-                        <div className={cn(
-                          "px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest border",
-                          service.status === 'Entregue' ? "bg-emerald-50 text-emerald-700 border-emerald-100" :
-                          service.status === 'Pós-Processamento' ? "bg-amber-50 text-amber-700 border-amber-100" :
-                          service.status === 'Campo Concluído' ? "bg-slate-50 text-slate-700 border-slate-100" :
-                          "bg-slate-50 text-slate-600 border-slate-100"
-                        )}>
-                          {service.status || 'Planejado'}
-                        </div>
+                        <select
+                          value={service.status || 'Planejado'}
+                          onChange={(e) => updateServiceStatus(service.id, e.target.value)}
+                          disabled={!(['admin', 'manager'].includes((user?.effectiveRole ?? user?.role) as string) || service.createdBy === user?.uid)}
+                          title="Situação do serviço"
+                          className={cn(
+                            "px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest border outline-none disabled:opacity-80",
+                            service.status === 'Entregue' ? "bg-emerald-50 text-emerald-700 border-emerald-100" :
+                            service.status === 'Pós-Processamento' ? "bg-amber-50 text-amber-700 border-amber-100" :
+                            service.status === 'Campo Concluído' ? "bg-slate-50 text-slate-700 border-slate-100" :
+                            "bg-slate-50 text-slate-600 border-slate-100"
+                          )}
+                        >
+                          <option value="Planejado">Planejado</option>
+                          <option value="Campo Concluído">Campo Concluído</option>
+                          <option value="Pós-Processamento">Pós-Processamento</option>
+                          <option value="Entregue">Entregue</option>
+                        </select>
                       </div>
+                      <button
+                        onClick={() => generateServiceReport(service)}
+                        className="py-1.5 px-3 rounded-xl border bg-white border-slate-200 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm transition-all"
+                        title="Relatório final em PDF"
+                      >
+                        <FileDown className="w-3.5 h-3.5" />
+                        PDF
+                      </button>
                       <button 
                         onClick={() => setExpandedGpsServiceId(isExpanded ? null : service.id)}
                         className={cn(

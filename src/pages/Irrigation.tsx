@@ -27,6 +27,7 @@ import { Client } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { drawBrandBanner, drawBrandFooter } from '../lib/pdfBranding';
 
 import ConfirmationModal from '../components/ConfirmationModal';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
@@ -87,6 +88,24 @@ export default function Irrigation() {
     area: 0
   });
 
+  // Eficiência de aplicação (Ea, %) — valor típico por método, ajustável
+  const [appEfficiency, setAppEfficiency] = useState(0);
+
+  // Dados do solo para turno de rega (opcionais)
+  const [soil, setSoil] = useState({
+    cc: 0,   // capacidade de campo (% peso)
+    pmp: 0,  // ponto de murcha permanente (% peso)
+    ds: 0,   // densidade do solo (g/cm³)
+    z: 0,    // profundidade efetiva das raízes (cm)
+    f: 0.5,  // fator de disponibilidade (fração)
+    ia: 0,   // intensidade de aplicação do sistema (mm/h)
+  });
+
+  const selectIrrigationType = (type: 'drip' | 'sprinkler') => {
+    setIrrigationType(type);
+    setAppEfficiency(type === 'drip' ? 90 : 80);
+  };
+
   useEffect(() => {
     if (user && !responsible) {
       setResponsible(user.displayName || '');
@@ -145,9 +164,47 @@ export default function Irrigation() {
     return Number((demand.eto * demand.kc).toFixed(2));
   }, [demand]);
 
-  const totalWaterDay = useMemo(() => {
+  // Lâmina bruta = ETc / Ea. Antes o volume diário usava só a lâmina líquida
+  // (ETc), ignorando as perdas do sistema — subdimensionava captação e bomba.
+  const grossDemand = useMemo(() => {
+    if (!netDemand || !appEfficiency) return 0;
+    return Number((netDemand / (appEfficiency / 100)).toFixed(2));
+  }, [netDemand, appEfficiency]);
+
+  const netWaterDay = useMemo(() => {
     return Number((netDemand * demand.area * 10).toFixed(2));
   }, [netDemand, demand.area]);
+
+  // Volume a captar por dia (já com as perdas do método de irrigação)
+  const totalWaterDay = useMemo(() => {
+    return Number((grossDemand * demand.area * 10).toFixed(2));
+  }, [grossDemand, demand.area]);
+
+  // Turno de rega e tempo de irrigação (opcional — só com os dados do solo).
+  // CRA = (CC − PMP)/10 · Ds · Z   [mm]   (CC e PMP em % de peso, Ds em g/cm³, Z em cm)
+  // IRN = CRA · f;  TR = IRN / ETc (arredondado para baixo);  LB = TR·ETc / Ea;  Ti = LB / Ia
+  const schedule = useMemo(() => {
+    const { cc, pmp, ds, z, f, ia } = soil;
+    if (!cc || !ds || !z || !f || cc <= pmp || !netDemand || !appEfficiency) return null;
+    const cra = ((cc - pmp) / 10) * ds * z;
+    const irnMax = cra * f;
+    const trMax = irnMax / netDemand;
+    const tr = Math.max(1, Math.floor(trMax));
+    const irn = tr * netDemand;
+    const lb = irn / (appEfficiency / 100);
+    const ti = ia ? lb / ia : 0;
+    return {
+      cra: Number(cra.toFixed(2)),
+      irnMax: Number(irnMax.toFixed(2)),
+      trMax: Number(trMax.toFixed(2)),
+      tr,
+      irn: Number(irn.toFixed(2)),
+      lb: Number(lb.toFixed(2)),
+      ti: Number(ti.toFixed(2)),
+      // TR < 1 dia: o solo não guarda a água de um dia inteiro — irrigar mais de uma vez por dia
+      warning: trMax < 1,
+    };
+  }, [soil, netDemand, appEfficiency]);
 
   const nextStep = () => setCurrentStep(prev => Math.min(prev + 1, 5));
   const prevStep = () => setCurrentStep(prev => Math.max(prev - 1, 1));
@@ -182,15 +239,7 @@ export default function Irrigation() {
     const pageWidth = doc.internal.pageSize.getWidth();
     const client = clients.find(c => c.id === selectedClientId);
 
-    doc.setFillColor(16, 185, 129);
-    doc.rect(0, 0, pageWidth, 40, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(24);
-    doc.setFont('helvetica', 'bold');
-    doc.text('AGROGESTÃO', 20, 25);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'italic');
-    doc.text('Soluções Hídricas e Projetos de Irrigação', 20, 32);
+    drawBrandBanner(doc, { height: 40, subtitle: 'Soluções Hídricas e Projetos de Irrigação' });
 
     doc.setTextColor(30, 41, 59);
     doc.setFontSize(14);
@@ -280,8 +329,10 @@ export default function Irrigation() {
     });
 
     const pumpStepY = (doc as any).lastAutoTable?.finalY + 10;
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.text('Memória de Cálculo - Potência Requerida:', 20, pumpStepY);
+    doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     const qLps = (hydraulic.flow * 1000) / 3600;
     const pumpFormulaText = [
@@ -311,25 +362,41 @@ export default function Irrigation() {
         ['Evapotranspiração de Referência (ETo)', demand.eto, 'mm/dia'],
         ['Coeficiente da Cultura (Kc)', demand.kc, '-'],
         ['Área Total do Talhão', demand.area, 'ha'],
+        ['Eficiência de Aplicação (Ea)', appEfficiency || '-', '%'],
       ],
       headStyles: { fillColor: [249, 115, 22] },
       margin: { left: 20, right: 20 }
     });
 
     const demandStepY = (doc as any).lastAutoTable?.finalY + 10;
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.text('Cálculo da Necessidade Hídrica:', 20, demandStepY);
+    doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     const demandFormulaText = [
       `1. Lâmina Líquida (ETc):`,
       `   ETc = ETo * Kc = ${demand.eto} * ${demand.kc} = ${netDemand} mm/dia`,
-      `2. Volume de Água Diário:`,
-      `   Vol = ETc * Área * 10 (m³/ha)`,
-      `   Vol = ${netDemand} * ${demand.area} * 10 = ${totalWaterDay} m³/dia`
+      `2. Lâmina Bruta (perdas do método de irrigação):`,
+      appEfficiency
+        ? `   LB = ETc / Ea = ${netDemand} / ${appEfficiency / 100} = ${grossDemand} mm/dia`
+        : `   Eficiência de aplicação não informada — lâmina bruta não calculada.`,
+      `3. Volume de Água Diário a Captar:`,
+      `   Vol = LB * Área * 10 (m³/ha)`,
+      `   Vol = ${appEfficiency ? grossDemand : netDemand} * ${demand.area} * 10 = ${appEfficiency ? totalWaterDay : netWaterDay} m³/dia`,
+      ...(schedule ? [
+        `4. Turno de Rega (dados do solo):`,
+        `   CRA = (CC - PMP)/10 * Ds * Z = (${soil.cc} - ${soil.pmp})/10 * ${soil.ds} * ${soil.z} = ${schedule.cra} mm`,
+        `   IRN = CRA * f = ${schedule.irnMax} mm;  TR = IRN / ETc = ${schedule.trMax} -> TR adotado ${schedule.tr} dia(s)`,
+        `   Lâmina bruta por irrigação = ${schedule.lb} mm`
+          + (schedule.ti > 0 ? `;  Tempo de irrigação = ${schedule.lb} / ${soil.ia} = ${schedule.ti} h` : ''),
+        ...(schedule.warning ? [`   ATENÇÃO: solo não armazena 1 dia de consumo — irrigar mais de uma vez ao dia.`] : []),
+      ] : []),
     ];
     doc.text(demandFormulaText, 25, demandStepY + 7);
 
-    const justificationY = demandStepY + 50;
+    const justificationY = demandStepY + 7 + demandFormulaText.length * (doc.getFontSize() * doc.getLineHeightFactor() / doc.internal.scaleFactor) + 10;
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.text('JUSTIFICATIVA TÉCNICA DO SISTEMA ESCOLHIDO:', 20, justificationY);
     doc.setFont('helvetica', 'normal');
@@ -365,7 +432,7 @@ export default function Irrigation() {
       'ASSOCIAÇÃO BRASILEIRA DE NORMAS TÉCNICAS. NBR 14197:2020: Equipamentos de irrigação aspersão convencional — Critérios para o projeto.',
       'ASAE - American Society of Agricultural Engineers. Standards of Irrigation and Drainage.'
     ];
-    doc.text(refs, 20, 77);
+    doc.text(refs.flatMap(r => doc.splitTextToSize(r, pageWidth - 40)), 20, 77);
 
     const bottomY = doc.internal.pageSize.getHeight() - 40;
     doc.setFont('helvetica', 'bold');
@@ -376,9 +443,7 @@ export default function Irrigation() {
     doc.setFont('helvetica', 'normal');
     doc.text('ASSINATURA DO RESPONSÁVEL TÉCNICO', pageWidth / 2, bottomY, { align: 'center' });
 
-    doc.setTextColor(150, 150, 150);
-    doc.setFontSize(8);
-    doc.text(`Relatório Técnico Gerado por AgroGestão Connect - ${formatDateTime(new Date())}`, pageWidth / 2, bottomY + 15, { align: 'center' });
+    drawBrandFooter(doc);
 
     doc.save(`Projeto_Irrigacao_${client?.name?.replace(/\s+/g, '_') || 'Cliente'}.pdf`);
   };
@@ -406,13 +471,18 @@ export default function Irrigation() {
           totalHead,
           pumpPower,
           netDemand,
+          grossDemand,
+          appEfficiency,
+          netWaterDay,
           totalWaterDay,
+          schedule,
           velocity
         },
         inputs: {
           hydraulic,
           pump,
-          demand
+          demand,
+          soil
         },
         createdAt: serverTimestamp(),
         createdBy: user?.uid,
@@ -431,7 +501,7 @@ export default function Irrigation() {
             type: 'success',
             read: false,
             createdAt: new Date().toISOString(),
-            link: '/agenda'
+            link: 'scheduling'
           });
         }
       } catch (notifError) {
@@ -651,10 +721,60 @@ export default function Irrigation() {
                  <div className="text-xl font-mono font-bold text-amber-800">{netDemand} <span className="text-[10px] font-normal">mm/dia</span></div>
               </div>
               <div className="p-4 bg-amber-600 text-white rounded-2xl shadow-lg shadow-amber-100">
-                 <h4 className="text-[10px] font-bold text-amber-100 uppercase mb-1">Volume Diário</h4>
-                 <div className="text-xl font-mono font-bold">{totalWaterDay} <span className="text-[10px] font-normal">m³/dia</span></div>
+                 <h4 className="text-[10px] font-bold text-amber-100 uppercase mb-1">
+                   {appEfficiency ? `Lâmina Bruta (Ea ${appEfficiency}%)` : 'Lâmina Bruta'}
+                 </h4>
+                 {appEfficiency ? (
+                   <div className="text-xl font-mono font-bold">{grossDemand} <span className="text-[10px] font-normal">mm/dia</span> · {totalWaterDay} <span className="text-[10px] font-normal">m³/dia</span></div>
+                 ) : (
+                   <div className="text-xs font-bold text-amber-100">Escolha o método de irrigação na etapa 4 para aplicar a eficiência.</div>
+                 )}
               </div>
             </div>
+
+            <details className="p-4 bg-white/40 border border-slate-100 rounded-2xl" open={!!soil.cc}>
+              <summary className="text-[10px] font-bold text-slate-500 uppercase cursor-pointer">
+                Turno de rega e tempo de irrigação (opcional — dados do solo)
+              </summary>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
+                {([
+                  ['cc', 'Capacidade de campo (% peso)', 'Ex: 28'],
+                  ['pmp', 'Ponto de murcha (% peso)', 'Ex: 14'],
+                  ['ds', 'Densidade do solo (g/cm³)', 'Ex: 1.3'],
+                  ['z', 'Profundidade das raízes (cm)', 'Ex: 40'],
+                  ['f', 'Fator de disponibilidade (0 a 1)', 'Ex: 0.5'],
+                  ['ia', 'Intensidade de aplicação (mm/h)', 'Ex: 8'],
+                ] as const).map(([key, label, ph]) => (
+                  <div key={key} className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">{label}</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={soil[key] || ''}
+                      onChange={(e) => setSoil({ ...soil, [key]: Number(e.target.value) })}
+                      className="w-full glass-input"
+                      placeholder={ph}
+                    />
+                  </div>
+                ))}
+              </div>
+              {schedule ? (
+                <div className="mt-4 font-mono text-[10px] text-slate-600 bg-white/80 p-3 rounded-lg space-y-1">
+                  <div>1. CRA = ({soil.cc} − {soil.pmp})/10 × {soil.ds} × {soil.z} = {schedule.cra} mm</div>
+                  <div>2. IRN máx = CRA × f = {schedule.cra} × {soil.f} = {schedule.irnMax} mm</div>
+                  <div>3. TR máx = IRN / ETc = {schedule.irnMax} / {netDemand} = {schedule.trMax} dias → TR adotado = {schedule.tr} dia(s)</div>
+                  <div>4. Lâmina bruta por irrigação = {schedule.tr} × {netDemand} / {appEfficiency / 100} = {schedule.lb} mm</div>
+                  {schedule.ti > 0 && <div>5. Tempo de irrigação = {schedule.lb} / {soil.ia} = {schedule.ti} h</div>}
+                  {schedule.warning && (
+                    <div className="text-rose-600 font-bold">Atenção: o solo não armazena a água de 1 dia inteiro — dividir a irrigação em mais de uma vez por dia.</div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-[10px] text-slate-400 italic mt-3">
+                  Preencha CC, PMP, densidade, profundidade e fator f (e escolha o método na etapa 4) para calcular o turno de rega.
+                </p>
+              )}
+            </details>
 
             <div className="p-4 bg-white/40 border border-slate-100 rounded-2xl">
               <h5 className="flex items-center gap-2 text-[9px] font-bold text-slate-500 uppercase mb-3">
@@ -667,8 +787,10 @@ export default function Irrigation() {
                 <div className="text-[10px] font-bold text-slate-400 uppercase mb-2">Passo a Passo do Cálculo:</div>
                 <div className="font-mono text-[9px] text-slate-500 space-y-1">
                   <div>1. ETc = {demand.eto} * {demand.kc} = {netDemand} mm/dia</div>
-                  <div>2. Vol = {netDemand} * {demand.area} * 10 = {totalWaterDay} m³/dia</div>
-                  <div className="pt-1 border-t border-slate-200 text-amber-600 font-bold">Res: {totalWaterDay} m³/dia</div>
+                  <div>2. Vol. líquido = {netDemand} * {demand.area} * 10 = {netWaterDay} m³/dia</div>
+                  {appEfficiency > 0 && <div>3. Lâmina bruta = {netDemand} / {appEfficiency / 100} = {grossDemand} mm/dia</div>}
+                  {appEfficiency > 0 && <div>4. Vol. a captar = {grossDemand} * {demand.area} * 10 = {totalWaterDay} m³/dia</div>}
+                  <div className="pt-1 border-t border-slate-200 text-amber-600 font-bold">Res: {appEfficiency > 0 ? totalWaterDay : netWaterDay} m³/dia</div>
                 </div>
               </div>
               <p className="text-[10px] text-slate-400 italic mt-3">
@@ -683,7 +805,7 @@ export default function Irrigation() {
              <h4 className="font-display font-medium text-slate-600">Selecione o método de aplicação:</h4>
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <button 
-                  onClick={() => setIrrigationType('drip')}
+                  onClick={() => selectIrrigationType('drip')}
                   className={cn(
                     "p-8 rounded-3xl border-2 transition-all flex flex-col items-center gap-4",
                     irrigationType === 'drip' ? "bg-emerald-50 border-emerald-500" : "bg-white/40 border-white/60 hover:border-emerald-200"
@@ -698,7 +820,7 @@ export default function Irrigation() {
                    </div>
                 </button>
                 <button 
-                  onClick={() => setIrrigationType('sprinkler')}
+                  onClick={() => selectIrrigationType('sprinkler')}
                   className={cn(
                     "p-8 rounded-3xl border-2 transition-all flex flex-col items-center gap-4",
                     irrigationType === 'sprinkler' ? "bg-slate-50 border-emerald-500" : "bg-white/40 border-white/60 hover:border-slate-200"
@@ -717,7 +839,19 @@ export default function Irrigation() {
                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
                  <div className="p-4 bg-emerald-50 rounded-2xl text-emerald-700 text-[10px] flex items-center justify-center gap-2">
                    <ShieldCheck className="w-4 h-4" />
-                   Método selecionado afetará o cálculo da lâmina bruta final no memorial técnico.
+                   Lâmina bruta = ETc / Ea = {netDemand} / {appEfficiency / 100} = {grossDemand} mm/dia ({totalWaterDay} m³/dia a captar)
+                 </div>
+                 <div className="text-left space-y-2">
+                   <label className="text-[10px] font-bold text-slate-500 uppercase px-1">Eficiência de aplicação — Ea (%)</label>
+                   <input
+                     type="number"
+                     min={40}
+                     max={100}
+                     value={appEfficiency || ''}
+                     onChange={(e) => setAppEfficiency(Math.min(100, Math.max(0, Number(e.target.value))))}
+                     className="w-full glass-input"
+                   />
+                   <p className="text-[10px] text-slate-400 px-1">Valor típico já preenchido (gotejamento 90%, aspersão 80%). Ajuste conforme o equipamento e o teste de uniformidade.</p>
                  </div>
                  <div className="text-left space-y-2">
                    <label className="text-[10px] font-bold text-slate-500 uppercase px-1">Justificativa Técnica da Escolha</label>

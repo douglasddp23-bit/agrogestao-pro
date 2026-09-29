@@ -32,6 +32,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { cn, handleFirestoreError, OperationType, shrinkImage, getAuthToken } from '../../lib/utils';
 import { db } from '../../lib/firebase';
+import { updatePdfBranding } from '../../lib/pdfBranding';
 import { collection, onSnapshot, query, where, orderBy, doc, limit, setDoc } from 'firebase/firestore';
 import { UserProfile, AttendanceRecord } from '../../types';
 import { NAV_ITEMS } from '../../constants/navigation';
@@ -55,8 +56,6 @@ const PAGE_LOADERS: Record<string, () => Promise<{ default: React.ComponentType<
   analysis_topography: () => import('../../pages/Topography'),
   analysis_credit: () => import('../../pages/RuralCredit'),
   rural_valuation: () => import('../../pages/RuralPropertyValuation'),
-  pest_disease: () => import('../../pages/PestDisease'),
-  environmental_xray: () => import('../../pages/EnvironmentalXray'),
   financial: () => import('../../pages/Financial'),
   reports: () => import('../../pages/Reports'),
   inventory: () => import('../../pages/Inventory'),
@@ -102,8 +101,6 @@ const AnalysisPage = React.lazy(PAGE_LOADERS.analysis);
 const AuditLogsPage = React.lazy(PAGE_LOADERS.audit_logs);
 const JudicialExpertisePage = React.lazy(PAGE_LOADERS['judicial-expertise']);
 const RuralPropertyValuationPage = React.lazy(PAGE_LOADERS.rural_valuation);
-const PestDiseasePage = React.lazy(PAGE_LOADERS.pest_disease);
-const EnvironmentalXrayPage = React.lazy(PAGE_LOADERS.environmental_xray);
 
 const PageFallback = () => (
   <div className="flex items-center justify-center h-full">
@@ -121,7 +118,7 @@ const shakeVariants = {
   }
 };
 
-type Page = 'dashboard' | 'clients' | 'scheduling' | 'analysis' | 'analysis_irrigation' | 'analysis_documentation' | 'analysis_topography' | 'analysis_credit' | 'pest_disease' | 'environmental_xray' | 'property_map' | 'judicial-expertise' | 'judicial_expertise' | 'rural-valuation' | 'rural_valuation' | 'hr' | 'messages' | 'documents' | 'users' | 'profile' | 'financial' | 'inventory' | 'field_visits' | 'contracts' | 'reports' | 'vehicles' | 'audit_logs';
+type Page = 'dashboard' | 'clients' | 'scheduling' | 'analysis' | 'analysis_irrigation' | 'analysis_documentation' | 'analysis_topography' | 'analysis_credit' | 'property_map' | 'judicial-expertise' | 'judicial_expertise' | 'rural-valuation' | 'rural_valuation' | 'hr' | 'messages' | 'documents' | 'users' | 'profile' | 'financial' | 'inventory' | 'field_visits' | 'contracts' | 'reports' | 'vehicles' | 'audit_logs';
 
 const getRoleBadgeClass = (role?: UserRole) => {
   switch (role) {
@@ -192,6 +189,17 @@ export default function MainApp() {
     const currentPath = location.pathname.substring(1) || 'dashboard';
     if (currentPath === 'profile' || currentPath === 'dashboard') return;
 
+    // Endereços antigos gravados em avisos/favoritos não podem virar link quebrado.
+    if (currentPath === 'agenda') {
+      navigate('/scheduling', { replace: true });
+      return;
+    }
+    if (currentPath === 'pest_disease' || currentPath === 'environmental_xray') {
+      toast.info('Esta página foi retirada do sistema.');
+      navigate('/dashboard', { replace: true });
+      return;
+    }
+
     const navItem = NAV_ITEMS.find(item => item.id === currentPath || item.key === currentPath);
     const navKey = navItem ? navItem.key : currentPath;
 
@@ -236,6 +244,12 @@ export default function MainApp() {
         setBranding({
           companyName: data.companyName || 'AgroGestão',
           companyLogo: data.companyLogo || '',
+          companyPhrase: data.companyPhrase || 'Almenara, MG',
+        });
+        // Mesma marca nos PDFs de serviço (logo + nome da empresa)
+        updatePdfBranding({
+          companyName: data.companyName,
+          companyLogo: data.companyLogo,
           companyPhrase: data.companyPhrase || 'Almenara, MG',
         });
       }
@@ -507,8 +521,6 @@ export default function MainApp() {
       case 'rural_valuation':
         return <RuralPropertyValuationPage />;
       case 'analysis': return <AnalysisPage typeFilter={undefined} />;
-      case 'pest_disease': return <PestDiseasePage />;
-      case 'environmental_xray': return <EnvironmentalXrayPage />;
       case 'property_map': return <PropertyMapPage />;
       case 'analysis_irrigation': return <IrrigationPage />;
       case 'analysis_documentation': return <RegularizationPage />;

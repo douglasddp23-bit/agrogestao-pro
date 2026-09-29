@@ -164,7 +164,7 @@ export default function NotificationBell() {
                     onClick={() => {
                       if (n.link) {
                         setIsOpen(false);
-                        navigate(`/${n.link}`);
+                        navigate(`/${String(n.link).replace(/^\/+/, '')}`);
                       }
                     }}
                     className={cn(

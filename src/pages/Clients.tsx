@@ -19,8 +19,6 @@ import {
   Building2,
   FileBadge,
   ClipboardList,
-  Bug,
-  Leaf,
   DollarSign,
   FileText,
   Calendar,
@@ -756,7 +754,7 @@ export default function Clients() {
   // Property Timeline State
   interface TimelineEvent {
     id: string;
-    type: 'visit' | 'contract' | 'pest' | 'xray' | 'financial' | 'analysis' | 'message' | 'appointment';
+    type: 'visit' | 'contract' | 'financial' | 'analysis' | 'message' | 'appointment';
     title: string;
     subtitle: string;
     date: string;
@@ -1702,7 +1700,7 @@ export default function Clients() {
                       <div className="py-12 bg-slate-50 rounded-2xl border text-center p-6">
                         <Calendar className="w-10 h-10 text-slate-300 mx-auto mb-2" />
                         <h5 className="font-bold text-slate-700 text-xs">Nenhum evento histórico protocolado</h5>
-                        <p className="text-[11px] text-slate-400 mt-1">Este cliente não possui faturamentos, pragas registradas, visitas de campo ou laudos de CAR ativos.</p>
+                        <p className="text-[11px] text-slate-400 mt-1">Este cliente não possui faturamentos, visitas de campo, agendamentos ou serviços registrados.</p>
                       </div>
                     ) : (
                       <div className="relative border-l-2 border-slate-150 ml-4 pl-6 space-y-6">
@@ -1710,24 +1708,18 @@ export default function Clients() {
                           const IconComp = 
                             evt.type === 'visit' ? ClipboardList :
                             evt.type === 'contract' ? FileText :
-                            evt.type === 'pest' ? Bug :
-                            evt.type === 'xray' ? Leaf :
                             evt.type === 'message' ? Mail :
                             evt.type === 'appointment' ? CalendarClock : DollarSign;
 
                           const themeColorClass = 
                             evt.type === 'visit' ? 'bg-emerald-500 text-white shadow-emerald-50' :
                             evt.type === 'contract' ? 'bg-emerald-500 text-white shadow-emerald-50' :
-                            evt.type === 'pest' ? 'bg-rose-500 text-white shadow-rose-50' :
-                            evt.type === 'xray' ? 'bg-emerald-550 text-white bg-emerald-600 shadow-emerald-50' :
                             evt.type === 'message' ? 'bg-emerald-500 text-white shadow-emerald-50' :
                             evt.type === 'appointment' ? 'bg-slate-700 text-white shadow-slate-100' : 'bg-amber-500 text-white shadow-amber-50';
 
                           const pillColor = 
                             evt.type === 'visit' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
                             evt.type === 'contract' ? 'bg-slate-50 text-slate-700 border border-slate-100' :
-                            evt.type === 'pest' ? 'bg-rose-55 text-rose-700 border border-rose-100 bg-rose-50' :
-                            evt.type === 'xray' ? 'bg-slate-55 text-slate-700 border border-slate-100 bg-slate-50' :
                             evt.type === 'message' ? 'bg-slate-50 text-slate-700 border border-slate-100' :
                             evt.type === 'appointment' ? 'bg-slate-100 text-slate-700 border border-slate-200' : 'bg-amber-50 text-amber-700 border border-amber-100';
 
@@ -1824,7 +1816,7 @@ export default function Clients() {
                                 type === 'topography' ? 'Projeto de Topografia' :
                                 type === 'irrigation' ? 'Projeto de Irrigação' :
                                 type === 'documentation' ? 'Regularização Ambiental' :
-                                type === 'credit' ? 'Projeto de Crédito Rural' : 'Raio-X Ambiental'
+                                type === 'credit' ? 'Projeto de Crédito Rural' : 'Serviço'
                               } foi registrado para ${selectedClientDetail.name}.`,
                               type: 'success',
                               read: false,
@@ -1856,7 +1848,6 @@ export default function Clients() {
                               <option value="irrigation">Projeto de Irrigação</option>
                               <option value="documentation">Regularização Ambiental</option>
                               <option value="credit">Projeto de Crédito Rural</option>
-                              <option value="environmental_xray">Raio-X Ambiental</option>
                             </select>
                           </div>
                           <div>
