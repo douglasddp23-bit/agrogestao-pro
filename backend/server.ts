@@ -13,16 +13,16 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import admin from 'firebase-admin';
 import fs from 'fs';
-import authRoutes from './backend/routes/authRoutes';
-import { refreshUserClaim } from './backend/controllers/authController';
+import authRoutes from './routes/authRoutes';
+import { refreshUserClaim } from './controllers/authController';
 import { GoogleGenAI } from '@google/genai';
-import { requireAuth } from './backend/middlewares/authMiddleware';
-import { sendNewAppointmentEmail, sendExpiringContractsDigestEmail, sendAlertEmail } from './backend/services/mailService';
+import { requireAuth } from './middlewares/authMiddleware';
+import { sendNewAppointmentEmail, sendExpiringContractsDigestEmail, sendAlertEmail } from './services/mailService';
 import helmet from 'helmet';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import cron from 'node-cron';
-import { runBackupIfDue } from './backend/services/backupService';
+import { runBackupIfDue } from './services/backupService';
 
 // Helper to get Gemini SDK instance dynamically on-demand with correct key
 function getGeminiClient(): GoogleGenAI | null {
@@ -1265,9 +1265,10 @@ Por favor, seja direto e use formatação Markdown limpa e amigável. Não adici
     res.status(404).json({ error: 'Rota não encontrada.' });
   });
 
-  // Vite middleware for development
+  // Vite middleware for development (as telas ficam em frontend/)
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
+      configFile: path.join(process.cwd(), 'frontend', 'vite.config.ts'),
       server: { middlewareMode: true },
       appType: 'spa',
     });

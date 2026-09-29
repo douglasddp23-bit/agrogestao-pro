@@ -163,7 +163,7 @@ trabalho). Depois disso é só abrir pelo ícone sempre que quiser usar.
 ## Se eu precisar mudar alguma coisa no sistema depois
 
 Você (ou eu, aqui no chat) pode editar os arquivos dentro da pasta do
-projeto (os arquivos `.tsx`, `.ts`, etc. dentro de `src/` e `backend/`).
+projeto (os arquivos `.tsx`, `.ts`, etc. dentro de `frontend/` e `backend/`).
 Depois de qualquer mudança, o caminho é sempre o mesmo:
 
 1. Salvar o arquivo editado.

@@ -3,9 +3,16 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig, loadEnv} from 'vite';
 
+// As telas (frontend) ficam nesta pasta; o servidor (backend) fica em ../backend.
+// O .env.local continua na raiz do projeto e o resultado do build continua em
+// ../dist (é de lá que o servidor e o app de computador leem).
+const ROOT = path.resolve(__dirname, '..');
+
 export default defineConfig(({mode}) => {
-  const env = loadEnv(mode, '.', '');
+  const env = loadEnv(mode, ROOT, '');
   return {
+    root: __dirname,
+    envDir: ROOT,
     plugins: [react(), tailwindcss()],
     // SEGURANÇA: removido o "define" que copiava GEMINI_API_KEY para dentro do app
     // (qualquer código que a usasse no navegador exporia a chave paga a todos).
@@ -23,6 +30,8 @@ export default defineConfig(({mode}) => {
       hmr: process.env.DISABLE_HMR !== 'true',
     },
     build: {
+      outDir: path.join(ROOT, 'dist'),
+      emptyOutDir: true,
       // As páginas (Dashboard, Clients, etc.) já são carregadas sob demanda
       // (React.lazy em MainApp.tsx), mas tudo que é usado na tela de login
       // (React, Firebase, animações, ícones...) ainda ia junto num único
