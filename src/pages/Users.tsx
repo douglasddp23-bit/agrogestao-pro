@@ -3,7 +3,6 @@ import { runExclusive } from '../lib/submitGuard';
 import { 
   UsersRound, 
   Search, 
-  Plus, 
   Shield, 
   Mail, 
   MoreVertical, 
@@ -19,22 +18,19 @@ import {
   Trash2,
   CheckCircle2,
   Download,
-  FileText,
   Calendar,
   Check
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
-import { collection, onSnapshot, query, orderBy, addDoc, doc, updateDoc, deleteDoc, serverTimestamp, limit, getDoc, setDoc } from 'firebase/firestore';
-import { sendPasswordResetEmail } from 'firebase/auth';
+import { collection, onSnapshot, query, orderBy, doc, updateDoc, limit, setDoc } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { UserProfile, UserRole } from '../types';
-import { handleFirestoreError, OperationType, generateRegistrationNumber, cn } from '../lib/utils';
+import { handleFirestoreError, OperationType, cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { createNotification } from '../lib/notifications';
 import { canCreateRole, ROLE_LABELS } from '../lib/permissions';
-import { logAudit } from '../lib/audit';
 
 import ConfirmationModal from '../components/ConfirmationModal';
 import UserDetailModal from '../components/users/UserDetailModal';

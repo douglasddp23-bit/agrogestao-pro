@@ -15,13 +15,10 @@ import {
   Users, 
   Award, 
   TrendingUp, 
-  Briefcase, 
-  CalendarDays,
   Sparkles,
   Info
 } from 'lucide-react';
 import { AttendanceRecord, UserProfile } from '../types';
-import { cn } from '../lib/utils';
 
 interface WeeklyWorkedHoursChartProps {
   team: UserProfile[];

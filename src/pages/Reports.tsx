@@ -1,37 +1,27 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { runExclusive } from '../lib/submitGuard';
 import { 
-  BarChart3, 
   Download, 
   FileText, 
   FileSpreadsheet, 
   Bot, 
   Send, 
-  ChevronRight, 
-  User, 
   Users,
   Loader2, 
   Sparkles, 
-  CheckCircle2, 
-  Activity, 
   TrendingUp, 
-  Info,
   Layers,
   Award,
-  BookOpen,
-  Calendar,
-  DollarSign,
   Sprout,
   ClipboardCheck
 } from 'lucide-react';
-import { collection, onSnapshot, query, orderBy, where, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
 import { exportToExcel } from '../lib/exportExcel';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import SkeletonList from '../components/SkeletonList';
 import EfficiencyReport from '../components/EfficiencyReport';
 import { formatDate, formatCurrency } from '../lib/utils';
 import { Client, FieldVisit, FinancialRecord, ServiceAnalysis, Contract } from '../types';

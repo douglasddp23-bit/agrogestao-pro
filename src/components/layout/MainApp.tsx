@@ -3,21 +3,11 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { 
   Search, 
-  LayoutDashboard, 
   Users, 
   ClipboardCheck, 
-  Map, 
-  Droplet, 
-  FileText, 
-  UsersRound, 
-  History, 
-  Clock, 
   LogOut, 
   MessageSquare,
-  Wallet,
-  TrendingUp,
   User,
-  Shield,
   ArrowRight,
   Upload,
   Building2,
@@ -25,16 +15,13 @@ import {
   Moon,
   CheckCircle2,
   FileImage,
-  Loader2,
-  Trash2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
-import { cn, handleFirestoreError, OperationType, shrinkImage, getAuthToken } from '../../lib/utils';
+import { cn, shrinkImage, getAuthToken } from '../../lib/utils';
 import { db } from '../../lib/firebase';
 import { updatePdfBranding } from '../../lib/pdfBranding';
-import { collection, onSnapshot, query, where, orderBy, doc, limit, setDoc } from 'firebase/firestore';
-import { UserProfile, AttendanceRecord } from '../../types';
+import { collection, onSnapshot, query, where, doc, setDoc } from 'firebase/firestore';
 import { NAV_ITEMS } from '../../constants/navigation';
 import { canAccessNav, UserRole, ROLE_LABELS } from '../../lib/permissions';
 import { useGlobalSearch } from '../../hooks/useGlobalSearch';

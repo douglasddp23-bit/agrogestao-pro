@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { runExclusive } from '../lib/submitGuard';
 import { 
   ShieldCheck, 
@@ -16,8 +16,6 @@ import {
   Download,
   Trash2,
   LandPlot,
-  History,
-  Info,
   Map
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';

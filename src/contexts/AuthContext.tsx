@@ -6,13 +6,11 @@ import {
   GoogleAuthProvider, 
   signOut,
   signInWithEmailAndPassword,
-  signInWithCustomToken,
-  updatePassword
-} from 'firebase/auth';
-import { doc, getDoc, setDoc, query, collection, where, getDocs, limit, serverTimestamp, updateDoc, onSnapshot } from 'firebase/firestore';
+  signInWithCustomToken} from 'firebase/auth';
+import { doc, getDoc, setDoc, query, collection, where, serverTimestamp, updateDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db, hasValidConfig } from '../lib/firebase';
 import { UserProfile, UserRole } from '../types';
-import { generateRegistrationNumber, handleFirestoreError, OperationType } from '../lib/utils';
+import { handleFirestoreError, OperationType } from '../lib/utils';
 import { getEffectiveRole, getActiveDelegation } from '../lib/permissions';
 
 export type LoginResult = { mfaRequired: true; ticket: string } | { mfaRequired: false };

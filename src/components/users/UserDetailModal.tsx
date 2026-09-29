@@ -5,19 +5,14 @@ import {
   Shield, 
   Users, 
   Lock, 
-  KeyRound, 
-  Ban, 
-  Unlock, 
   Mail, 
   Hash, 
-  Calendar, 
-  Award, 
   Sparkles,
   Check
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
-import { doc, updateDoc, onSnapshot, collection, query, where } from 'firebase/firestore';
+import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { UserProfile, UserRole, TemporaryDelegation } from '../../types';
 import { ROLE_LABELS, getEffectiveRole, getActiveDelegation } from '../../lib/permissions';

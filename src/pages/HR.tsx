@@ -1,30 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { runExclusive } from '../lib/submitGuard';
 import { 
-  UsersRound, 
   Clock, 
   Calendar, 
-  MapPin, 
   CheckCircle2, 
-  AlertCircle,
-  TrendingDown,
-  TrendingUp,
   UserCheck,
-  UserX,
   Palmtree,
   UserPlus,
   X,
   Check,
   ArrowRight,
-  ShieldAlert,
-  Award,
   Plus,
-  HelpCircle,
-  Activity,
   Landmark,
-  DollarSign,
-  Briefcase,
-  FileText,
   FileSpreadsheet
 } from 'lucide-react';
 import { collection, addDoc, onSnapshot, query, orderBy, limit, where, serverTimestamp, Timestamp, doc, updateDoc, setDoc, deleteField } from 'firebase/firestore';

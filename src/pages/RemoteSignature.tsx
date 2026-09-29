@@ -16,10 +16,7 @@ import {
   Download,
   Check,
   RotateCcw,
-  User,
-  ExternalLink,
-  SmartphoneIcon
-} from 'lucide-react';
+  User} from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { logAudit } from '../lib/audit';

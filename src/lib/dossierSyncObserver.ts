@@ -6,9 +6,9 @@ import {
   getDocs,
   Unsubscribe 
 } from 'firebase/firestore';
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { db, ensureDocumentFolder } from './firebase';
-import { JudicialExpertise, RuralPropertyValuation, ClientDocument } from '../types';
+import { JudicialExpertise, RuralPropertyValuation } from '../types';
 
 export type SyncBadgeState = 'synced' | 'syncing' | 'recent' | 'unlinked' | 'pending';
 

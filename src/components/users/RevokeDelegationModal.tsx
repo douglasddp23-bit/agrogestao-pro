@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, AlertTriangle, ShieldX, Calendar } from 'lucide-react';
+import { ShieldX } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
 import { doc, updateDoc } from 'firebase/firestore';

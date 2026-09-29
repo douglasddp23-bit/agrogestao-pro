@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { runExclusive } from '../../lib/submitGuard';
-import { X, Shield, Calendar, AlertCircle, Info, Sparkles, UserPlus } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { X, Calendar, Sparkles, UserPlus } from 'lucide-react';
+import { motion } from 'motion/react';
 import { toast } from 'sonner';
 import { collection, addDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';

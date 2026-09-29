@@ -2,22 +2,10 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { runExclusive } from '../lib/submitGuard';
 import { 
   Users, 
-  TrendingUp, 
-  ClipboardCheck, 
-  Mail, 
   MapPin, 
   CheckCircle2, 
   Clock,
-  ExternalLink,
-  Video,
-  Newspaper,
-  BookOpen,
   RefreshCw,
-  UserPlus,
-  Palmtree,
-  ArrowRight,
-  PieChart as PieChartIcon,
-  BarChart3,
   AlertCircle,
   Calendar,
   ClipboardList,
@@ -30,25 +18,20 @@ import {
   Printer,
   ArrowUp,
   ArrowDown,
-  GripVertical,
   RotateCcw
 } from 'lucide-react';
 import PrintPreviewModal from '../components/PrintPreviewModal';
 import { collection, query, limit, orderBy, onSnapshot, where, doc as fsDoc, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Client, UserProfile, VacationRequest, InternalMessage, FieldVisit, FinancialRecord, InventoryItem, Contract, Vehicle } from '../types';
-import { formatDateTime, formatDate, cn, handleFirestoreError, OperationType, getAuthToken, todayLocalDateString, sortByDateDesc } from '../lib/utils';
+import { formatDate, cn, handleFirestoreError, OperationType, getAuthToken, todayLocalDateString, sortByDateDesc } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
-import { auth } from '../lib/firebase';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import AgendaWidget from '../components/AgendaWidget';
 import PersonalReminders from '../components/PersonalReminders';
 import { 
-  PieChart, 
-  Pie, 
-  Cell, 
   ResponsiveContainer, 
   BarChart, 
   Bar, 

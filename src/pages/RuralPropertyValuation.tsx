@@ -5,8 +5,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   collection, addDoc, onSnapshot, query, orderBy, updateDoc, doc, deleteDoc, where, getDocs, serverTimestamp 
 } from 'firebase/firestore';
-import { saveFile, deleteStoredFile, handleFileLinkClick } from '../lib/fileStore';
-import { db, storage, ensureDocumentFolder } from '../lib/firebase';
+import { saveFile, handleFileLinkClick } from '../lib/fileStore';
+import { db, ensureDocumentFolder } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { isManagementRole, canEditOwnRecord } from '../lib/permissions';
 import { useNavigate } from 'react-router-dom';
@@ -14,11 +14,11 @@ import { RuralPropertyValuation, Client } from '../types';
 import { 
   formatDate, formatCurrency, numberToWordsBRL, cn, handleFirestoreError, OperationType, todayLocalDateString } from '../lib/utils';
 import { 
-  MapPin, Plus, Search, Filter, Calendar, DollarSign, FileText, 
-  CheckCircle2, Clock, Trash2, Edit3, X, ChevronRight, Download, 
-  Building, Trees, Tractor, Home, Droplets, Zap, ShieldCheck, 
-  Calculator, Sparkles, Building2, UserCheck, Eye, Layers, Compass,
-  Folder, FolderOpen, FolderSync, RefreshCw, ExternalLink, Loader2,
+  MapPin, Plus, Search, DollarSign, FileText, 
+  CheckCircle2, Clock, Trash2, Edit3, X, Download, 
+  Building, Tractor, Home, ShieldCheck, 
+  Calculator, Sparkles, UserCheck, Compass,
+  FolderOpen, FolderSync, RefreshCw, ExternalLink, Loader2,
   AlertTriangle, Check
 } from 'lucide-react';
 import { toast } from 'sonner';

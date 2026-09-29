@@ -1,9 +1,6 @@
 import React, { useState } from 'react';
 import { 
   CheckCircle2, 
-  Circle, 
-  Clock, 
-  Calendar, 
   Gavel, 
   Scale, 
   FileSpreadsheet, 
@@ -11,7 +8,6 @@ import {
   MapPin, 
   DollarSign, 
   TrendingUp, 
-  ChevronRight, 
   Sparkles, 
   ArrowRight,
   ShieldCheck,
@@ -22,7 +18,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { cn, formatDate, formatCurrency, todayLocalDateString } from '../lib/utils';
 import { JudicialExpertise, RuralPropertyValuation } from '../types';

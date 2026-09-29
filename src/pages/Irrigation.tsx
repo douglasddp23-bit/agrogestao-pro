@@ -9,8 +9,6 @@ import {
   Zap,
   Sprout,
   CloudRain,
-  ShieldCheck,
-  BookOpen,
   User,
   CheckCircle2,
   Trash2,
@@ -37,7 +35,7 @@ import { buildServiceReportPDF } from '../lib/pdfBranding';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { Droplet as PageIcon } from 'lucide-react';
-import ServiceKpiCards, { formatBRL, isThisMonth, toDateAny } from '../components/service/ServiceKpiCards';
+import ServiceKpiCards, { formatBRL, isThisMonth } from '../components/service/ServiceKpiCards';
 import {
   PricingFields, ResponsibleFields, WizardSteps, computePricing, emptyPricing, registryLabel, responsibleFromProfile,
   ServicePricing, ResponsibleTech,

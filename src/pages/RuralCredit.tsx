@@ -4,13 +4,9 @@ import {
   Wallet, 
   Search, 
   Plus, 
-  Filter, 
-  TrendingUp, 
   Calendar, 
   User, 
   CheckCircle2, 
-  Clock, 
-  AlertCircle,
   MoreVertical,
   ChevronRight,
   ChevronLeft,
@@ -21,7 +17,6 @@ import {
   Trash2,
   X,
   CreditCard,
-  Building2,
   Landmark,
   FileDown
 } from 'lucide-react';
@@ -30,14 +25,10 @@ import {
   onSnapshot, 
   query, 
   where, 
-  orderBy, 
   addDoc, 
   updateDoc, 
   deleteDoc,
-  doc, 
-  serverTimestamp,
-  getDocs
-} from 'firebase/firestore';
+  doc} from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { createNotification } from '../lib/notifications';

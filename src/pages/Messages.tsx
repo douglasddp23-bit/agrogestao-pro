@@ -11,10 +11,7 @@ import {
   User,
   Plus,
   X,
-  ChevronRight,
   Mail,
-  Smile,
-  Clock,
   Paperclip,
   Image,
   File,
@@ -24,7 +21,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { collection, addDoc, onSnapshot, query, orderBy, where, updateDoc, doc, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, where, updateDoc, doc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { InternalMessage, UserProfile, EmailTemplate, Channel } from '../types';
@@ -32,7 +29,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import PageHeader from '../components/layout/PageHeader';
 import { MessageSquare as PageIcon } from 'lucide-react';
 import { handleFirestoreError, OperationType, formatDateTime, formatTime, cn } from '../lib/utils';
-import { FileText, Settings, Copy } from 'lucide-react';
+import { FileText, Settings } from 'lucide-react';
 
 import ConfirmationModal from '../components/ConfirmationModal';
 import ChannelChat from '../components/ChannelChat';

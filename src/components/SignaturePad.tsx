@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Trash2, Check, X, PenTool, User } from 'lucide-react';
+import { Trash2, Check, PenTool, User } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface SignaturePadProps {

@@ -1,22 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  collection, addDoc, onSnapshot, query, orderBy, getDocs, updateDoc, doc, deleteDoc, where
+  collection, addDoc, onSnapshot, query, orderBy, updateDoc, doc, deleteDoc, where
 } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { Appointment, Client, UserProfile } from '../types';
 import { logAudit } from '../lib/audit';
-import { PERMISSIONS, UserRole, hasRole } from '../lib/permissions';
 import ConfirmationModal from '../components/ConfirmationModal';
 import {
   formatDate, cn, handleFirestoreError, OperationType, getAuthToken, todayLocalDateString, safeUrl } from '../lib/utils';
 import { 
   CalendarDays, UserCheck, CheckCircle2, Trash2, Plus, Search, Calendar, 
   User, Clock, ClipboardList, Check, X, ChevronLeft, ChevronRight, 
-  AlertCircle, MessageSquare, Mail, Layers, Eye, RefreshCw, Download,
-  MapPin, Navigation, Route, LocateFixed, ArrowUpDown, ExternalLink
+  Mail, Layers, RefreshCw, Download,
+  MapPin, Navigation, Route, LocateFixed, ExternalLink
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';

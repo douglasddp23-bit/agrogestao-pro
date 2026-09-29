@@ -5,27 +5,19 @@ import {
   FileText, 
   Plus, 
   Search, 
-  Filter, 
   Download, 
-  Calendar, 
   Edit, 
   Trash2, 
   Eye, 
-  PlusCircle, 
   CheckCircle2, 
   Clock, 
   DollarSign, 
-  Layers, 
   ChevronRight, 
-  User, 
-  TrendingUp, 
   Check, 
   X,
-  FilePlus,
   ShieldAlert,
   Settings,
   ArrowRight,
-  ArrowLeft,
   PenTool,
   History,
   Save,
@@ -34,11 +26,9 @@ import {
   AlertCircle,
   CalendarClock,
   Smartphone,
-  MessageSquare,
-  Share2
-} from 'lucide-react';
-import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Cell, PieChart, Pie } from 'recharts';
-import { collection, onSnapshot, addDoc, doc, deleteDoc, updateDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
+  MessageSquare} from 'lucide-react';
+import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from 'recharts';
+import { collection, onSnapshot, addDoc, doc, deleteDoc, updateDoc, query, orderBy } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { logAudit } from '../lib/audit';

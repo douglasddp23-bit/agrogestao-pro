@@ -5,7 +5,6 @@ import {
   ChevronRight, 
   ChevronLeft, 
   X, 
-  TrendingUp, 
   FileText, 
   Map, 
   Calendar, 

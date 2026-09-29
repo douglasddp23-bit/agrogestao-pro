@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
   CloudCheck, 
-  CloudUpload, 
-  CloudOff, 
   RefreshCw, 
   CheckCircle2, 
   Clock, 
@@ -16,9 +14,9 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
-import { db, hasValidConfig } from '../lib/firebase';
+import { db } from '../lib/firebase';
 import { onSnapshot, doc } from 'firebase/firestore';
-import { getCacheSummary, clearAllCache, CacheMetadata } from '../lib/indexedDbCache';
+import { getCacheSummary, CacheMetadata } from '../lib/indexedDbCache';
 
 export interface SyncLog {
   id: string;

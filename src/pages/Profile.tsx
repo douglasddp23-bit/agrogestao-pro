@@ -11,23 +11,20 @@ import {
   FileText, 
   Camera,
   ChevronRight,
-  Clock,
   DollarSign,
   AlertCircle,
   KeyRound,
   Shield,
   Edit,
   Bell,
-  Plus,
   X,
-  CheckCircle2,
   Loader2
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { cn, formatDate, formatCurrency } from '../lib/utils';
 import { toast } from 'sonner';
-import { doc, getDoc, updateDoc, collection, query, where, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db, storage, hasValidConfig } from '../lib/firebase';
+import { doc, getDoc, updateDoc, collection, query, where, onSnapshot, addDoc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import PageHeader from '../components/layout/PageHeader';
 import { User as PageIcon } from 'lucide-react';

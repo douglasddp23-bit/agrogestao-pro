@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { runExclusive } from '../lib/submitGuard';
-import { Map, MapPin, Maximize, Compass, Layers, FileCheck, Save, User, CheckCircle2, ChevronRight, Info, Ruler, Satellite, Trash2, Plus, FileCode, Crosshair, Navigation, ChevronDown, ChevronUp, FileSpreadsheet, Activity, FileDown, Search, Wallet, Edit3, X, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Map, MapPin, Maximize, Compass, Layers, FileCheck, Save, CheckCircle2, Ruler, Satellite, Trash2, Plus, FileCode, Crosshair, FileSpreadsheet, Activity, FileDown, Search, Wallet, Edit3, X, ArrowLeft, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { cn, safeUrl } from '../lib/utils';

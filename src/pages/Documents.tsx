@@ -10,17 +10,13 @@ import {
   Upload,
   Download,
   Trash2,
-  ExternalLink,
   Info,
   Loader2,
   Folder,
   FolderOpen,
   FileCheck,
-  Plus,
   ArrowRight,
   Sparkles,
-  CheckCircle2,
-  RefreshCw,
   FolderSync
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -31,7 +27,7 @@ import { collection, onSnapshot, query, orderBy, where, addDoc, serverTimestamp,
 import { saveFile, deleteStoredFile, handleFileLinkClick, uploadErrorMessage, FileTooLargeError, isTooLargeToSave } from '../lib/fileStore';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { db, storage, auth } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
 import { Client, ClientDocument } from '../types';
 import { cn, formatDateTime, formatDate, sortByDateDesc } from '../lib/utils';
 import { useDossierLiveSync } from '../lib/dossierSyncObserver';

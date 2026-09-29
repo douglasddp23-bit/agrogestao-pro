@@ -2,19 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { 
   Users, 
   Plus, 
-  ShieldAlert, 
-  Clock, 
-  CheckCircle2, 
   Calendar, 
-  AlertCircle, 
-  ArrowRight, 
   ShieldCheck, 
-  XCircle, 
-  RefreshCw 
-} from 'lucide-react';
+  XCircle} from 'lucide-react';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import { UserProfile, TemporaryDelegation, UserRole } from '../../types';
+import { UserProfile, TemporaryDelegation } from '../../types';
 import { ROLE_LABELS } from '../../lib/permissions';
 import { useAuth } from '../../contexts/AuthContext';
 import NewDelegationModal from './NewDelegationModal';

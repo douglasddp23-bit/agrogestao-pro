@@ -8,7 +8,6 @@ import {
   Trash2, 
   Edit2, 
   MapPin, 
-  Phone, 
   Mail,
   User,
   X,
@@ -29,14 +28,13 @@ import {
   Loader2,
   Paperclip,
   ShieldCheck,
-  CheckCircle2,
   FolderOpen,
   MessageSquare,
   Send
 } from 'lucide-react';
-import { collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc, updateDoc, serverTimestamp, where, setDoc, getDocs } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, deleteDoc, doc, updateDoc, serverTimestamp, where, setDoc, getDocs } from 'firebase/firestore';
 import { saveFile, deleteStoredFile, handleFileLinkClick, uploadErrorMessage, FileTooLargeError, isTooLargeToSave } from '../lib/fileStore';
-import { db, storage, auth, hasValidConfig } from '../lib/firebase';
+import { db, auth, hasValidConfig } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { Client, Property } from '../types';
 import { logAudit } from '../lib/audit';

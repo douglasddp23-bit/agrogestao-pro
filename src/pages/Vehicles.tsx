@@ -5,21 +5,12 @@ import {
   Car, 
   Plus, 
   Search, 
-  Fuel, 
   FileText, 
   TrendingUp, 
   Wrench, 
-  Calendar, 
-  CheckCircle2, 
-  AlertCircle,
-  Clock,
   Navigation,
-  DollarSign,
-  PlusCircle,
-  Eye,
   Trash2,
   X,
-  History,
   Link2
 } from 'lucide-react';
 import { collection, onSnapshot, addDoc, doc, deleteDoc, updateDoc, query, orderBy } from 'firebase/firestore';

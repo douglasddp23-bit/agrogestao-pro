@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/firebase';
-import { collection, onSnapshot, query, where, orderBy, doc, limit, writeBatch, setDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, doc, writeBatch, setDoc } from 'firebase/firestore';
 import { AppNotification } from '../../types';
 import { cn, handleFirestoreError, OperationType, formatDateTime } from '../../lib/utils';
 

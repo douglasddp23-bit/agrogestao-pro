@@ -11,7 +11,6 @@ import {
   Users, 
   Hash, 
   Folder, 
-  User as UserIcon,
   Download,
   Info,
   Eye
@@ -22,7 +21,6 @@ import {
   addDoc, 
   onSnapshot, 
   query, 
-  orderBy, 
   where, 
   updateDoc, 
   doc, 

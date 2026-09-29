@@ -4,20 +4,12 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   DollarSign, 
   PlusCircle, 
-  ArrowUpRight, 
-  ArrowDownRight, 
-  Download, 
   FileSpreadsheet, 
   FileText, 
   Trash2, 
-  CheckCircle2, 
   Calendar, 
-  Filter, 
   Search, 
-  User,
   Clock,
-  Briefcase,
-  AlertCircle,
   X,
   ChevronRight,
   ArrowLeft,
@@ -26,7 +18,6 @@ import {
   CreditCard,
   Ban,
   ShieldAlert,
-  Eye,
   Lock
 } from 'lucide-react';
 import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, query, orderBy } from 'firebase/firestore';
@@ -38,9 +29,9 @@ import { toast } from 'sonner';
 import { exportToExcel } from '../lib/exportExcel';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { BarChart, Bar, PieChart, Pie, Cell, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import { BarChart, Bar, PieChart, Pie, Cell, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import SkeletonList from '../components/SkeletonList';
-import { formatDateTime, formatDate, todayLocalDateString, formatCurrency } from '../lib/utils';
+import { formatDate, todayLocalDateString, formatCurrency } from '../lib/utils';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { FinancialRecord, FinancialStatus, PaymentMethod, FinancialCategory, Client, ServiceAnalysis, ExpenseReport, UserRole } from '../types';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';

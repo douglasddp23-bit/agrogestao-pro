@@ -6,7 +6,7 @@ import {
   collection, addDoc, onSnapshot, query, orderBy, updateDoc, doc, deleteDoc, where, getDocs, serverTimestamp 
 } from 'firebase/firestore';
 import { saveFile, deleteStoredFile, handleFileLinkClick } from '../lib/fileStore';
-import { db, storage, ensureDocumentFolder } from '../lib/firebase';
+import { db, ensureDocumentFolder } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { isManagementRole, canEditOwnRecord } from '../lib/permissions';
 import { useNavigate } from 'react-router-dom';
@@ -14,10 +14,10 @@ import { JudicialExpertise, Client } from '../types';
 import {
   formatDate, formatCurrency, cn, handleFirestoreError, OperationType, parseDateInput, safeUrl } from '../lib/utils';
 import { 
-  Scale, Plus, Search, Filter, Copy, Check, Calendar, MapPin, 
-  DollarSign, FileText, CheckCircle2, Clock, AlertTriangle, 
-  Trash2, Edit3, X, ChevronRight, Download, Building, Landmark,
-  Gavel, ArrowRight, UserCheck, Eye, Sparkles, Folder, FolderOpen,
+  Scale, Plus, Search, Copy, Check, Calendar, MapPin, 
+  DollarSign, FileText, Clock, 
+  Trash2, Edit3, X, Download, Building, Landmark,
+  Gavel, UserCheck, Folder, FolderOpen,
   FolderSync, RefreshCw, ExternalLink, ShieldCheck, Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';

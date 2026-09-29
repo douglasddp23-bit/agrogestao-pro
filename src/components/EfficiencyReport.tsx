@@ -7,25 +7,15 @@ import {
   ZAxis, 
   CartesianGrid, 
   Tooltip, 
-  Legend, 
   ResponsiveContainer, 
   Cell,
-  ReferenceLine,
-  ReferenceArea
-} from 'recharts';
+  ReferenceLine} from 'recharts';
 import { 
   Sprout, 
   TrendingUp, 
   Activity, 
-  Filter, 
-  Download, 
-  Info, 
   Award, 
-  Zap, 
   Printer, 
-  CheckCircle2, 
-  AlertTriangle,
-  HelpCircle,
   BarChart2,
   FileSpreadsheet,
   Layers,
@@ -34,8 +24,6 @@ import {
 import { ServiceAnalysis, Client } from '../types';
 import PrintPreviewModal from './PrintPreviewModal';
 import { exportToExcel } from '../lib/exportExcel';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
 
 interface EfficiencyReportProps {

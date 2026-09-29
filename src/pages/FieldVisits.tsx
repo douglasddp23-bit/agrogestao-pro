@@ -4,8 +4,6 @@ import {
   ClipboardList, 
   Plus, 
   Search, 
-  Filter, 
-  Download, 
   FileText, 
   FileSpreadsheet, 
   Trash2, 
@@ -22,20 +20,15 @@ import {
   Laptop,
   ArrowRight,
   ArrowLeft,
-  ChevronRight,
-  User,
-  ExternalLink,
-  Tag,
   Mic,
   MicOff,
-  Sparkles,
   BookmarkPlus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, onSnapshot, addDoc, doc, deleteDoc, updateDoc, setDoc, query, orderBy } from 'firebase/firestore';
-import { saveFile, uploadErrorMessage } from '../lib/fileStore';
+import { collection, onSnapshot, doc, deleteDoc, updateDoc, setDoc, query, orderBy } from 'firebase/firestore';
+import { saveFile } from '../lib/fileStore';
 import StoredImage from '../components/StoredImage';
-import { db, storage } from '../lib/firebase';
+import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
 import { exportToExcel } from '../lib/exportExcel';

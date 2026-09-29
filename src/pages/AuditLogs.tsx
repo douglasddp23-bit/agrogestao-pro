@@ -4,8 +4,6 @@ import {
   Search, 
   Filter, 
   Calendar, 
-  User, 
-  ArrowRight, 
   Clock, 
   Eye, 
   Trash2, 

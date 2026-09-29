@@ -5,27 +5,18 @@ import {
   MapPin, 
   User, 
   ClipboardCheck, 
-  Droplet, 
-  Map, 
-  CheckCircle2, 
   AlertCircle,
   Calendar as CalendarIcon,
   ChevronLeft,
   ChevronRight,
-  Filter,
-  Plus,
   Video,
-  VideoOff,
   Phone,
   Truck,
-  HelpCircle,
-  X,
-  Sparkles
-} from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
-import { collection, onSnapshot, query, addDoc, getDocs, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+  HelpCircle} from 'lucide-react';
+import { motion } from 'motion/react';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { cn, formatDate, handleFirestoreError, OperationType, safeUrl } from '../lib/utils';
+import { cn, handleFirestoreError, OperationType, safeUrl } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   format, 
@@ -42,7 +33,6 @@ import {
   isToday
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { toast } from 'sonner';
 
 interface UnifiedEvent {
   id: string;

@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { runExclusive } from '../lib/submitGuard';
 import { 
-  Boxes, 
   PlusCircle, 
   ArrowUp, 
   ArrowDown, 
@@ -9,23 +8,15 @@ import {
   Trash2, 
   History, 
   Search, 
-  Filter, 
-  Calendar, 
   User, 
   Package, 
   ArrowLeftRight, 
   FileSpreadsheet, 
   FileText,
-  Bookmark,
-  ChevronRight,
   ScanBarcode,
   QrCode,
-  Camera,
-  X,
-  CheckCircle2,
-  FileCheck
-} from 'lucide-react';
-import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, writeBatch, query, orderBy, increment } from 'firebase/firestore';
+  X} from 'lucide-react';
+import { collection, onSnapshot, addDoc, deleteDoc, doc, writeBatch, query, orderBy, increment } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
@@ -33,7 +24,7 @@ import { exportToExcel } from '../lib/exportExcel';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import SkeletonList from '../components/SkeletonList';
-import { formatDateTime, formatDate, cn, formatCurrency, parseDecimalBR } from '../lib/utils';
+import { formatDateTime, formatDate, formatCurrency, parseDecimalBR } from '../lib/utils';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { PERMISSIONS } from '../lib/permissions';
 import { UserRole } from '../types';
