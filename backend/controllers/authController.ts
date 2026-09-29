@@ -758,19 +758,18 @@ export async function deleteUser(req: Request, res: Response) {
     // Remove from in-memory virtual store
     virtualUsersMap.delete(uid);
 
-    // Try deleting from Firebase Auth
+    // Conta de login: se falhar (e não for "usuário já não existe"), para aqui —
+    // senão a pessoa sumiria da tela mas continuaria conseguindo entrar.
     try {
       await admin.auth().deleteUser(uid);
-    } catch {
-      // ignore
+    } catch (authErr: any) {
+      if (authErr?.code !== 'auth/user-not-found') throw authErr;
     }
 
-    // Try deleting from Firestore
-    try {
-      await admin.firestore().collection('users').doc(uid).delete();
-    } catch {
-      // ignore
-    }
+    // Ficha pública e credenciais (hashes/histórico de senha) do colaborador
+    const fs = admin.firestore();
+    await fs.collection('users').doc(uid).delete();
+    await fs.collection('user_credentials').doc(uid).delete();
 
     return res.json({ success: true, message: 'Colaborador excluído com sucesso.' });
   } catch (err: any) {

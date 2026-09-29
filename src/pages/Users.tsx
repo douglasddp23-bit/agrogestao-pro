@@ -33,7 +33,7 @@ import { UserProfile, UserRole } from '../types';
 import { handleFirestoreError, OperationType, generateRegistrationNumber, cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { createNotification } from '../lib/notifications';
-import { canCreateRole } from '../lib/permissions';
+import { canCreateRole, ROLE_LABELS } from '../lib/permissions';
 import { logAudit } from '../lib/audit';
 
 import ConfirmationModal from '../components/ConfirmationModal';
@@ -403,45 +403,25 @@ export default function Users() {
       return;
     }
 
-    // 1. Optimistic feedback: update UI state instantly
-    setTeam(prev => prev.filter(u => u.uid !== member.uid));
-    toast.success("Colaborador removido com sucesso!");
-    setSelectedUser(null);
-
-    // 2. Perform backend & Firebase updates asynchronously in the background
-    (async () => {
-      try {
-        let idToken = '';
-        const currentUser = auth.currentUser;
-        if (currentUser) {
-          idToken = await currentUser.getIdToken();
-        } else {
-          const cachedSession = localStorage.getItem('virtual_user_session');
-          if (cachedSession) {
-            const parsed = JSON.parse(cachedSession);
-            idToken = '';
-          }
-        }
-        
-        const response = await fetch('/api/delete-user', {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${idToken}`
-          },
-          body: JSON.stringify({ uid: member.uid })
-        });
-        if (!response.ok) {
-          console.warn('Backend Auth user deletion returned non-ok status.');
-        }
-      } catch (backendErr) {
-        console.warn('Backend delete-user call failed, proceeding with direct client-side Firestore deletion:', backendErr);
-      }
-
-      await deleteDoc(doc(db, 'users', member.uid));
-    })().catch(err => {
-      console.error("Delete background sync error:", err);
-    });
+    // Só some da tela depois que o servidor confirmar (antes dizia "removido com
+    // sucesso" mesmo quando o servidor recusava, e o erro era ignorado).
+    const toastId = toast.loading(`Excluindo ${member.displayName}...`);
+    try {
+      const idToken = auth.currentUser ? await auth.currentUser.getIdToken() : '';
+      const response = await fetch('/api/delete-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+        body: JSON.stringify({ uid: member.uid })
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || `Servidor recusou (${response.status}).`);
+      setTeam(prev => prev.filter(u => u.uid !== member.uid));
+      setSelectedUser(null);
+      toast.success('Colaborador removido com sucesso!', { id: toastId });
+    } catch (err: any) {
+      console.error('Erro ao excluir colaborador:', err);
+      toast.error('Não foi possível excluir: ' + (err?.message || 'falha na comunicação com o servidor.'), { id: toastId });
+    }
   };
 
   const generatePDFForUserData = (data: {
@@ -707,12 +687,14 @@ export default function Users() {
                             exit={{ opacity: 0, scale: 0.95 }}
                             className="absolute right-0 top-10 w-48 bg-white rounded-xl shadow-xl border border-slate-100 z-10 py-1 overflow-hidden"
                           >
+                            {(user?.effectiveRole ?? user?.role) === 'admin' && (
                             <button 
                                onClick={() => handleResetPassword(member)}
                                className="w-full px-4 py-2 text-left text-xs font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-2"
                             >
                                <KeyRound className="w-3.5 h-3.5" /> Redefinir Senha
                             </button>
+                            )}
                             <button 
                                onClick={() => {
                                  setDetailModalUser(member);
@@ -786,7 +768,7 @@ export default function Users() {
                  </div>
                  <div className="flex items-center gap-3 text-[11px] text-slate-500 bg-slate-50/50 p-2 rounded-lg border border-slate-100 mt-1.5">
                     <Shield className="w-3.5 h-3.5 text-emerald-500" />
-                    <span>Gestor: <span className="font-bold text-slate-700">{member.adminName || 'Douglas Pinheiro'}</span></span>
+                    <span>Gestor: <span className="font-bold text-slate-700">{member.adminName || '—'}</span></span>
                  </div>
               </div>
 
@@ -843,7 +825,7 @@ export default function Users() {
                           </div>
                           <div>
                             <div className="font-bold text-slate-700">{member.displayName}</div>
-                            <div className="text-[10px] text-slate-400 mt-0.5">Gestor: {member.adminName || 'Douglas Pinheiro'}</div>
+                            <div className="text-[10px] text-slate-400 mt-0.5">Gestor: {member.adminName || '—'}</div>
                           </div>
                        </div>
                     </td>
@@ -851,7 +833,7 @@ export default function Users() {
                     <td className="p-4 text-slate-500 hidden lg:table-cell">{member.registrationNumber || '---'}</td>
                     <td className="p-4">
                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded-lg font-bold uppercase text-[9px] tracking-tighter">
-                          {member.role}
+                          {ROLE_LABELS[member.role as keyof typeof ROLE_LABELS] || member.role}
                        </span>
                     </td>
                     <td className="p-4">
@@ -914,6 +896,7 @@ export default function Users() {
                                {member.blocked ? <Unlock className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}
                              </button>
                            )}
+                           {(user?.effectiveRole ?? user?.role) === 'admin' && (
                            <button 
                              onClick={() => handleResetPassword(member)}
                              className="p-1.5 bg-slate-50 text-slate-600 rounded-lg hover:bg-slate-100 transition-all font-bold"
@@ -921,6 +904,7 @@ export default function Users() {
                            >
                              <KeyRound className="w-3.5 h-3.5" />
                            </button>
+                           )}
                            {canDeleteUsers && (
                              <button 
                                id={`delete-user-list-${member.uid}`}

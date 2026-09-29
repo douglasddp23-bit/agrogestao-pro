@@ -348,7 +348,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               const initialRole: UserRole = roleFromClaim;
               const newProfile: UserProfile = {
                 uid: firebaseUser.uid,
-                displayName: firebaseUser.displayName || (initialRole === 'admin' ? 'Douglas Dias Pereira' : 'Consultor'),
+                displayName: firebaseUser.displayName || (firebaseUser.email ? firebaseUser.email.split('@')[0] : 'Colaborador'),
                 email: firebaseUser.email || '',
                 role: initialRole,
                 registrationNumber: initialRole === 'admin' ? 'ADM-001' : 'PENDENTE',

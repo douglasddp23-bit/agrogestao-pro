@@ -34,7 +34,7 @@ import { AttendanceRecord, UserProfile, VacationRequest } from '../types';
 import { logAudit } from '../lib/audit';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
-import { handleFirestoreError, OperationType, formatDateTime, formatDate, cn, todayLocalDateString, sortByDateDesc, toMillis, formatCurrency, validateCPF } from '../lib/utils';
+import { handleFirestoreError, OperationType, formatDateTime, formatDate, cn, todayLocalDateString, sortByDateDesc, toMillis, formatCurrency, parseDecimalBR, validateCPF } from '../lib/utils';
 import WeeklyWorkedHoursChart from '../components/WeeklyWorkedHoursChart';
 import { canCreateRole, UserRole, ROLE_LABELS } from '../lib/permissions';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
@@ -693,9 +693,9 @@ export default function HR() {
     }
 
     try {
-      const base = parseFloat(payrollForm.baseSalary) || 0;
-      const extra = parseFloat(payrollForm.extraHoursVal) || 0;
-      const ded = parseFloat(payrollForm.deductions) || 0;
+      const base = parseDecimalBR(payrollForm.baseSalary) || 0;
+      const extra = parseDecimalBR(payrollForm.extraHoursVal) || 0;
+      const ded = parseDecimalBR(payrollForm.deductions) || 0;
       const net = (base + extra) - ded;
       if (base <= 0) {
         toast.error('Informe o salário base do colaborador.');
@@ -1302,7 +1302,7 @@ export default function HR() {
                           <div className="text-[10px] text-slate-400">{emp.department || 'Operações'}</div>
                         </td>
                         <td className="p-4 font-bold text-slate-700">
-                          {emp.salary ? `R$ ${parseFloat(emp.salary).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Não informado'}
+                          {emp.salary ? formatCurrency(parseDecimalBR(emp.salary)) : 'Não informado'}
                         </td>
                         <td className="p-4 text-slate-600">
                           {emp.admissionDate ? formatDate(emp.admissionDate) : '---'}
@@ -2114,7 +2114,7 @@ export default function HR() {
                 <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex justify-between items-center text-xs">
                   <span className="font-bold text-slate-500 uppercase text-[9px]">Salário Líquido Estimado</span>
                   <span className="font-black text-slate-700 text-sm">
-                    R$ {((parseFloat(payrollForm.baseSalary) || 0) + (parseFloat(payrollForm.extraHoursVal) || 0) - (parseFloat(payrollForm.deductions) || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    R$ {((parseDecimalBR(payrollForm.baseSalary) || 0) + (parseDecimalBR(payrollForm.extraHoursVal) || 0) - (parseDecimalBR(payrollForm.deductions) || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
 
