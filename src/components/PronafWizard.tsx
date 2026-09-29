@@ -9,7 +9,7 @@ import { createNotification } from '../lib/notifications';
 import { Client, ServiceAnalysis } from '../types';
 import { cn, formatCPF, formatCurrency, todayLocalDateString } from '../lib/utils';
 import { getPdfBranding, drawBrandBanner, drawBrandFooter } from '../lib/pdfBranding';
-import { CREDIT_PROGRAMS, BANCOS_FINANCIADORES, SAFRA_REFERENCIA, findCreditProgram, CreditProgram } from '../lib/creditPrograms';
+import { CREDIT_PROGRAMS, BANCOS_FINANCIADORES, SAFRA_REFERENCIA, findCreditProgram, findFaixa, creditConditions, CreditProgram } from '../lib/creditPrograms';
 import { toast } from 'sonner';
 
 // ======================================================================
@@ -79,13 +79,14 @@ const makeElaborador = (): ElaboradorInfo => ({ empresa: '', cnpj: '', elaborado
 export interface DadosProposta {
   banco: string;
   programaId: string;
+  faixaId: string;      // linha/taxa dentro do programa (ex.: Mais Alimentos — tratores 5%)
   dataProposta: string;
   agencia: string;
   atividadePrincipal: string;
   elaborador: ElaboradorInfo;
 }
 const makeDadosProposta = (): DadosProposta => ({
-  banco: '', programaId: '', dataProposta: todayLocalDateString(),
+  banco: '', programaId: '', faixaId: '', dataProposta: todayLocalDateString(),
   agencia: '', atividadePrincipal: '', elaborador: makeElaborador(),
 });
 function calcPrevisaoContrato(dataProposta: string) {
@@ -279,14 +280,17 @@ function SectionAccordion({ expanded, onToggle, icon, title, badge, children }: 
   );
 }
 
-function ProgramConditions({ program, compact }: { program: CreditProgram; compact?: boolean }) {
+function ProgramConditions({ program, faixaId, compact }: { program: CreditProgram; faixaId?: string; compact?: boolean }) {
+  const c = creditConditions(program, faixaId);
+  const faixa = findFaixa(program, faixaId);
   const rows: [string, string][] = [
     ['Quem pode', program.publico],
-    ['Juros', program.juros],
-    ['Limite', program.limite],
-    ['Prazo', program.prazo],
-    ['Carência', program.carencia],
-    ...(program.bonus ? [['Bônus', program.bonus] as [string, string]] : []),
+    ...(faixa ? [['Linha', faixa.nome] as [string, string]] : []),
+    ['Juros', c.juros],
+    ['Limite', c.limite],
+    ['Prazo', c.prazo],
+    ['Carência', c.carencia],
+    ...(c.bonus ? [['Bônus', c.bonus] as [string, string]] : []),
   ];
   return (
     <div className={cn('rounded-xl border border-emerald-200 bg-emerald-50/60', compact ? 'p-3' : 'p-4')}>
@@ -313,6 +317,8 @@ export default function PronafWizard({ isOpen, onClose, clients, existingProject
   const [expandedSection, setExpandedSection] = useState<string | null>('dados');
 
   const program = findCreditProgram(proposta.dados.programaId);
+  const faixa = findFaixa(program, proposta.dados.faixaId);
+  const cond = program ? creditConditions(program, proposta.dados.faixaId) : null;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -327,6 +333,7 @@ export default function PronafWizard({ isOpen, onClose, clients, existingProject
       const nova = normalizeProposta(pronafData.proposta);
       if (!nova.dados.banco) nova.dados.banco = p.bank || '';
       if (!nova.dados.programaId) nova.dados.programaId = p.creditProgramId || '';
+      nova.dados.programaId = findCreditProgram(nova.dados.programaId)?.id || '';
       setProposta(nova);
       // Sem programa escolhido (propostas antigas), volta para a etapa 1.
       setStep(pronafData.cliente && nova.dados.programaId ? 2 : 1);
@@ -385,6 +392,7 @@ export default function PronafWizard({ isOpen, onClose, clients, existingProject
     if (!foundClient || !user) return;
     if (!proposta.dados.banco) { toast.error('Selecione o banco financiador.'); return; }
     if (!program) { toast.error('Selecione o programa de crédito.'); return; }
+    if (program.faixas && !faixa) { toast.error('Selecione a linha / taxa de juros do programa.'); return; }
     setSaving(true);
     try {
       const pronafCliente: PronafCliente = {
@@ -505,6 +513,7 @@ export default function PronafWizard({ isOpen, onClose, clients, existingProject
     if (!projectId) return;
     if (!proposta.dados.dataProposta) { toast.error('Informe a data da proposta.'); return; }
     if (!program) { toast.error('Selecione o programa de crédito.'); return; }
+    if (program.faixas && !faixa) { toast.error('Selecione a linha / taxa de juros do programa.'); return; }
     if (!proposta.dados.banco) { toast.error('Selecione o banco financiador.'); return; }
     setSaving(true);
     try {
@@ -560,9 +569,15 @@ export default function PronafWizard({ isOpen, onClose, clients, existingProject
       // Tabela "rótulo | valor | rótulo | valor" — deixa cada via caber em 1 página.
       const kv4 = (y: number, title: string, pairs: [string, string | undefined][], headColor = DARK) => {
         const body: any[] = [];
-        for (let i = 0; i < pairs.length; i += 2) {
+        // Rótulo começando com "!" ocupa a linha inteira.
+        for (let i = 0; i < pairs.length; i++) {
           const a = pairs[i], b = pairs[i + 1];
-          body.push(b ? [a[0], a[1] || '—', b[0], b[1] || '—'] : [a[0], { content: a[1] || '—', colSpan: 3 }]);
+          if (a[0].startsWith('!') || !b || b[0].startsWith('!')) {
+            body.push([a[0].replace(/^!/, ''), { content: a[1] || '—', colSpan: 3 }]);
+          } else {
+            body.push([a[0], a[1] || '—', b[0], b[1] || '—']);
+            i++;
+          }
         }
         autoTable(pdf, {
           startY: y,
@@ -596,12 +611,17 @@ export default function PronafWizard({ isOpen, onClose, clients, existingProject
           ['Endereço', [foundClient.address?.street, foundClient.address?.number, foundClient.address?.neighborhood].filter(Boolean).join(', ')],
         ], EMERALD);
 
-        y = kv4(y, 'Dados da Proposta', [
+        // Condições do programa/linha entram aqui (valores de referência do Plano Safra).
+        y = kv4(y, `Dados da Proposta — condições de referência do ${SAFRA_REFERENCIA}, confirmadas pelo banco na contratação`, [
           ['Banco', proposta.dados.banco], ['Agência', proposta.dados.agencia],
           ['Programa', program.nome], ['Finalidade', program.finalidade],
+          ...(faixa ? [['!Linha', faixa.nome] as [string, string]] : []),
+          ['Juros', cond!.juros], ['Limite', cond!.limite],
+          ['Prazo', cond!.prazo], ['Carência', cond!.carencia],
+          ...(cond!.bonus ? [['!Bônus', cond!.bonus] as [string, string]] : []),
           ['Data da proposta', fmtDate(proposta.dados.dataProposta)], ['Previsão contrato', fmtDate(calcPrevisaoContrato(proposta.dados.dataProposta))],
           ['Atividade', proposta.dados.atividadePrincipal], ['Técnico', proposta.dados.elaborador.elaborador],
-          ['Empresa', [proposta.dados.elaborador.empresa, proposta.dados.elaborador.cnpj].filter(Boolean).join(' · CNPJ ')],
+          ['!Empresa', [proposta.dados.elaborador.empresa, proposta.dados.elaborador.cnpj].filter(Boolean).join(' · CNPJ ')],
         ]);
 
         const imoveis = proposta.imoveisVinculados.filter(i => (i.denominacao || '').trim());
@@ -644,13 +664,6 @@ export default function PronafWizard({ isOpen, onClose, clients, existingProject
         ];
         y = ensure(y, 25);
         y = table(y, '', garRows, { head: [[{ content: 'Garantias', colSpan: 2 }]] });
-
-        y = ensure(y, 30);
-        y = kv4(y, `Condições de referência — ${SAFRA_REFERENCIA} (confirmadas pelo banco na contratação)`, [
-          ['Juros', program.juros], ['Limite', program.limite],
-          ['Prazo', program.prazo], ['Carência', program.carencia],
-          ...(program.bonus ? [['Bônus', program.bonus] as [string, string]] : []),
-        ]);
 
         // Documentos em 2 colunas de checklist
         y = ensure(y, 30);
@@ -703,7 +716,7 @@ export default function PronafWizard({ isOpen, onClose, clients, existingProject
   const resumoGar = resumoGarantias(proposta);
   const toggle = (id: string) => setExpandedSection(expandedSection === id ? null : id);
   const clientProps = foundClient?.properties || [];
-  const canConfirm = !!foundClient && !!proposta.dados.banco && !!program && !saving;
+  const canConfirm = !!foundClient && !!proposta.dados.banco && !!program && (!program.faixas || !!faixa) && !saving;
   const inputCls = 'w-full px-2.5 py-2 rounded-lg border border-slate-200 text-xs';
   const labelCls = 'text-[10px] font-medium text-slate-500 block mb-0.5';
 
@@ -766,7 +779,7 @@ export default function PronafWizard({ isOpen, onClose, clients, existingProject
                     </div>
                     <div>
                       <label className="text-sm font-bold text-slate-700 mb-1.5 block">2. Programa de crédito</label>
-                      <select value={proposta.dados.programaId} onChange={(e) => updateDados({ programaId: e.target.value })}
+                      <select value={proposta.dados.programaId} onChange={(e) => updateDados({ programaId: e.target.value, faixaId: '' })}
                         className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 outline-none text-sm font-medium bg-white">
                         <option value="">Selecione o programa...</option>
                         {(['Pronaf', 'Pronamp', 'Demais produtores'] as const).map(grupo => (
@@ -777,7 +790,17 @@ export default function PronafWizard({ isOpen, onClose, clients, existingProject
                       </select>
                     </div>
                   </div>
-                  {program && <div className="mt-3"><ProgramConditions program={program} compact /></div>}
+                  {program?.faixas && (
+                    <div className="mt-3">
+                      <label className="text-sm font-bold text-slate-700 mb-1.5 block">Linha / taxa de juros</label>
+                      <select value={proposta.dados.faixaId} onChange={(e) => updateDados({ faixaId: e.target.value })}
+                        className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 outline-none text-sm font-medium bg-white">
+                        <option value="">Selecione o que será financiado...</option>
+                        {program.faixas.map(f => <option key={f.id} value={f.id}>{f.juros.replace(' ao ano', ' a.a.')} — {f.nome}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  {program && <div className="mt-3"><ProgramConditions program={program} faixaId={proposta.dados.faixaId} compact /></div>}
                 </div>
 
                 {/* 3. Cliente */}
@@ -862,11 +885,20 @@ export default function PronafWizard({ isOpen, onClose, clients, existingProject
                     </div>
                     <div className="col-span-2">
                       <label className={labelCls}>Programa</label>
-                      <select value={proposta.dados.programaId} onChange={(e) => updateDados({ programaId: e.target.value })} className={cn(inputCls, 'bg-white')}>
+                      <select value={proposta.dados.programaId} onChange={(e) => updateDados({ programaId: e.target.value, faixaId: '' })} className={cn(inputCls, 'bg-white')}>
                         <option value="">Selecione</option>
                         {CREDIT_PROGRAMS.map(p => <option key={p.id} value={p.id}>{p.nome} — {p.finalidade}</option>)}
                       </select>
                     </div>
+                    {program?.faixas && (
+                      <div className="col-span-2 md:col-span-4">
+                        <label className={labelCls}>Linha / taxa de juros</label>
+                        <select value={proposta.dados.faixaId} onChange={(e) => updateDados({ faixaId: e.target.value })} className={cn(inputCls, 'bg-white')}>
+                          <option value="">Selecione</option>
+                          {program.faixas.map(f => <option key={f.id} value={f.id}>{f.juros.replace(' ao ano', ' a.a.')} — {f.nome}</option>)}
+                        </select>
+                      </div>
+                    )}
                     <div>
                       <label className={labelCls}>Agência</label>
                       <input value={proposta.dados.agencia} onChange={(e) => updateDados({ agencia: e.target.value })} placeholder="Ex.: 1234 — Almenara" className={inputCls} />
@@ -876,7 +908,7 @@ export default function PronafWizard({ isOpen, onClose, clients, existingProject
                       <input value={proposta.dados.atividadePrincipal} onChange={(e) => updateDados({ atividadePrincipal: e.target.value })} placeholder="Ex.: bovinocultura de leite, cafeicultura, horticultura..." className={inputCls} />
                     </div>
                   </div>
-                  {program && <ProgramConditions program={program} compact />}
+                  {program && <ProgramConditions program={program} faixaId={proposta.dados.faixaId} compact />}
                   <p className="text-[11px] font-semibold text-slate-500 -mb-2">Empresa elaboradora</p>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                     <input value={proposta.dados.elaborador.empresa} onChange={(e) => updateElaborador({ empresa: e.target.value })} placeholder="Empresa elaboradora" className={inputCls} />
@@ -1075,7 +1107,7 @@ export default function PronafWizard({ isOpen, onClose, clients, existingProject
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs bg-slate-50 rounded-xl p-3">
                   <span>Cliente: <strong>{foundClient?.name || '—'}</strong></span>
                   <span>Banco: <strong>{proposta.dados.banco || '—'}</strong></span>
-                  <span>Programa: <strong>{program?.nome || '—'}</strong></span>
+                  <span>Programa: <strong>{program?.nome || '—'}{cond ? ` · ${cond.juros.replace(' ao ano', ' a.a.')}` : ''}</strong></span>
                   <span>Data: <strong>{fmtDate(proposta.dados.dataProposta)}</strong></span>
                   <span>Imóvel: <strong>{proposta.imoveisVinculados[0]?.denominacao || '—'}</strong></span>
                   <span>Financiado: <strong>{formatCurrency(totalGeralInvest.financiamento)}</strong></span>
@@ -1085,7 +1117,7 @@ export default function PronafWizard({ isOpen, onClose, clients, existingProject
 
                 {program && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <ProgramConditions program={program} compact />
+                    <ProgramConditions program={program} faixaId={proposta.dados.faixaId} compact />
                     <div className="rounded-xl border border-slate-200 p-3">
                       <p className="text-xs font-bold text-slate-700 mb-2 flex items-center gap-1.5"><FileCheck2 className="w-4 h-4 text-emerald-600" /> Documentos que o cliente deve providenciar</p>
                       <ul className="flex flex-col gap-1">
@@ -1105,7 +1137,7 @@ export default function PronafWizard({ isOpen, onClose, clients, existingProject
                 <button onClick={resetAndClose} className="text-sm text-slate-500 hover:text-slate-700 font-medium">Cancelar</button>
                 <button onClick={() => runExclusive('PronafWizard.handleConfirmClient', () => handleConfirmClient())} disabled={!canConfirm}
                   className={cn('flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-all', canConfirm ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm' : 'bg-slate-100 text-slate-400 cursor-not-allowed')}
-                  title={!proposta.dados.banco ? 'Escolha o banco' : !program ? 'Escolha o programa' : !foundClient ? 'Escolha o cliente' : ''}>
+                  title={!proposta.dados.banco ? 'Escolha o banco' : !program ? 'Escolha o programa' : program.faixas && !faixa ? 'Escolha a linha / taxa de juros' : !foundClient ? 'Escolha o cliente' : ''}>
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Confirmar e continuar <ArrowRight className="w-4 h-4" /></>}
                 </button>
               </>
