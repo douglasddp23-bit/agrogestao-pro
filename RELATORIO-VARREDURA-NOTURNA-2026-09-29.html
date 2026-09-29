@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Varredura do Sistema</title>
+<style>
+  @page { size: A4; margin: 15mm 14mm 17mm 14mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; color: #1e293b; font-size: 10pt; line-height: 1.45; margin: 0; }
+  .banner { background: #10b981; color: #fff; border-radius: 10px; padding: 14px 18px; display: flex; align-items: center; gap: 16px; }
+  .logo { width: 64px; height: 64px; background: #fff; border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
+  .logo img { max-width: 58px; max-height: 58px; }
+  .logo span { color: #10b981; font-weight: 800; font-size: 34px; }
+  .banner h1 { margin: 0; font-size: 17pt; }
+  .banner p { margin: 2px 0 0; font-size: 9.5pt; }
+  .doc-title { text-align: center; margin: 16px 0 3px; font-size: 15pt; font-weight: 800; }
+  .doc-sub { text-align: center; color: #64748b; font-size: 9pt; margin-bottom: 12px; }
+  h2 { font-size: 12.5pt; color: #047857; border-bottom: 2px solid #d1fae5; padding-bottom: 3px; margin: 18px 0 8px; page-break-after: avoid; }
+  h3 { font-size: 10.5pt; margin: 12px 0 5px; page-break-after: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 10px; font-size: 8.8pt; }
+  th { background: #1e293b; color: #fff; text-align: left; padding: 4px 6px; }
+  td { border-bottom: 1px solid #e2e8f0; padding: 4px 6px; vertical-align: top; }
+  tr { page-break-inside: avoid; }
+  .ok { color: #047857; font-weight: 700; }
+  .fix { color: #b45309; font-weight: 700; }
+  .box { border: 1px solid #a7f3d0; background: #ecfdf5; border-radius: 8px; padding: 9px 12px; margin: 8px 0; page-break-inside: avoid; }
+  .warn { border-color: #fecaca; background: #fff1f2; }
+  .mono { font-family: Consolas, monospace; font-size: 8.8pt; background: #f1f5f9; padding: 0 3px; border-radius: 3px; }
+  ul, ol { margin: 4px 0 8px 18px; padding: 0; }
+  li { margin: 2px 0; }
+  .small { font-size: 8.3pt; color: #64748b; }
+  .pb { page-break-before: always; }
+  .footer { margin-top: 20px; border-top: 1px solid #e2e8f0; padding-top: 6px; font-size: 8pt; color: #94a3b8; display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+<div class="banner"><div class="logo">{{LOGO_HTML}}</div><div><h1>{{EMPRESA}}</h1><p>{{FRASE}}</p></div></div>
+<div class="doc-title">RELATÓRIO DA VARREDURA COMPLETA DO SISTEMA</div>
+<div class="doc-sub">29/09/2026 · testes no aplicativo de verdade, com banco de TESTE (nenhum dado real usado) · 4 perfis: Administrador, Gerente, RH e Consultor</div>
+
+<div class="box">
+  <strong>Resumo</strong>
+  <ul>
+    <li><strong>Todas as abas foram abertas com os 4 perfis, sem nenhuma quebra.</strong> Cada perfil só entra onde deve.</li>
+    <li><strong>Mais de 30 erros corrigidos.</strong> Os mais graves:
+      <ul>
+        <li>o valor do contrato "15.000,00" era gravado como <strong>R$ 15</strong>;</li>
+        <li>contratos e PDFs diziam que a empresa contratada era <strong>"AgroGestão Pro Consultoria Agrícola Ltda."</strong>, com endereço inventado;</li>
+        <li>relatórios com <strong>dados inventados</strong>: clima fixo na visita de campo e 12 fazendas fictícias no Relatório de Eficiência;</li>
+        <li>botões que davam erro de permissão;</li>
+        <li>a exclusão de usuário dizia "sucesso" mesmo quando falhava.</li>
+      </ul>
+    </li>
+    <li><strong>Excluir agora é exclusivo do Administrador</strong>, nas telas e nas regras do banco (testado perfil por perfil). As regras só passam a valer depois que você publicar (seção 5, item 1).</li>
+    <li><strong>Novidades:</strong>
+      <ul>
+        <li>busca geral em todo o sistema;</li>
+        <li>Excel em mais 10 telas;</li>
+        <li>novos alertas automáticos (laudos, parcelas, financeiro vencido, lembrete da agenda);</li>
+        <li>histórico de alterações em Irrigação, Topografia, Regularização e Crédito.</li>
+      </ul>
+    </li>
+    <li>Tudo foi salvo no Git (12 salvamentos nesta rodada). <strong>Nada foi enviado ao GitHub</strong>, que só envio com a sua autorização.</li>
+  </ul>
+</div>
+
+<h2>1. Teste aba por aba, por perfil</h2>
+<p class="small">Legenda: <strong>A</strong> = Administrador · <strong>G</strong> = Gerente · <strong>R</strong> = RH · <strong>C</strong> = Consultor · "—" = sem acesso à aba (e o bloqueio foi confirmado). Em cada aba foram testados, conforme o caso: abrir, listar/filtrar, cadastrar, editar, excluir e as ações especiais (PDF, Excel, status, pagamento, envio).</p>
+<table>
+  <tr><th style="width:17%">Aba</th><th style="width:15%">Perfis testados</th><th>Resultado</th></tr>
+  <tr><td>Dashboard</td><td>A G R C</td><td class="ok">OK. "Verificar Alertas" gera os avisos certos para cada pessoa. Lembretes pessoais funcionam.</td></tr>
+  <tr><td>Clientes</td><td>A G C · R —</td><td class="ok">Cadastrar (todos), editar (G/A), excluir (A). Excel novo.</td></tr>
+  <tr><td>Análises Técnicas</td><td>A G C · R —</td><td><span class="fix">Corrigido:</span> salvar resultados travava quando algum valor era número. Criar, editar e excluir OK. Painel e Excel novos.</td></tr>
+  <tr><td>Visitas de Campo</td><td>A G C · R —</td><td><span class="fix">Corrigido:</span> o PDF da visita quebrava com dados incompletos e trazia clima e fotos inventados. Criar, Excel e PDF geral OK.</td></tr>
+  <tr><td>Agendamentos</td><td>A G C · R —</td><td class="ok">Criar, editar, confirmar, concluir, cancelar, ICS e excluir (A) OK. Excel novo.</td></tr>
+  <tr><td>Perícia Judicial</td><td>A G C · R —</td><td><span class="fix">Corrigido:</span> o consultor via Editar e Excluir sem ter permissão. Criar, editar e minuta em PDF OK.</td></tr>
+  <tr><td>Avaliação de Imóveis</td><td>A G C · R —</td><td><span class="fix">Corrigido:</span> o mesmo problema de botões da Perícia. Criar, editar e laudo em PDF OK.</td></tr>
+  <tr><td>Irrigação / Topografia</td><td>A G C · R —</td><td class="ok">Fluxo em etapas, PDF, pagamento e situação OK. O consultor fica só na leitura (regra original). Histórico e Excel novos.</td></tr>
+  <tr><td>Regularização</td><td>A G C · R —</td><td><span class="fix">Corrigido:</span> o PDF do protocolo quebrava em registro sem documentos. Protocolo RA automático, status e Excel OK.</td></tr>
+  <tr><td>Crédito Rural</td><td>A G C · R —</td><td><span class="fix">Corrigido:</span> o gerente via Excluir, mas o banco recusava. Proposta PRONAF, detalhes, PDF e status OK.</td></tr>
+  <tr><td>Contratos</td><td>A G · R C —</td><td><span class="fix">Vários erros corrigidos, ver seção 2.1.</span> Cadastro, aprovação, parcelas, aditivo, PDF e <strong>assinatura pelo link do cliente (sem login)</strong> testados.</td></tr>
+  <tr><td>Financeiro</td><td>A G · R C —</td><td><span class="fix">Corrigido:</span> o valor "1.500,00" era lido errado. Lançar, marcar pago, cancelar, Excel e PDF OK.</td></tr>
+  <tr><td>Estoque</td><td>A G · R C —</td><td><span class="fix">Corrigido:</span> o PDF quebrava com item incompleto e o gerente via Excluir. Cadastro, entrada e Excel OK.</td></tr>
+  <tr><td>Relatórios</td><td>A G · R C —</td><td><span class="fix">Corrigido:</span> um PDF quebrava com visitas sem cultura, e o Relatório de Eficiência inventava dados (seção 2.3). Excel e PDFs OK.</td></tr>
+  <tr><td>Documentos</td><td>A G · R C —</td><td class="ok">Dossiê e PDFs OK. Excluir documento: só A.</td></tr>
+  <tr><td>Veículos</td><td>A G · R C —</td><td><span class="fix">Corrigido:</span> o gerente via Excluir. Cadastro, status e viagem (com checagem de odômetro) OK.</td></tr>
+  <tr><td>Mensagens</td><td>A G R C</td><td class="ok">Escrever, enviar, ler, responder e mandar para a lixeira OK.</td></tr>
+  <tr><td>Ponto / RH</td><td>A G R C</td><td class="ok">Ponto (com intervalo mínimo), pedido de licença e de férias (5 a 30 dias), aprovação pelo RH e holerite OK. <span class="fix">Corrigido:</span> a folha aceita "3.500,00".</td></tr>
+  <tr><td>Usuários</td><td>A R · G C —</td><td><span class="fix">Corrigido:</span> ver seção 2.1. Cadastrar (com PDF de credenciais), bloquear e desbloquear OK.</td></tr>
+  <tr><td>Auditoria</td><td>A · G R C —</td><td class="ok">Filtros e CSV OK.</td></tr>
+  <tr><td>Meu Perfil</td><td>A G R C</td><td class="ok">Editar nome OK.</td></tr>
+  <tr><td>Mapa de Propriedades</td><td>—</td><td>Removido a seu pedido. O endereço antigo leva ao Início com aviso.</td></tr>
+  <tr><td>Portal do cliente</td><td>sem login</td><td class="ok">Link /assinar: abre sem login, mostra o nome da sua empresa e a assinatura torna o contrato "Ativo".</td></tr>
+</table>
+
+<h2 class="pb">2. O que foi corrigido</h2>
+<h3>2.1 Erros de funcionamento</h3>
+<ol>
+  <li><strong>Contratos: valor errado.</strong> "15.000,00" era gravado como R$ 15, e o aditivo "1.500,00" virava R$ 1,50. Agora o formato brasileiro é aceito (também no Financeiro, no Estoque e na Folha).</li>
+  <li><strong>Contratos: empresa errada.</strong> Modelos, PDF, minuta, WhatsApp e página de assinatura diziam "AgroGestão Pro Consultoria Agrícola Ltda." e um endereço inventado ("Av. Floresta, 1200"). Agora usam o nome de Configurar Marca, gravado no contrato. Contratos antigos também saem corrigidos no PDF.</li>
+  <li><strong>Contratos: minuta sem IA.</strong> O texto que entrava no contrato trazia "GERADO EM MODO OFFLINE", "Configure a chave de API Gemini", símbolos de formatação, valor R$ 0,00 e datas "2026-09-29". Agora sai uma minuta limpa.</li>
+  <li><strong>Contratos: tabela.</strong> A coluna Ações ficava fora da tela, e o tipo aparecia em código ("assistencia_tecnica"). Corrigido. Entram os tipos Assistência Técnica, Perícia, Avaliação e Outros, com modelo pronto.</li>
+  <li><strong>Contratos: métricas.</strong> "Total Assinados" e o gráfico ignoravam contratos assinados no papel e lançados como Ativos. A numeração era aleatória (podia repetir) e agora é sequencial: CT-2026-001, 002...</li>
+  <li><strong>Botões proibidos.</strong> Botões que davam erro de permissão foram escondidos para quem não pode usá-los: Perícia, Avaliação, Crédito, Financeiro, Estoque, Veículos e Redefinir Senha.</li>
+  <li><strong>Exclusão de usuário.</strong> A tela dizia "removido" antes de o servidor confirmar e ignorava falhas; também sobravam os dados de senha do excluído. Agora espera a confirmação, mostra o erro real e apaga as credenciais.</li>
+  <li><strong>Telas que quebravam com registros incompletos:</strong> PDF de visita, de protocolo, de estoque e de relatórios, e salvar resultados de análise.</li>
+  <li><strong>Alertas automáticos.</strong> O aviso "prazo de regularização" usava a data agendada em vez do prazo legal. Os dias saíam contados a mais. Avisos de contrato iam para todos, inclusive consultores. Protocolos do mesmo cliente se anulavam.</li>
+  <li><strong>Nomes e textos.</strong> Um nome real fixo como "gestor" padrão foi removido. Cargos agora aparecem em português. O aditivo avisa quando o texto está vazio e mostra desconto com sinal de menos.</li>
+</ol>
+
+<h3>2.2 Excluir só pelo Administrador (seu pedido)</h3>
+<p>Telas: os botões de excluir sumiram para os outros perfis em todas as abas. Banco: as regras passaram a recusar a exclusão de qualquer outro perfil. Testei cada coleção com cada perfil e só o Administrador consegue. Continuam liberados só os itens pessoais: as próprias mensagens, lembretes, avisos, modelos de e-mail e desistir do próprio pedido de férias pendente. Os demais usam "Cancelar".</p>
+
+<h3>2.3 Dados inventados removidos</h3>
+<ul>
+  <li><strong>Relatório de visita:</strong> saíram a tabela de clima fixa (27,4 °C, 62%...) e as fotos simuladas com "sanidade: Excelente". Agora mostra as fotos reais, a logo, o GPS e a próxima visita.</li>
+  <li><strong>Relatório de Eficiência:</strong> saíram as 12 fazendas fictícias, os resultados de solo preenchidos por fórmula e a cultura atribuída em rodízio. O "R² = 0,86" também era fixo e agora é calculado. A conclusão agora é calculada a partir das amostras.</li>
+</ul>
+
+<h2>3. Melhorias no código</h2>
+<ul>
+  <li><strong>288 importações sem uso removidas</strong> de 43 arquivos, com a correção automática do próprio TypeScript.</li>
+  <li><strong>Código morto removido:</strong> o endpoint de diagnóstico de pragas (página retirada) e os tipos de Pragas e Raio-X.</li>
+  <li><strong>Funções e componentes compartilhados</strong> no lugar de código repetido: <span class="mono">parseDecimalBR</span> (números em formato BR), <span class="mono">isManagementRole</span> e <span class="mono">canEditOwnRecord</span> (permissões iguais às do banco), <span class="mono">ExportExcelButton</span>, <span class="mono">useInitialSearch</span>, <span class="mono">ServiceKpiCards</span> e <span class="mono">ServiceFormParts</span>.</li>
+  <li><strong>Tratamento de erro:</strong> exclusão de usuário, PDF de visita e exportações passam a avisar a falha em vez de ignorá-la.</li>
+  <li>Não há TODO pendente no código. O uso de "any" continua em partes antigas (seção 5).</li>
+</ul>
+
+<h2>4. Funcionalidades novas</h2>
+<ul>
+  <li><strong>Busca geral de verdade.</strong> Antes procurava só nome de cliente. Agora cobre clientes (inclusive CPF sem pontos), serviços, protocolos RA, processos, contratos, lançamentos, placas, insumos e colaboradores. Ignora acentos e respeita o que cada perfil pode ver. Ao clicar, a página abre já filtrada no registro.</li>
+  <li><strong>Exportar Excel</strong> em Clientes, Análises, Agendamentos, Irrigação, Topografia, Regularização, Crédito Rural, Perícia, Avaliação e Usuários.</li>
+  <li><strong>Novos alertas automáticos:</strong> prazo de laudo pericial (para a gestão e o autor); parcelas de contrato a vencer ou vencidas e lançamentos vencidos (só gestão); lembrete para o técnico do agendamento do dia seguinte.</li>
+  <li><strong>Histórico de alterações</strong> (quem fez o quê e quando) em Irrigação, Topografia, Regularização e Crédito Rural, visível nos detalhes.</li>
+</ul>
+
+<h2>5. Pendente de decisão sua</h2>
+<table>
+  <tr><th style="width:4%">#</th><th>Decisão</th></tr>
+  <tr><td>1</td><td><strong>Publicar as regras novas</strong> (excluir só o Administrador): dois cliques em <span class="mono">5-publicar-regras.bat</span> e digitar SIM. Até lá, o banco real ainda aceita exclusões pelas regras antigas; as telas já escondem os botões.</td></tr>
+  <tr><td>2</td><td>O <strong>Consultor</strong> pode cadastrar Perícia, Avaliação, Visitas e Protocolos, mas <strong>não</strong> Análises, Irrigação, Topografia nem Crédito (tela em "Apenas Leitura"). Quer liberar?</td></tr>
+  <tr><td>3</td><td>O <strong>RH</strong> deve poder redefinir a senha dos consultores? Hoje só o Administrador pode.</td></tr>
+  <tr><td>4</td><td><strong>Relatório de Eficiência:</strong> a produtividade é uma estimativa por fórmula, não colheita registrada. Manter (agora com aviso), tirar, ou passar a registrar a colheita real?</td></tr>
+  <tr><td>5</td><td><strong>WhatsApp da agenda</strong> aparece como "simulado": não há provedor configurado, então o cliente não é avisado de verdade. Contratar um provedor?</td></tr>
+  <tr><td>6</td><td><strong>Aditivo de contrato</strong> altera o valor total, mas não redistribui as parcelas. Quer que redistribua automaticamente?</td></tr>
+  <tr><td>7</td><td><strong>Grande mudança, não feita:</strong> trocar os tipos "any" que restam por tipos reais nas páginas antigas (Contratos, RH, Relatórios) e dividir essas páginas, que têm de 2.000 a 3.300 linhas. Recomendo fazer por etapas.</td></tr>
+</table>
+
+<div class="footer"><span>{{EMPRESA}} — {{FRASE}}</span><span>Relatório gerado em {{DATA}}</span></div>
+</body>
+</html>
