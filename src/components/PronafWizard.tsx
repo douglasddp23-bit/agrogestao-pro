@@ -721,7 +721,7 @@ export default function PronafWizard({ isOpen, onClose, clients, existingProject
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.96, y: 10 }}
           onClick={(e) => e.stopPropagation()}
-          className={cn('bg-white rounded-2xl shadow-2xl w-full overflow-hidden max-h-[92vh] flex flex-col transition-all', step === 1 ? 'max-w-3xl' : 'max-w-6xl')}
+          className={cn('bg-white rounded-2xl shadow-2xl w-full overflow-hidden max-h-[92vh] flex flex-col transition-all', step === 1 ? 'max-w-2xl' : 'max-w-6xl')}
         >
           {/* Header */}
           <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 px-6 py-5 flex items-center justify-between shrink-0">
@@ -753,34 +753,31 @@ export default function PronafWizard({ isOpen, onClose, clients, existingProject
           <div className="p-6 overflow-y-auto custom-scrollbar">
             {step === 1 && (
               <div className="flex flex-col gap-6">
-                {/* 1. Banco */}
+                {/* 1. Banco e 2. Programa — listas de seleção lado a lado */}
                 <div>
-                  <p className="text-sm font-bold text-slate-700 mb-2">1. Banco financiador</p>
-                  <div className="flex flex-wrap gap-2">
-                    {BANCOS_FINANCIADORES.map(b => (
-                      <button key={b} type="button" onClick={() => updateDados({ banco: b })}
-                        className={cn('px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all',
-                          proposta.dados.banco === b ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm' : 'bg-white border-slate-200 text-slate-600 hover:border-emerald-300')}>
-                        {b}
-                      </button>
-                    ))}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-sm font-bold text-slate-700 mb-1.5 block">1. Banco financiador</label>
+                      <select value={proposta.dados.banco} onChange={(e) => updateDados({ banco: e.target.value })}
+                        className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 outline-none text-sm font-medium bg-white">
+                        <option value="">Selecione o banco...</option>
+                        {BANCOS_FINANCIADORES.map(b => <option key={b} value={b}>{b}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-sm font-bold text-slate-700 mb-1.5 block">2. Programa de crédito</label>
+                      <select value={proposta.dados.programaId} onChange={(e) => updateDados({ programaId: e.target.value })}
+                        className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 outline-none text-sm font-medium bg-white">
+                        <option value="">Selecione o programa...</option>
+                        {(['Pronaf', 'Pronamp', 'Demais produtores'] as const).map(grupo => (
+                          <optgroup key={grupo} label={grupo}>
+                            {CREDIT_PROGRAMS.filter(p => p.grupo === grupo).map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </div>
                   </div>
-                </div>
-
-                {/* 2. Programa */}
-                <div>
-                  <p className="text-sm font-bold text-slate-700 mb-2">2. Programa de crédito</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {CREDIT_PROGRAMS.map(p => (
-                      <button key={p.id} type="button" onClick={() => updateDados({ programaId: p.id })}
-                        className={cn('text-left px-3.5 py-2.5 rounded-xl border transition-all',
-                          proposta.dados.programaId === p.id ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-100' : 'bg-white border-slate-200 hover:border-emerald-300')}>
-                        <p className="text-xs font-bold text-slate-800">{p.nome}</p>
-                        <p className="text-[10px] text-slate-500 mt-0.5">{p.finalidade} · Juros: {p.juros.split(' (')[0].replace(/^Até/, 'até')}</p>
-                      </button>
-                    ))}
-                  </div>
-                  {program && <div className="mt-3"><ProgramConditions program={program} /></div>}
+                  {program && <div className="mt-3"><ProgramConditions program={program} compact /></div>}
                 </div>
 
                 {/* 3. Cliente */}
