@@ -861,9 +861,9 @@ export default function Scheduling() {
     }
   };
 
-  // Excluir: gestão (Admin/Gerente) ou quem criou o agendamento — igual à regra do banco.
+  // Excluir: só o Administrador (os demais usam "Cancelar").
   const canDeleteAppointment = (app: Appointment) =>
-    !app.isVirtual && (isManagement || app.createdBy === user?.uid);
+    !app.isVirtual && (user?.effectiveRole ?? user?.role) === 'admin';
 
   const handleDeleteAppointment = async () => {
     const app = appointmentToDelete;

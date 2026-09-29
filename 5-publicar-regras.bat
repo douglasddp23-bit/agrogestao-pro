@@ -2,7 +2,7 @@
 cd /d "%~dp0"
 echo ============================================================
 echo  Publicar as regras de seguranca do banco (Firestore)
-echo  - Contratos e Financeiro: so Gerente e Administrador
+echo  - Excluir registros: somente o Administrador
 echo  A versao atual sera guardada antes, para poder desfazer.
 echo ============================================================
 echo.

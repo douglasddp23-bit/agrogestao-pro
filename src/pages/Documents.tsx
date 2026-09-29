@@ -36,8 +36,10 @@ import { useLocation } from 'react-router-dom';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { getPdfBranding } from '../lib/pdfBranding';
 import { useInitialSearch } from '../hooks/useInitialSearch';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Documents() {
+  const { user } = useAuth();
   const location = useLocation();
   const [searchTerm, setSearchTerm] = useState('');
   useInitialSearch(setSearchTerm); // termo vindo da Busca Global
@@ -1462,12 +1464,14 @@ export default function Documents() {
                           >
                             <Download className="w-4 h-4" />
                           </a>
+                          {(user?.effectiveRole ?? user?.role) === 'admin' && (
                           <button 
                             onClick={() => setIsDeleteModalOpen(doc)}
                             className="p-2 hover:bg-white rounded-full text-slate-400 hover:text-rose-500 transition-colors border border-transparent hover:border-slate-150 shadow-sm cursor-pointer"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
+                          )}
                         </div>
                       </div>
                     ))}

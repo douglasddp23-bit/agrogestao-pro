@@ -2785,6 +2785,7 @@ export default function Clients() {
                                       <Download className="w-3.5 h-3.5" />
                                     </a>
                                   )}
+                                  {(tempFile || (user?.effectiveRole ?? user?.role) === 'admin') && (
                                   <button
                                     type="button"
                                     onClick={async () => {
@@ -2826,6 +2827,7 @@ export default function Clients() {
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
+                                  )}
                                 </div>
                               ) : (
                                 <label className="cursor-pointer px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1">

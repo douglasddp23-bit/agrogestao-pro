@@ -166,8 +166,9 @@ export const PERMISSIONS = {
   // Igual à regra do banco (firestore.rules: clients → delete só isAdmin). Antes o
   // Gerente via o botão "Excluir", mas o banco recusava e aparecia erro.
   canDeleteClient:   (role: UserRole, _hasActiveServices = false) => role === 'admin',
-  canDeleteAnalysis: (role: UserRole, status?: string) => role === 'admin' || (role === 'manager' && status === 'draft'),
-  canDeleteVisit:    (role: UserRole, status?: string) => role === 'admin' || (role === 'manager' && status === 'agendada'),
+  // Excluir: só Administrador (decisão do dono, 29/09/2026)
+  canDeleteAnalysis: (role: UserRole, _status?: string) => role === 'admin',
+  canDeleteVisit:    (role: UserRole, _status?: string) => role === 'admin',
   canCancelSchedule: (role: UserRole, isOwner = false) => hasRole(role, 'manager') || isOwner,
   canDeleteSchedule: (role: UserRole) => role === 'admin',
 };

@@ -5,6 +5,9 @@ service cloud.firestore {
     // REGRAS DE SEGURANÇA — AgroGestão Pro
     // Princípios:
     //  • Tudo bloqueado por padrão; cada coleção libera só o necessário.
+    //  • EXCLUIR registros é exclusivo do Administrador (decisão de 29/09/2026);
+    //    ficam de fora só itens pessoais (as próprias mensagens, lembretes, avisos,
+    //    modelos de e-mail e desistir do próprio pedido de férias pendente).
     //  • O cargo vem SÓ do token (custom claim "role"), que só o servidor grava
     //    para contas criadas por um administrador. Não há mais e-mail "mágico"
     //    de administrador (admin@agrogestao.com.br não existia e qualquer um
@@ -209,14 +212,14 @@ service cloud.firestore {
         && incoming().size is int && incoming().size <= 2097152
         && incoming().chunks is int && incoming().chunks >= 1 && incoming().chunks <= 4;
       // Antes qualquer funcionário apagava qualquer arquivo.
-      allow delete: if isValidId(fileId) && (isManagement() || isOwnerOf('createdBy'));
+      allow delete: if isValidId(fileId) && (isAdmin() || isOwnerOf('createdBy'));
 
       match /chunks/{chunkId} {
         allow read: if isStaff();
         // Só grava pedaços do PRÓPRIO arquivo (criado na mesma operação)
         allow create: if isStaff() && incoming().data is string && incoming().data.size() <= 750000
           && getAfter(/databases/$(database)/documents/file_blobs/$(fileId)).data.createdBy == request.auth.uid;
-        allow delete: if isManagement()
+        allow delete: if isAdmin()
           || (isStaff() && get(/databases/$(database)/documents/file_blobs/$(fileId)).data.createdBy == request.auth.uid);
       }
     }
@@ -284,7 +287,7 @@ service cloud.firestore {
       allow create: if isStaff() && isValidId(leaveId) && incoming().userId == request.auth.uid
         && incoming().status == 'pending' && strMax(incoming().get('reason', ''), 1000);
       allow update: if isManagement() && isValidId(leaveId) && request.auth.uid != existing().userId;
-      allow delete: if isManagement() && isValidId(leaveId);
+      allow delete: if isAdmin() && isValidId(leaveId);
     }
 
     // --- Folha de pagamento (salário: dado sensível) ---
@@ -292,7 +295,7 @@ service cloud.firestore {
       allow list: if isHR() || (isSignedIn() && existing().employeeId == request.auth.uid);
       allow get: if isValidId(payrollId) && (isHR() || (isSignedIn() && existing().employeeId == request.auth.uid));
       allow create, update: if isHR() && isValidId(payrollId);
-      allow delete: if isHR() && isValidId(payrollId);
+      allow delete: if isAdmin() && isValidId(payrollId);
     }
 
     // --- Reembolso de despesas ---
@@ -307,7 +310,7 @@ service cloud.firestore {
         (existing().createdBy == request.auth.uid && existing().status == 'pending_approval'
           && !incoming().diff(existing()).affectedKeys().hasAny(['status', 'approvedBy', 'approvedAt', 'approvalNotes', 'createdBy']))
       );
-      allow delete: if isManagement() && isValidId(expenseId);
+      allow delete: if isAdmin() && isValidId(expenseId);
     }
 
     // --- Modelos de contrato ---
@@ -324,7 +327,7 @@ service cloud.firestore {
       allow get: if isStaff() && isValidId(valuationId);
       allow create: if isStaff() && isValidId(valuationId) && incoming().createdBy == request.auth.uid;
       allow update: if isStaff() && isValidId(valuationId) && (isManagement() || isOwnerOf('createdBy')) && keepsField('createdBy');
-      allow delete: if isManagement() && isValidId(valuationId);
+      allow delete: if isAdmin() && isValidId(valuationId);
     }
 
     // --- Perícias judiciais ---
@@ -333,7 +336,7 @@ service cloud.firestore {
       allow get: if isStaff() && isValidId(expertiseId);
       allow create: if isStaff() && isValidId(expertiseId) && incoming().createdBy == request.auth.uid;
       allow update: if isStaff() && isValidId(expertiseId) && (isManagement() || isOwnerOf('createdBy')) && keepsField('createdBy');
-      allow delete: if isManagement() && isValidId(expertiseId);
+      allow delete: if isAdmin() && isValidId(expertiseId);
     }
 
     // --- Documentos do dossiê ---
@@ -343,7 +346,7 @@ service cloud.firestore {
       allow create: if isStaff() && isValidId(docId) && isValidDoc(incoming());
       allow update: if isStaff() && isValidId(docId) && isValidDoc(incoming()) && keepsField('clientId');
       // Antes qualquer funcionário apagava qualquer documento de qualquer cliente.
-      allow delete: if isManagement() && isValidId(docId);
+      allow delete: if isAdmin() && isValidId(docId);
     }
 
     function isValidDoc(data) {
@@ -362,7 +365,7 @@ service cloud.firestore {
       allow get: if isStaff() && isValidId(visitId);
       allow create: if isStaff() && isValidId(visitId) && incoming().technicianId == request.auth.uid;
       allow update: if isStaff() && isValidId(visitId) && (isManagement() || isOwnerOf('technicianId')) && keepsField('technicianId');
-      allow delete: if isManagement() && isValidId(visitId);
+      allow delete: if isAdmin() && isValidId(visitId);
     }
 
     // --- Financeiro (só Gerente e Administrador lêem e editam) ---
@@ -399,8 +402,8 @@ service cloud.firestore {
         incoming().signedAt is string &&
         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'signatureBase64', 'signedByName', 'signedAt', 'updatedAt'])
       ));
-      // Antes qualquer consultor (e depois o RH) podia excluir contratos.
-      allow delete: if isManager() && isValidId(id);
+      // Antes qualquer consultor (e depois o RH/Gerente) podia excluir contratos.
+      allow delete: if isAdmin() && isValidId(id);
     }
 
     // --- Pragas e doenças ---
@@ -409,7 +412,7 @@ service cloud.firestore {
       allow get: if isStaff() && isValidId(id);
       allow create: if isStaff() && isValidId(id) && incoming().reportedById == request.auth.uid;
       allow update: if isStaff() && isValidId(id) && (isManagement() || isOwnerOf('reportedById')) && keepsField('reportedById');
-      allow delete: if isManagement() && isValidId(id);
+      allow delete: if isAdmin() && isValidId(id);
     }
 
     // --- Estoque ---
@@ -438,7 +441,7 @@ service cloud.firestore {
       allow get: if isStaff() && isValidId(id);
       allow create: if isStaff() && isValidId(id);
       allow update: if isStaff() && isValidId(id);
-      allow delete: if isManagement() && isValidId(id);
+      allow delete: if isAdmin() && isValidId(id);
     }
 
     // --- Veículos ---
@@ -454,7 +457,7 @@ service cloud.firestore {
       allow get: if isStaff() && isValidId(id);
       allow create: if isStaff() && isValidId(id) && incoming().driverId == request.auth.uid;
       allow update: if isStaff() && isValidId(id) && (isManagement() || isOwnerOf('driverId')) && keepsField('driverId');
-      allow delete: if isManagement() && isValidId(id);
+      allow delete: if isAdmin() && isValidId(id);
     }
 
     // --- Agenda (eventos avulsos) ---
@@ -485,7 +488,7 @@ service cloud.firestore {
         // o técnico designado registra check-in/check-out da própria visita
         (isOwnerOf('technicianId') && incoming().diff(existing()).affectedKeys().hasOnly(['checkInLocation', 'checkOutLocation', 'status']))
       );
-      allow delete: if (isManagement() || isOwnerOf('createdBy')) && isValidId(appointmentId);
+      allow delete: if isAdmin() && isValidId(appointmentId);
     }
 
     function isValidAppointment(data) {
@@ -516,7 +519,7 @@ service cloud.firestore {
       allow get: if isStaff() && isValidId(channelId);
       allow create: if isStaff() && isValidId(channelId) && incoming().createdBy == request.auth.uid && strMax(incoming().get('name', ''), 80);
       allow update: if isStaff() && isValidId(channelId) && (isOwnerOf('createdBy') || isAdmin()) && keepsField('createdBy');
-      allow delete: if isStaff() && isValidId(channelId) && (isOwnerOf('createdBy') || isAdmin());
+      allow delete: if isAdmin() && isValidId(channelId);
     }
 
     match /channel_messages/{messageId} {
