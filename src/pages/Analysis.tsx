@@ -590,7 +590,7 @@ export default function Analysis({ typeFilter }: AnalysisProps) {
 
     if (elementsToValidate) {
       elementsFilled = elementsToValidate.every(el => 
-        waivedFields.includes(el.id) || (resultsForm[el.id] && resultsForm[el.id].trim() !== '')
+        waivedFields.includes(el.id) || (resultsForm[el.id] != null && String(resultsForm[el.id]).trim() !== '')
       );
     } else {
       // For general types like Documentation, Credit, etc., check description

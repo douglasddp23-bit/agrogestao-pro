@@ -127,7 +127,7 @@ export default function Reports() {
       v.propertyName,
       v.technicianName,
       v.objective,
-      v.crops.map(c => c.name).join(', ')
+      (v.crops || []).map(c => c.name).join(', ')
     ]);
 
     autoTable(doc, {
@@ -248,7 +248,7 @@ export default function Reports() {
     
     visits.forEach(v => {
       if (v.crops && Array.isArray(v.crops)) {
-        v.crops.forEach(c => {
+        (v.crops || []).forEach(c => {
           const key = (c.name || '').trim().toLowerCase();
           if (!key) return;
           
@@ -774,7 +774,7 @@ export default function Reports() {
         formatDate(v.visitDate),
         v.propertyName,
         v.technicianName,
-        v.crops.map(c => `${c.name} (${c.stage})`).join(', ') || 'Sem Grãos',
+        (v.crops || []).map(c => `${c.name} (${c.stage})`).join(', ') || 'Sem Grãos',
         v.objective
       ]);
 
@@ -916,7 +916,7 @@ export default function Reports() {
 - Total de Visitas de Campo Registradas: ${visits.length} vistorias físicas.
 - Total de Projetos Contratuais Ativos: ${contracts.length} acordos jurídicos.
 - Total de Faturamento Consolidado em Caixa: ${formatCurrency(financials.reduce((sum, f) => sum + f.value, 0))}.
-- Lista de Grãos/Culturas sob Monitoramento: ${Array.from(new Set(visits.flatMap(v => v.crops.map(c => c.name)))).join(', ') || 'Nenhum'}.
+- Lista de Grãos/Culturas sob Monitoramento: ${Array.from(new Set(visits.flatMap(v => (v.crops || []).map(c => c.name)))).join(', ') || 'Nenhum'}.
 
 * ÚLTIMAS VISITAS REALIZADAS *:
 ${visits.slice(0, 3).map(v => `- Data: ${v.visitDate}, Cliente: ${v.clientName}, Local: ${v.propertyName}, Objetivo: ${v.objective}. Recomendações: ${v.recommendations || 'Simples vistoria'}`).join('\n')}

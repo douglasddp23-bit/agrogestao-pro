@@ -76,21 +76,7 @@ const METRIC_CONFIGS: Record<string, { label: string; unit: string; minIdeal: nu
   ph: { label: 'pH (CaCl₂)', unit: '-', minIdeal: 5.5, maxIdeal: 6.5, step: 0.2, xDomain: [4.0, 7.5] },
 };
 
-// Seed dataset simulating agronomic field correlation samples when database has few records
-const SEED_SAMPLES: EfficiencySamplePoint[] = [
-  { id: 'S1', clientName: 'Fazenda Santa Maria', propertyName: 'Talhão Ouro', crop: 'Soja', v_percent: 68, p_mg: 24, k_cmol: 0.38, mo_g: 32, ph: 6.2, expectedYield: 88, potentialYield: 92, efficiencyIndex: 95.6, status: 'Otimizado', recommendation: 'Manter adubação de reposição e monitoramento foliar.' },
-  { id: 'S2', clientName: 'Agropecuária Boa Vista', propertyName: 'Gleba Sul', crop: 'Soja', v_percent: 52, p_mg: 12, k_cmol: 0.20, mo_g: 22, ph: 5.2, expectedYield: 62, potentialYield: 85, efficiencyIndex: 72.9, status: 'Limitado', recommendation: 'Calagem imediata para elevar V% a 65% e fosfatagem em área total.' },
-  { id: 'S3', clientName: 'Fazenda Alvorada', propertyName: 'Pivô Central 01', crop: 'Milho', v_percent: 65, p_mg: 28, k_cmol: 0.42, mo_g: 35, ph: 6.0, expectedYield: 145, potentialYield: 155, efficiencyIndex: 93.5, status: 'Otimizado', recommendation: 'Manejo nutricional equilibrado para alta produtividade em irrigação.' },
-  { id: 'S4', clientName: 'Sítio Novo Horizonte', propertyName: 'Talhão 04', crop: 'Soja', v_percent: 44, p_mg: 8, k_cmol: 0.15, mo_g: 18, ph: 4.8, expectedYield: 48, potentialYield: 80, efficiencyIndex: 60.0, status: 'Deficiente', recommendation: 'Necessita correção severa de acidez e gesso agrícola para aprofundamento radicular.' },
-  { id: 'S5', clientName: 'Fazenda Progresso', propertyName: 'Gleba Cerrado', crop: 'Soja', v_percent: 61, p_mg: 18, k_cmol: 0.30, mo_g: 28, ph: 5.8, expectedYield: 78, potentialYield: 85, efficiencyIndex: 91.7, status: 'Adequado', recommendation: 'Adubação de manutenção atende plenamente as exigências do cultivo.' },
-  { id: 'S6', clientName: 'Fazenda Primavera', propertyName: 'Talhão Amambai', crop: 'Algodão', v_percent: 72, p_mg: 32, k_cmol: 0.48, mo_g: 38, ph: 6.4, expectedYield: 310, potentialYield: 330, efficiencyIndex: 93.9, status: 'Otimizado', recommendation: 'Excelente saturação de bases para o desenvolvimento de fibras longas.' },
-  { id: 'S7', clientName: 'Agrícola Sapezal', propertyName: 'Setor Norte', crop: 'Milho', v_percent: 58, p_mg: 16, k_cmol: 0.26, mo_g: 24, ph: 5.5, expectedYield: 118, potentialYield: 140, efficiencyIndex: 84.2, status: 'Adequado', recommendation: 'Suplementação de Nitrogênio em cobertura acompanhada de Potássio.' },
-  { id: 'S8', clientName: 'Fazenda Terra Rica', propertyName: 'Talhão Baixada', crop: 'Café', v_percent: 64, p_mg: 22, k_cmol: 0.45, mo_g: 40, ph: 6.1, expectedYield: 52, potentialYield: 58, efficiencyIndex: 89.6, status: 'Otimizado', recommendation: 'Balanço Ca/Mg/K ideal para enchimento de grãos.' },
-  { id: 'S9', clientName: 'Produtor João Silva', propertyName: 'Sítio Recanto', crop: 'Feijão', v_percent: 55, p_mg: 14, k_cmol: 0.22, mo_g: 25, ph: 5.4, expectedYield: 38, potentialYield: 48, efficiencyIndex: 79.1, status: 'Limitado', recommendation: 'Aplicação de Boro e Zinco via foliar para prevenir abortamento floral.' },
-  { id: 'S10', clientName: 'Fazenda Chapadão', propertyName: 'Talhão Mairá', crop: 'Soja', v_percent: 74, p_mg: 38, k_cmol: 0.52, mo_g: 42, ph: 6.5, expectedYield: 92, potentialYield: 95, efficiencyIndex: 96.8, status: 'Otimizado', recommendation: 'Solo em altíssimo teto produtivo. Evitar adubação excessiva de K.' },
-  { id: 'S11', clientName: 'Agro Vale do Araguaia', propertyName: 'Gleba 02', crop: 'Milho', v_percent: 48, p_mg: 10, k_cmol: 0.18, mo_g: 19, ph: 5.0, expectedYield: 95, potentialYield: 135, efficiencyIndex: 70.3, status: 'Deficiente', recommendation: 'Limitante grave de Fósforo e acidez trocável. Recomendada calagem em taxa variável.' },
-  { id: 'S12', clientName: 'Fazenda Rio Verde', propertyName: 'Pivô 03', crop: 'Algodão', v_percent: 66, p_mg: 26, k_cmol: 0.36, mo_g: 31, ph: 5.9, expectedYield: 295, potentialYield: 320, efficiencyIndex: 92.1, status: 'Adequado', recommendation: 'Ajuste fino de micronutrientes Manganês e Boro.' },
-];
+// Antes havia aqui 12 fazendas fictícias exibidas quando o banco tinha poucas análises.
 
 export default function EfficiencyReport({ analyses = [], clients = [] }: EfficiencyReportProps) {
   const [selectedMetric, setSelectedMetric] = useState<string>('v_percent');
@@ -102,21 +88,21 @@ export default function EfficiencyReport({ analyses = [], clients = [] }: Effici
   const dataset: EfficiencySamplePoint[] = useMemo(() => {
     const soilAnalyses = analyses.filter(a => a.type === 'soil' && a.results && Object.keys(a.results).length > 0);
     
-    if (soilAnalyses.length === 0) {
-      return SEED_SAMPLES;
-    }
+    if (soilAnalyses.length === 0) return [];
 
     const parsedFromDB: EfficiencySamplePoint[] = soilAnalyses.map((a, idx) => {
       const res = a.results || {};
-      const v = Number(res.v_percent) || Number(res.v) || (45 + (idx * 7) % 35);
-      const p = Number(res.p) || (10 + (idx * 5) % 30);
-      const k = Number(res.k) || (0.15 + (idx * 0.08) % 0.4);
-      const mo = Number(res.mo) || (20 + (idx * 4) % 25);
-      const ph = Number(res.ph) || (4.8 + (idx * 0.3) % 2.0);
+      const num = (...vals: any[]) => { for (const x of vals) { const n = parseFloat(String(x ?? '').replace(',', '.')); if (Number.isFinite(n)) return n; } return NaN; };
+      const v = num(res.v_percent, res.v);
+      const p = num(res.p);
+      const k = num(res.k);
+      const mo = num(res.mo);
+      const ph = num(res.ph);
       
       // Determine crop type and expected yield from analysis or client properties
-      const cropList: ('Soja' | 'Milho' | 'Algodão' | 'Café' | 'Feijão')[] = ['Soja', 'Milho', 'Algodão', 'Café', 'Feijão'];
-      const crop = cropList[idx % cropList.length];
+      const cropRaw = String(res.crop || res.cultura || (a as any).crop || '').trim();
+      const known = ['Soja', 'Milho', 'Algodão', 'Café', 'Feijão'];
+      const crop = (known.find(c => c.toLowerCase() === cropRaw.toLowerCase()) || (cropRaw ? cropRaw : 'Não informada')) as any;
 
       let expectedYield = 70;
       let potentialYield = 90;
@@ -147,8 +133,8 @@ export default function EfficiencyReport({ analyses = [], clients = [] }: Effici
 
       return {
         id: a.id || `DB-${idx}`,
-        clientName: a.clientName || 'Produtor Rural',
-        propertyName: a.propertyName || 'Fazenda Registrada',
+        clientName: a.clientName || '—',
+        propertyName: a.propertyName || '—',
         crop,
         v_percent: Math.round(v * 10) / 10,
         p_mg: Math.round(p * 10) / 10,
@@ -163,12 +149,8 @@ export default function EfficiencyReport({ analyses = [], clients = [] }: Effici
       };
     });
 
-    // Merge if DB has very few samples so chart scatter remains informative
-    if (parsedFromDB.length < 5) {
-      return [...parsedFromDB, ...SEED_SAMPLES.slice(parsedFromDB.length)];
-    }
-
-    return parsedFromDB;
+    // Só entram amostras com V% e P informados (base da estimativa)
+    return parsedFromDB.filter(s => Number.isFinite(s.v_percent) && Number.isFinite(s.p_mg));
   }, [analyses]);
 
   // Filter dataset based on selected crop and search query
@@ -185,7 +167,7 @@ export default function EfficiencyReport({ analyses = [], clients = [] }: Effici
 
   // Scatter chart data prepared for Recharts
   const scatterData = useMemo(() => {
-    return filteredData.map(item => {
+    return filteredData.filter(item => Number.isFinite((item as any)[selectedMetric])).map(item => {
       let xVal = item.v_percent;
       if (selectedMetric === 'p_mg') xVal = item.p_mg;
       else if (selectedMetric === 'k_cmol') xVal = item.k_cmol;
@@ -203,34 +185,25 @@ export default function EfficiencyReport({ analyses = [], clients = [] }: Effici
 
   // Calculate Agronomic Statistics (KPIs)
   const stats = useMemo(() => {
-    if (filteredData.length === 0) {
+    // Só amostras com o elemento escolhido informado (nada é preenchido por estimativa)
+    const pts = filteredData.filter(item => Number.isFinite((item as any)[selectedMetric]));
+    if (pts.length === 0) {
       return { totalSamples: 0, avgMetric: 0, avgYield: 0, avgEfficiency: 0, r2Correlation: 0 };
     }
-
-    const totalSamples = filteredData.length;
-    let metricSum = 0;
-    let yieldSum = 0;
-    let effSum = 0;
-
-    filteredData.forEach(item => {
-      if (selectedMetric === 'v_percent') metricSum += item.v_percent;
-      else if (selectedMetric === 'p_mg') metricSum += item.p_mg;
-      else if (selectedMetric === 'k_cmol') metricSum += item.k_cmol;
-      else if (selectedMetric === 'mo_g') metricSum += item.mo_g;
-      else if (selectedMetric === 'ph') metricSum += item.ph;
-
-      yieldSum += item.expectedYield;
-      effSum += item.efficiencyIndex;
-    });
-
-    const avgMetric = (metricSum / totalSamples).toFixed(1);
-    const avgYield = Math.round(yieldSum / totalSamples);
-    const avgEfficiency = (effSum / totalSamples).toFixed(1);
-
-    // Approximate R² correlation calculation for soil metric vs productivity
-    const r2Correlation = Number(avgEfficiency) >= 88 ? 0.86 : 0.74;
-
-    return { totalSamples, avgMetric, avgYield, avgEfficiency, r2Correlation };
+    const xs = pts.map(item => (item as any)[selectedMetric] as number);
+    const ys = pts.map(item => item.expectedYield);
+    const n = pts.length;
+    const mean = (arr: number[]) => arr.reduce((s, v) => s + v, 0) / arr.length;
+    const mx = mean(xs), my = mean(ys);
+    const avgMetric = mx.toFixed(1);
+    const avgYield = Math.round(my);
+    const avgEfficiency = mean(pts.map(item => item.efficiencyIndex)).toFixed(1);
+    // R² real (Pearson ao quadrado) entre o elemento do solo e a produtividade estimada.
+    // Antes era um número fixo (0,86 ou 0,74) escolhido pela média de eficiência.
+    let sxy = 0, sxx = 0, syy = 0;
+    for (let i = 0; i < n; i++) { sxy += (xs[i] - mx) * (ys[i] - my); sxx += (xs[i] - mx) ** 2; syy += (ys[i] - my) ** 2; }
+    const r2Correlation = n >= 3 && sxx > 0 && syy > 0 ? Math.round(((sxy * sxy) / (sxx * syy)) * 100) / 100 : 0;
+    return { totalSamples: n, avgMetric, avgYield, avgEfficiency, r2Correlation };
   }, [filteredData, selectedMetric]);
 
   const currentConfig = METRIC_CONFIGS[selectedMetric] || METRIC_CONFIGS.v_percent;
@@ -312,7 +285,7 @@ export default function EfficiencyReport({ analyses = [], clients = [] }: Effici
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Análise de correlação entre fertilidade de solo e curva de produtividade esperada por cultura
+              Produtividade <strong>estimada por modelo</strong> a partir de V% e P das análises de solo reais (não é colheita medida). Amostras sem esses resultados não entram.
             </p>
           </div>
         </div>

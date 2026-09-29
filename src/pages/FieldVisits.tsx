@@ -67,7 +67,7 @@ import iconRetina from 'leaflet/dist/images/marker-icon-2x.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { ClipboardList as PageIcon } from 'lucide-react';
-import { getPdfBranding } from '../lib/pdfBranding';
+import { getPdfBranding, drawBrandBanner, drawBrandFooter } from '../lib/pdfBranding';
 
 let DefaultIcon = L.icon({
     iconUrl: iconMarker,
@@ -597,200 +597,106 @@ const { url: downloadUrl } = await saveFile(item.file, filename);
 
   // Generate complete visit PDF Report
   const handleGeneratePDF = (visit: FieldVisit) => {
-    const doc = new jsPDF();
-    
-    // Header Style
-    doc.setFillColor(6, 95, 70); // Deep Emerald
-    doc.rect(0, 0, 210, 42, 'F');
+    // Só dados reais da visita. (Antes o relatório imprimia uma tabela de clima
+    // fixa — "27,4 °C", "62 %" — e fotos simuladas com "sanidade: Excelente"
+    // quando não havia fotos, como se fossem dados coletados.)
+    try {
+      const doc = new jsPDF();
+      drawBrandBanner(doc, { height: 32, subtitle: 'Relatório Técnico & Diário de Visita de Campo' });
+      doc.setTextColor(100, 116, 139);
+      doc.setFontSize(8);
+      doc.text(`Emitido em: ${new Date().toLocaleDateString('pt-BR')}  ·  ID: ${visit.id}`, 195, 38, { align: 'right' });
 
-    doc.setTextColor(255, 255, 255);
-    doc.setFont("Helvetica", "bold");
-    doc.setFontSize(22);
-    doc.text(getPdfBranding().companyName, 15, 18);
-    doc.setFontSize(10);
-    doc.setFont("Helvetica", "normal");
-    doc.text('Relatório Técnico & Diário de Visita de Campo', 15, 28);
-    doc.text(`ID: ${visit.id}`, 140, 28);
-    doc.text(`Emitido em: ${new Date().toLocaleDateString('pt-BR')}`, 140, 34);
-
-    // Metadata section
-    doc.setTextColor(51, 65, 85);
-    doc.setFontSize(11);
-    doc.setFont('Helvetica', 'bold');
-    doc.text('INFORMAÇÕES DA VISITA', 15, 52);
-
-    doc.setFont('Helvetica', 'normal');
-    doc.setFontSize(9);
-    const metaData = [
-      ['Produtor / Cliente:', visit.clientName, 'Data da Visita:', formatDate(visit.visitDate)],
-      ['Propriedade:', visit.propertyName, 'Técnico Responsável:', visit.technicianName],
-      ['Objetivo Principal:', visit.objective, 'Origem Registro:', visit.createdByDevice === 'mobile' ? 'Aplicativo Mobile' : 'Portal Web WebApp'],
-    ];
-
-    autoTable(doc, {
-      startY: 56,
-      body: metaData,
-      theme: 'plain',
-      styles: { cellPadding: 2, fontSize: 8.5 },
-      columnStyles: {
-        0: { fontStyle: 'bold', cellWidth: 40 },
-        1: { cellWidth: 60 },
-        2: { fontStyle: 'bold', cellWidth: 40 },
-        3: { cellWidth: 50 },
-      }
-    });
-
-    // CLIMATE DATA COLLECTED PANEL
-    const climateY = (doc as any).lastAutoTable.finalY + 8;
-    doc.setFontSize(11);
-    doc.setFont('Helvetica', 'bold');
-    doc.text('DADOS CLIMÁTICOS COLETADOS', 15, climateY);
-
-    // Dynamic weather simulation corresponding to the visit parameters
-    const climateData = [
-      ['Temperatura Média:', '27.4 °C', 'Umidade Relativa Ar:', '62 %'],
-      ['Velocidade do Vento:', '12.8 km/h (SE)', 'Precipitação Acumulada:', '0.0 mm'],
-      ['Pressão Atmosférica:', '1014 hPa', 'Radiação Solar Ativa:', '845 W/m²'],
-      ['Temperatura do Solo:', '22.1 °C', 'Orvalho (Dew Point):', '19.5 °C']
-    ];
-
-    autoTable(doc, {
-      startY: climateY + 4,
-      body: climateData,
-      theme: 'striped',
-      styles: { cellPadding: 2.2, fontSize: 8 },
-      columnStyles: {
-        0: { fontStyle: 'bold', cellWidth: 45, fillColor: [241, 245, 249] },
-        1: { cellWidth: 45 },
-        2: { fontStyle: 'bold', cellWidth: 45, fillColor: [241, 245, 249] },
-        3: { cellWidth: 45 }
-      }
-    });
-
-    // Crops Table
-    const lastY = (doc as any).lastAutoTable.finalY + 8;
-    doc.setFontSize(11);
-    doc.setFont('Helvetica', 'bold');
-    doc.text('CULTURAS INSPECIONADAS & DIAGNÓSTICO FITOSSANITÁRIO', 15, lastY);
-
-    const cropsBody = (visit.crops || []).map(c => [
-      c.name,
-      c.stage,
-      `${c.estimatedArea} ha`,
-      c.observations || 'Nenhum sintoma de estresse biótico detectado.'
-    ]);
-
-    autoTable(doc, {
-      startY: lastY + 4,
-      head: [['Cultura', 'Estágio Fenológico', 'Área Estimada', 'Anotações de Diagnóstico de Saúde']],
-      body: cropsBody,
-      headStyles: { fillColor: [6, 95, 70] },
-      styles: { fontSize: 8 }
-    });
-
-    // Recommendations & Final Observations
-    const lastY2 = (doc as any).lastAutoTable.finalY + 10;
-    doc.setFontSize(11);
-    doc.setFont('Helvetica', 'bold');
-    doc.text('DIRETRIZES TÉCNICAS E PARECER DE RECOMENDAÇÃO', 15, lastY2);
-
-    doc.setFont('Helvetica', 'normal');
-    doc.setFontSize(9);
-    const recomendacoesText = doc.splitTextToSize(visit.recommendations || 'Manter o monitoramento de pragas e o cronograma nutricional planejado.', 180);
-    doc.text(recomendacoesText, 15, lastY2 + 5);
-
-    const obsTextY = lastY2 + 10 + (recomendacoesText.length * 4);
-    doc.setFont('Helvetica', 'bold');
-    doc.text('Observações e Desvios Gerais:', 15, obsTextY);
-    doc.setFont('Helvetica', 'normal');
-    const obsText = doc.splitTextToSize(visit.generalObservations || 'Sem observações adicionais para este registro.', 180);
-    doc.text(obsText, 15, obsTextY + 5);
-
-    // Photos Section with mock frames fallback if empty
-    doc.addPage();
-    doc.setFontSize(13);
-    doc.setFont('Helvetica', 'bold');
-    doc.text('ANEXO FOTOGRÁFICO DE EVIDÊNCIAS DE CAMPO', 15, 20);
-
-    if (visit.photos && visit.photos.length > 0) {
-      // Render layout of actual uploaded photos
-      visit.photos.slice(0, 4).forEach((photo, index) => {
-        const row = Math.floor(index / 2);
-        const col = index % 2;
-        const x = 15 + col * 92;
-        const y = 28 + row * 92;
-
-        // Photo outer frame
-        doc.setDrawColor(203, 213, 225);
-        doc.setFillColor(248, 250, 252);
-        doc.rect(x, y, 86, 62, 'FD');
-
-        doc.setFontSize(8);
-        doc.setTextColor(30, 41, 59);
-        doc.setFont('Helvetica', 'bold');
-        doc.text(`Registro Fotográfico ${index + 1}: ${photo.caption || 'Sem legenda'}`, x + 3, y + 68);
-        doc.setFont('Helvetica', 'normal');
-        doc.setTextColor(100, 116, 139);
-        doc.text(`Coletado em: ${formatDateTime(photo.takenAt)}`, x + 3, y + 72);
-        doc.text(`Status: Sincronizado S3`, x + 3, y + 76);
+      doc.setTextColor(51, 65, 85);
+      doc.setFontSize(11);
+      doc.setFont('Helvetica', 'bold');
+      doc.text('INFORMAÇÕES DA VISITA', 15, 46);
+      const gps = typeof visit.latitude === 'number' && typeof visit.longitude === 'number'
+        ? `${visit.latitude.toFixed(6)}, ${visit.longitude.toFixed(6)}${visit.accuracyMeters ? ` (±${Math.round(visit.accuracyMeters)} m)` : ''}`
+        : 'Não registrado';
+      autoTable(doc, {
+        startY: 50,
+        body: [
+          ['Produtor / Cliente:', visit.clientName || '—', 'Data da Visita:', formatDate(visit.visitDate) || '—'],
+          ['Propriedade:', visit.propertyName || '—', 'Técnico Responsável:', visit.technicianName || '—'],
+          ['Objetivo Principal:', visit.objective || '—', 'Coordenadas GPS:', gps],
+          ...(visit.nextVisitDate ? [['Próxima Visita:', formatDate(visit.nextVisitDate), '', '']] : []),
+        ],
+        theme: 'plain',
+        styles: { cellPadding: 2, fontSize: 8.5 },
+        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 40 }, 1: { cellWidth: 60 }, 2: { fontStyle: 'bold', cellWidth: 40 }, 3: { cellWidth: 50 } },
       });
-    } else {
-      // Perfect mock layout representing real field conditions (highly formatted mock frames!)
-      // Frame 1
-      doc.setDrawColor(203, 213, 225);
-      doc.setFillColor(248, 250, 252);
-      doc.rect(15, 28, 86, 62, 'FD');
-      
-      // Draw simulated camera crop center
-      doc.setDrawColor(148, 163, 184);
-      doc.line(53, 54, 53 + 10, 54);
-      doc.line(58, 49, 58, 49 + 10);
 
-      doc.setFontSize(8.5);
-      doc.setTextColor(30, 41, 59);
+      let y = (doc as any).lastAutoTable.finalY + 8;
+      const crops = visit.crops || [];
+      if (crops.length) {
+        doc.setFontSize(11); doc.setFont('Helvetica', 'bold');
+        doc.text('CULTURAS INSPECIONADAS & DIAGNÓSTICO', 15, y);
+        autoTable(doc, {
+          startY: y + 4,
+          head: [['Cultura', 'Estágio Fenológico', 'Área Estimada', 'Observações']],
+          body: crops.map(c => [c.name || '—', c.stage || '—', c.estimatedArea ? `${c.estimatedArea} ha` : '—', c.observations || '—']),
+          headStyles: { fillColor: [6, 95, 70] },
+          styles: { fontSize: 8 },
+        });
+        y = (doc as any).lastAutoTable.finalY + 10;
+      }
+
+      const block = (title: string, body: string) => {
+        if (y > 255) { doc.addPage(); y = 20; }
+        doc.setFontSize(11); doc.setFont('Helvetica', 'bold'); doc.setTextColor(51, 65, 85);
+        doc.text(title, 15, y);
+        doc.setFont('Helvetica', 'normal'); doc.setFontSize(9);
+        const lines = doc.splitTextToSize(body, 180);
+        doc.text(lines, 15, y + 5);
+        y += 10 + lines.length * 4;
+      };
+      block('RECOMENDAÇÕES TÉCNICAS', visit.recommendations || 'Nenhuma recomendação registrada.');
+      block('OBSERVAÇÕES GERAIS', visit.generalObservations || 'Nenhuma observação registrada.');
+
+      // Fotos reais (com a imagem quando estiver disponível no registro)
+      const photos = (visit.photos || []).slice(0, 6);
+      if (photos.length) {
+        doc.addPage();
+        doc.setFontSize(13); doc.setFont('Helvetica', 'bold'); doc.setTextColor(51, 65, 85);
+        doc.text('ANEXO FOTOGRÁFICO', 15, 20);
+        photos.forEach((photo, index) => {
+          const x = 15 + (index % 2) * 92;
+          const py = 28 + Math.floor(index / 2) * 84;
+          doc.setDrawColor(203, 213, 225); doc.setFillColor(248, 250, 252);
+          doc.rect(x, py, 86, 62, 'FD');
+          const src = photo.url || photo.localUri || '';
+          if (/^data:image\/(png|jpe?g)/i.test(src)) {
+            try { doc.addImage(src, /png/i.test(src.slice(0, 20)) ? 'PNG' : 'JPEG', x + 1, py + 1, 84, 60); } catch { /* imagem inválida: fica o quadro */ }
+          }
+          doc.setFontSize(8); doc.setTextColor(30, 41, 59); doc.setFont('Helvetica', 'bold');
+          doc.text(doc.splitTextToSize(`Foto ${index + 1}: ${photo.caption || 'Sem legenda'}`, 84)[0], x + 1, py + 67);
+          doc.setFont('Helvetica', 'normal'); doc.setTextColor(100, 116, 139);
+          if (photo.takenAt) doc.text(`Registrada em: ${formatDateTime(photo.takenAt)}`, x + 1, py + 71);
+        });
+      }
+
+      // Assinaturas
+      const pageCount = (doc as any).internal.getNumberOfPages();
+      doc.setPage(pageCount);
+      const pageHeight = doc.internal.pageSize.height;
+      doc.setDrawColor(100, 116, 139);
+      doc.line(30, pageHeight - 38, 90, pageHeight - 38);
+      doc.line(120, pageHeight - 38, 180, pageHeight - 38);
+      doc.setFontSize(8.5); doc.setTextColor(71, 85, 105);
+      doc.text('Assinatura do Produtor Rural', 60, pageHeight - 33, { align: 'center' });
       doc.setFont('Helvetica', 'bold');
-      doc.text("Evidência 01: Estado Vegetativo da Cultura", 18, 96);
+      doc.text(visit.technicianName || 'Responsável Técnico', 150, pageHeight - 33, { align: 'center' });
       doc.setFont('Helvetica', 'normal');
-      doc.setTextColor(100, 116, 139);
-      doc.text("Coordenadas GPS: Estimadas por georreferência do talhão", 18, 101);
-      doc.text(`Condição de sanidade geral: Excelente`, 18, 106);
+      doc.text('Responsável Técnico', 150, pageHeight - 29, { align: 'center' });
+      drawBrandFooter(doc);
 
-      // Frame 2
-      doc.rect(109, 28, 86, 62, 'FD');
-      
-      // Draw simulated camera crop center 2
-      doc.line(147, 54, 147 + 10, 54);
-      doc.line(152, 49, 152, 49 + 10);
-
-      doc.setFontSize(8.5);
-      doc.setTextColor(30, 41, 59);
-      doc.setFont('Helvetica', 'bold');
-      doc.text("Evidência 02: Amostra Solo e Estabilidade Radicular", 112, 96);
-      doc.setFont('Helvetica', 'normal');
-      doc.setTextColor(100, 116, 139);
-      doc.text("Coordenadas GPS: Provedor de GPS Integrado (5m precisão)", 112, 101);
-      doc.text(`Avaliação de irrigação: Conforme`, 112, 106);
+      doc.save(`Relatorio_Visita_${(visit.clientName || 'Cliente').replace(/\s+/g, '_')}_${visit.visitDate || ''}.pdf`);
+      toast.success('Relatório PDF exportado com sucesso!');
+    } catch (err) {
+      console.error('Erro ao gerar PDF da visita:', err);
+      toast.error('Não foi possível gerar o PDF desta visita.');
     }
-
-    // Signatures
-    const pageCount = (doc as any).internal.getNumberOfPages();
-    doc.setPage(pageCount);
-    const pageHeight = doc.internal.pageSize.height;
-    
-    doc.setDrawColor(100, 116, 139);
-    doc.line(30, pageHeight - 38, 90, pageHeight - 38);
-    doc.line(120, pageHeight - 38, 180, pageHeight - 38);
-
-    doc.setFontSize(8.5);
-    doc.setTextColor(71, 85, 105);
-    doc.text('Assinatura do Produtor Rural', 42, pageHeight - 33);
-    doc.setFont('Helvetica', 'bold');
-    doc.text(visit.technicianName, 132, pageHeight - 33);
-    doc.setFont('Helvetica', 'normal');
-    doc.text('Engenheiro Agrônomo / Técnico', 134, pageHeight - 29);
-
-    doc.save(`Relatorio_Visita_${visit.clientName.replace(/\s+/g, '_')}_${visit.visitDate}.pdf`);
-    toast.success('Relatório PDF exportado com sucesso!');
   };
 
 

@@ -396,8 +396,8 @@ export default function Inventory() {
         i.name,
         (i.category || '').toUpperCase(),
         i.unit,
-        i.currentQuantity.toString(),
-        i.minQuantity.toString(),
+        String(i.currentQuantity ?? 0),
+        String(i.minQuantity ?? 0),
         i.currentQuantity <= i.minQuantity ? 'ESTOQUE CRÍTICO' : 'DISPONÍVEL'
       ]);
 
@@ -415,7 +415,7 @@ export default function Inventory() {
       const rows = movements.map(m => [
         m.itemName,
         m.type === 'in' ? 'ENTRADA (+)' : 'RETIRADA (-)',
-        m.quantity.toString(),
+        String(m.quantity ?? 0),
         m.reason,
         m.responsibleName,
         formatDateTime(m.createdAt)

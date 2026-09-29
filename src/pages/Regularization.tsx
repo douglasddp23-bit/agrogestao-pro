@@ -335,7 +335,7 @@ export default function Regularization() {
 
     const docItems = DOCUMENT_TYPES.map(dt => [
       dt.label,
-      service.documents[dt.id as keyof typeof service.documents] ? 'SIM (INCLUSO)' : 'Não solicitado / Pendente'
+      (service.documents || ({} as DocService['documents']))[dt.id as keyof DocService['documents']] ? 'SIM (INCLUSO)' : 'Não solicitado / Pendente'
     ]);
 
     autoTable(doc, {
