@@ -21,6 +21,7 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { Map as PageIcon } from 'lucide-react';
 import { useInitialSearch } from '../hooks/useInitialSearch';
+import ExportExcelButton from '../components/service/ExportExcelButton';
 
 export interface GPSPoint {
   id: string;
@@ -994,6 +995,12 @@ export default function Topography() {
       <header className={PAGE_HEADER_CLASS} data-page-header>
         <PageTitle icon={PageIcon} title="Topografia" subtitle="Levantamentos, medições e georreferenciamento" />
         <div className="flex items-center gap-3">
+          <ExportExcelButton fileName="Servicos_Topografia" getRows={() => filteredServices.map((s: any) => ({
+    'Cliente': s.clientName || '', 'Propriedade': s.propertyName || '', 'Serviço': s.serviceLabel || '', 'Situação': s.status || 'Planejado',
+    'Área (ha)': Number(s.areaSize) || 0, 'Pontos GPS': (s.points || []).length, 'Execução': (s.scheduledDate ? String(s.scheduledDate).split('T')[0].split('-').reverse().join('/') : ''),
+    'Valor (R$)': (typeof s.value === 'number' ? s.value : Number(s.value) || 0), 'Pagamento': s.paymentStatus === 'pago' ? 'Pago' : 'A receber',
+    'Responsável': s.responsibleTech?.name || s.technicalResponsible || '', 'ART/TRT': s.technicalLicense || '',
+  }))} />
           {readOnly ? (
             <button disabled className="px-5 py-2.5 rounded-2xl font-bold flex items-center gap-2 bg-slate-300 text-slate-500 cursor-not-allowed text-xs">
               <Plus className="w-4 h-4" /> Apenas Leitura

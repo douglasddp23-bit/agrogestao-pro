@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { CalendarDays as PageIcon } from 'lucide-react';
 import { useInitialSearch } from '../hooks/useInitialSearch';
+import ExportExcelButton from '../components/service/ExportExcelButton';
 
 export default function Scheduling() {
   const { user } = useAuth();
@@ -915,6 +916,11 @@ export default function Scheduling() {
         <PageTitle icon={PageIcon} title="Agendamentos" subtitle="Agenda de visitas e consultorias da equipe" />
 
         <div className="flex items-center gap-2.5">
+          <ExportExcelButton fileName="Agendamentos" getRows={() => filteredAppointments.map((a: any) => ({
+    'Data': (a.date ? String(a.date).split('T')[0].split('-').reverse().join('/') : ''), 'Hora': a.time || '', 'Cliente': a.clientName || '', 'Serviço': a.serviceType || '',
+    'Técnico': a.technicianName || '', 'Status': ({ scheduled: 'Agendado', confirmed: 'Confirmado', completed: 'Concluído', cancelled: 'Cancelado' } as Record<string, string>)[a.status] || a.status || '',
+    'Observações': a.notes || '',
+  }))} />
           <button 
             onClick={() => setIsRouteModalOpen(true)}
             className="px-4 py-3.5 bg-white/80 hover:bg-white text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all cursor-pointer flex items-center gap-2 shadow-sm font-display"

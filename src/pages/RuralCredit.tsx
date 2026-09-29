@@ -53,6 +53,7 @@ import { toast } from 'sonner';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { Wallet as PageIcon } from 'lucide-react';
 import { useInitialSearch } from '../hooks/useInitialSearch';
+import ExportExcelButton from '../components/service/ExportExcelButton';
 
 export default function RuralCredit() {
   const { user } = useAuth();
@@ -404,6 +405,11 @@ export default function RuralCredit() {
         <div className={PAGE_HEADER_CLASS} data-page-header>
           <PageTitle icon={PageIcon} title="Crédito Rural" subtitle="Financiamentos, custeio agropecuário e projetos Pronaf" />
           <div className="flex items-center gap-3">
+          <ExportExcelButton fileName="Credito_Rural" getRows={() => filteredProjects.map((p: any) => ({
+    'Cliente': p.clientName || '', 'Propriedade': p.propertyName || '', 'Linha': p.financingType || '', 'Banco': p.bank || '',
+    'Atividade': p.category || '', 'Status': p.status || '', 'Valor (R$)': (typeof p.value === 'number' ? p.value : Number(p.value) || 0), 'Custo de Execução (R$)': (typeof p.cost === 'number' ? p.cost : Number(p.cost) || 0),
+    'Previsão': (p.scheduledDate ? String(p.scheduledDate).split('T')[0].split('-').reverse().join('/') : ''), 'Responsável': p.responsibleTechnician || '',
+  }))} />
           {(user?.effectiveRole ?? user?.role) === 'staff' || (user?.effectiveRole ?? user?.role) === 'consultant' ? (
             <button
               disabled

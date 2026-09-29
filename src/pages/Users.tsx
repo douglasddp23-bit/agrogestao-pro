@@ -42,6 +42,7 @@ import NewDelegationModal from '../components/users/NewDelegationModal';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { UsersRound as PageIcon } from 'lucide-react';
 import { useInitialSearch } from '../hooks/useInitialSearch';
+import ExportExcelButton from '../components/service/ExportExcelButton';
 
 export default function Users() {
   const { user } = useAuth();
@@ -584,6 +585,10 @@ export default function Users() {
         </div>
 
         <div className="flex items-center gap-3">
+          <ExportExcelButton fileName="Colaboradores" getRows={() => filteredTeam.map((u: any) => ({
+    'Nome': u.displayName || '', 'E-mail': u.email || '', 'Matrícula': u.registrationNumber || '',
+    'Cargo': ROLE_LABELS[u.role as keyof typeof ROLE_LABELS] || u.role || '', 'Setor': u.department || '', 'Situação': u.blocked ? 'Bloqueado' : 'Ativo',
+  }))} />
           <div className="flex bg-white/40 p-1 rounded-xl border border-white/50">
             <button 
               onClick={() => setViewMode('grid')}

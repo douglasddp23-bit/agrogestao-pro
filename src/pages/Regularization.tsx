@@ -36,6 +36,7 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { ShieldCheck as PageIcon } from 'lucide-react';
 import { useInitialSearch } from '../hooks/useInitialSearch';
+import ExportExcelButton from '../components/service/ExportExcelButton';
 
 interface DocService {
   id: string;
@@ -409,6 +410,12 @@ export default function Regularization() {
         <PageTitle icon={PageIcon} title="Regularização Ambiental" subtitle="Gestão documental rural (CAR, CCIR, ITR, escrituras)" />
 
         <div className="flex items-center gap-3">
+          <ExportExcelButton fileName="Protocolos_Regularizacao" getRows={() => filteredServices.map((s: any) => ({
+    'Protocolo': s.internalProtocol || '', 'Processo no Órgão': s.protocolNumber || '', 'Órgão': s.organ || '',
+    'Cliente': s.clientName || '', 'Propriedade': s.propertyName || '', 'Status': s.status === 'Concluido' ? 'Concluído' : s.status || '',
+    'Prazo Legal': (s.deadline ? String(s.deadline).split('T')[0].split('-').reverse().join('/') : ''), 'Previsto': (s.scheduledDate ? String(s.scheduledDate).split('T')[0].split('-').reverse().join('/') : ''), 'Responsável': s.responsible || '',
+    'Documentos': Object.entries(s.documents || {}).filter(([, v]) => v).map(([k]) => k.toUpperCase()).join(', '),
+  }))} />
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input 

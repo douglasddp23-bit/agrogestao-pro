@@ -51,6 +51,7 @@ import { toast } from 'sonner';
 import ConfirmationModal from '../components/ConfirmationModal';
 import AuditTrail from '../components/AuditTrail';
 import { useInitialSearch } from '../hooks/useInitialSearch';
+import ExportExcelButton from '../components/service/ExportExcelButton';
 
 type FormStep = 'personal' | 'address' | 'documents' | 'review';
 
@@ -1228,6 +1229,13 @@ export default function Clients() {
       {confirmModal}
       <header className={PAGE_HEADER_CLASS} data-page-header>
         <PageTitle icon={PageIcon} title="Clientes" subtitle="Cadastro de produtores, propriedades e histórico de atendimento" />
+        <div className="flex items-center gap-3">
+          <ExportExcelButton fileName="Clientes" getRows={() => (confirmedSearchTerm ? filteredClients : clients).map((c: any) => ({
+    'Nome': c.name || '', 'CPF/CNPJ': c.cpf || '', 'Código': c.clientCode || '', 'Tipo': c.clientType === 'pronaf' ? 'Pronaf' : 'Produtor Rural',
+    'Telefone': c.phone || '', 'E-mail': c.ownerEmail || '', 'Cidade': c.address?.city || '', 'UF': c.address?.state || '',
+    'Propriedades': (c.properties || []).map((p: any) => p?.name + (p?.areaHectares ? ` (${p.areaHectares} ha)` : '')).filter(Boolean).join('; '),
+    'Cadastro': (c.createdAt ? String(c.createdAt).split('T')[0].split('-').reverse().join('/') : ''),
+  }))} />
         {PERMISSIONS.canCreateClient(((user?.effectiveRole ?? user?.role) as UserRole) || 'consultant') && (
           <button 
             onClick={() => setIsModalOpen(true)}
@@ -1236,6 +1244,7 @@ export default function Clients() {
             <Plus className="w-4 h-4" /> Novo Cliente
           </button>
         )}
+        </div>
       </header>
 
       {/* Card de Busca e Filtros */}

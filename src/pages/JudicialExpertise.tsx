@@ -30,6 +30,7 @@ import { logAudit } from '../lib/audit';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { Scale as PageIcon } from 'lucide-react';
 import { useInitialSearch } from '../hooks/useInitialSearch';
+import ExportExcelButton from '../components/service/ExportExcelButton';
 
 const EXPERTISE_TYPE_LABELS: Record<string, string> = {
   servidao_administrativa: 'Servidão Administrativa',
@@ -773,6 +774,11 @@ export default function JudicialExpertisePage() {
         <PageTitle icon={PageIcon} title="Perícia Judicial" subtitle="Processos periciais, honorários e laudos (TJMG / PJe)" />
 
         <div className="flex items-center gap-3">
+          <ExportExcelButton fileName="Pericias_Judiciais" getRows={() => filteredExpertises.map((e: any) => ({
+    'Processo': e.processNumber || '', 'Comarca': e.comarca || '', 'Vara': e.vara || '', 'Requerente': e.requerente || '', 'Requerido': e.requerido || '',
+    'Tipo': e.expertiseType || '', 'Status': e.status || '', 'Laudo': e.laudoStatus || '', 'Prazo do Laudo': (e.laudoDeadline ? String(e.laudoDeadline).split('T')[0].split('-').reverse().join('/') : ''),
+    'Honorários Propostos (R$)': (typeof e.honorariosPropostos === 'number' ? e.honorariosPropostos : Number(e.honorariosPropostos) || 0), 'Honorários Aprovados (R$)': (typeof e.honorariosAprovados === 'number' ? e.honorariosAprovados : Number(e.honorariosAprovados) || 0), 'Honorários': e.honorariosStatus || '',
+  }))} />
           <button
             onClick={handleOpenCreateModal}
             className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-2xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"

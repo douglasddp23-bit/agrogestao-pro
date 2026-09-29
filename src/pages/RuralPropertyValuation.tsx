@@ -31,6 +31,7 @@ import { logAudit } from '../lib/audit';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { Landmark as PageIcon } from 'lucide-react';
 import { useInitialSearch } from '../hooks/useInitialSearch';
+import ExportExcelButton from '../components/service/ExportExcelButton';
 
 const PURPOSE_LABELS: Record<string, string> = {
   compra_venda: 'Compra e Venda',
@@ -818,6 +819,11 @@ export default function RuralPropertyValuationPage() {
         <PageTitle icon={PageIcon} title="Avaliação de Imóveis" subtitle="Laudos e pareceres técnicos de avaliação (ABNT NBR 14.653-3)" />
 
         <div className="flex items-center gap-3">
+          <ExportExcelButton fileName="Avaliacoes_Imoveis" getRows={() => filteredValuations.map((v: any) => ({
+    'Cliente': v.clientName || '', 'Imóvel': v.propertyName || '', 'Município': [v.propertyCity, v.propertyState].filter(Boolean).join('/'),
+    'Finalidade': v.purpose || '', 'Área (ha)': Number(v.totalArea) || 0, 'VTN (R$/ha)': (typeof v.landValuePerHa === 'number' ? v.landValuePerHa : Number(v.landValuePerHa) || 0),
+    'Benfeitorias (R$)': (typeof v.improvementsValue === 'number' ? v.improvementsValue : Number(v.improvementsValue) || 0), 'Valor Total (R$)': (typeof v.totalValue === 'number' ? v.totalValue : Number(v.totalValue) || 0), 'Status': v.status || '', 'Data do Laudo': (v.reportDate ? String(v.reportDate).split('T')[0].split('-').reverse().join('/') : ''),
+  }))} />
           <button
             onClick={handleOpenCreateModal}
             className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-2xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"

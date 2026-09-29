@@ -52,6 +52,7 @@ import AuditTrail from '../components/AuditTrail';
 import { toast } from 'sonner';
 import { getPdfBranding } from '../lib/pdfBranding';
 import { useInitialSearch } from '../hooks/useInitialSearch';
+import ExportExcelButton from '../components/service/ExportExcelButton';
 
 interface AnalysisProps {
   typeFilter?: AnalysisType;
@@ -848,6 +849,11 @@ export default function Analysis({ typeFilter }: AnalysisProps) {
       <header className={PAGE_HEADER_CLASS} data-page-header>
         <PageTitle icon={PageIcon} title={getTitle()} subtitle="Análises de solo, água e foliar, com laudos e resultados" />
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+          <ExportExcelButton fileName="Analises" getRows={() => filteredAnalyses.map((a: any) => ({
+    'Cliente': a.clientName || '', 'Propriedade': a.propertyName || '', 'Tipo': a.type || '', 'Status': a.status || '',
+    'Técnico': a.responsibleTechnician || '', 'Coleta': (a.collectionDate ? String(a.collectionDate).split('T')[0].split('-').reverse().join('/') : ''), 'Agendada': (a.scheduledDate ? String(a.scheduledDate).split('T')[0].split('-').reverse().join('/') : ''),
+    'Valor (R$)': (typeof a.value === 'number' ? a.value : Number(a.value) || 0), 'Descrição': a.description || '',
+  }))} />
           <div className="relative flex-1 md:w-48">
             <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
             <input 

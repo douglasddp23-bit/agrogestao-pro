@@ -43,6 +43,7 @@ import {
   ServicePricing, ResponsibleTech,
 } from '../components/service/ServiceFormParts';
 import { useInitialSearch } from '../hooks/useInitialSearch';
+import ExportExcelButton from '../components/service/ExportExcelButton';
 
 // ─── Cálculos (mesmas fórmulas de antes; só saíram do componente para poderem
 //     ser usadas também no PDF de projetos já salvos) ──────────────────────────
@@ -648,6 +649,12 @@ export default function Irrigation() {
       <header className={PAGE_HEADER_CLASS} data-page-header>
         <PageTitle icon={PageIcon} title="Irrigação" subtitle="Projetos e cálculos de engenharia hídrica com memorial técnico" />
         <div className="flex items-center gap-3">
+          <ExportExcelButton fileName="Projetos_Irrigacao" getRows={() => filtered.map((p: any) => ({
+    'Cliente': p.clientName || '', 'Propriedade': p.propertyName || '', 'Sistema': systemLabel(p.type), 'Situação': statusOf(p),
+    'Área (ha)': Number(p.inputs?.demand?.area) || 0, 'Potência (cv)': p.results?.pumpPower ?? '', 'Volume a captar (m³/dia)': p.results?.totalWaterDay || p.results?.netWaterDay || '',
+    'Valor (R$)': (typeof p.value === 'number' ? p.value : Number(p.value) || 0), 'Pagamento': p.paymentStatus === 'pago' ? 'Pago' : 'A receber',
+    'Responsável': p.responsibleTech?.name || p.responsible || '', 'Registro': registryLabel(p.responsibleTech), 'Execução': (p.scheduledDate ? String(p.scheduledDate).split('T')[0].split('-').reverse().join('/') : ''),
+  }))} />
           {readOnly ? (
             <button disabled className="px-5 py-2.5 rounded-2xl font-bold flex items-center gap-2 bg-slate-300 text-slate-500 cursor-not-allowed text-xs">
               <Plus className="w-4 h-4" /> Apenas Leitura
