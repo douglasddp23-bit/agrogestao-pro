@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { runExclusive } from '../lib/submitGuard';
-import { Map, MapPin, Maximize, Compass, Layers, FileCheck, Save, User, CheckCircle2, ChevronRight, Info, Ruler, Satellite, Trash2, Plus, FileCode, Crosshair, Navigation, ChevronDown, ChevronUp, FileSpreadsheet, Activity, FileDown } from 'lucide-react';
+import { Map, MapPin, Maximize, Compass, Layers, FileCheck, Save, User, CheckCircle2, ChevronRight, Info, Ruler, Satellite, Trash2, Plus, FileCode, Crosshair, Navigation, ChevronDown, ChevronUp, FileSpreadsheet, Activity, FileDown, Search, Wallet, Edit3, X, ArrowLeft, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { cn, safeUrl } from '../lib/utils';
@@ -11,6 +11,11 @@ import { Client } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { handleFirestoreError, OperationType, todayLocalDateString, formatDate } from '../lib/utils';
 import { buildServiceReportPDF } from '../lib/pdfBranding';
+import ServiceKpiCards, { formatBRL, isThisMonth } from '../components/service/ServiceKpiCards';
+import {
+  PricingFields, ResponsibleFields, WizardSteps, computePricing, emptyPricing, registryLabel, responsibleFromProfile,
+  ServicePricing, ResponsibleTech,
+} from '../components/service/ServiceFormParts';
 
 import ConfirmationModal from '../components/ConfirmationModal';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
@@ -44,6 +49,8 @@ const TOPO_SERVICES: TopoServiceOption[] = [
   { id: 'demarcation', label: 'Demarcação', description: 'Locação de divisas e piquetes', icon: MapPin },
   { id: 'subdivision', label: 'Desdobro/Loteamento', description: 'Divisão de áreas e glebas', icon: Maximize },
 ];
+
+const TOPO_STEPS = ['Cliente e Área', 'Dados do Serviço', 'Pontos GPS', 'Valor do Serviço', 'Responsável e PDF'];
 
 const getPointTypeLabel = (type: GPSPoint['type']) => {
   switch(type) {
@@ -220,7 +227,13 @@ export default function Topography() {
   const [observations, setObservations] = useState('');
   const [scheduledDate, setScheduledDate] = useState(todayLocalDateString());
   const [isSaving, setIsSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [step, setStep] = useState(0);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [pricing, setPricing] = useState<ServicePricing>(emptyPricing());
+  const [responsibleTech, setResponsibleTech] = useState<ResponsibleTech>(responsibleFromProfile(user));
 
   // New fields - CORREÇÃO 3
   const [topoEquipment, setTopoEquipment] = useState('rtk_gnss');
@@ -387,6 +400,12 @@ export default function Topography() {
     return unsubscribe;
   }, []);
 
+  // Área cadastrada da fazenda já vem como sugestão
+  const suggestTopoArea = (clientId: string, name: string) => {
+    const prop = (clients.find(c => c.id === clientId)?.properties || []).find(p => p.name === name);
+    if (prop?.areaHectares && !areaSize) setAreaSize(String(prop.areaHectares));
+  };
+
   const handleClientChange = (clientId: string) => {
     setSelectedClientId(clientId);
     const selectedClient = clients.find(c => c.id === clientId);
@@ -398,6 +417,7 @@ export default function Topography() {
       if (properties.length === 1) {
         setPropertyName(properties[0]);
         setShowPropertySelect(false);
+        suggestTopoArea(clientId, properties[0]);
       } else if (properties.length > 1) {
         setPropertyName('');
         setShowPropertySelect(true);
@@ -412,70 +432,137 @@ export default function Topography() {
     }
   };
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedClientId || !areaSize || !serviceType || !propertyName) {
-      toast.error('Por favor, preencha todos os campos obrigatórios (Cliente, Propriedade, Área e Serviço).');
-      return;
-    }
+  const resetForm = () => {
+    setEditingId(null); setStep(0);
+    setSelectedClientId(''); setPropertyName(''); setAvailableProperties([]); setShowPropertySelect(false);
+    setAreaSize(''); setServiceType(null); setObservations(''); setScheduledDate(todayLocalDateString());
+    setTopoEquipment('rtk_gnss'); setTargetRepresentative(''); setTechnicalLicense(''); setServiceStatus('Planejado');
+    setMapReportUrl(''); setNewServicePoints([]); setTempCoords(null);
+    setPricing(emptyPricing()); setResponsibleTech(responsibleFromProfile(user));
+  };
 
+  const openNew = () => { resetForm(); setIsFormOpen(true); };
+
+  const openEdit = (s: any) => {
+    resetForm();
+    setEditingId(s.id);
+    setSelectedClientId(s.clientId || '');
+    const props = (clients.find(c => c.id === s.clientId)?.properties || []).map(p => p.name).filter(Boolean);
+    setAvailableProperties(props);
+    setShowPropertySelect(props.length > 1);
+    setPropertyName(s.propertyName || '');
+    setAreaSize(s.areaSize ? String(s.areaSize) : '');
+    setServiceType(s.serviceType || null);
+    setObservations(s.observations || '');
+    setScheduledDate(s.scheduledDate || todayLocalDateString());
+    setTopoEquipment(s.topoEquipment || 'rtk_gnss');
+    setTargetRepresentative(s.targetRepresentative || '');
+    setTechnicalLicense(s.technicalLicense || '');
+    setServiceStatus(s.status || 'Planejado');
+    setMapReportUrl(s.mapReportUrl || '');
+    setNewServicePoints(s.points || []);
+    setPricing({ ...emptyPricing(), ...(s.pricing || {}) });
+    setResponsibleTech(s.responsibleTech || { ...responsibleFromProfile(user), name: s.technicalResponsible || user?.displayName || '' });
+    setIsFormOpen(true);
+  };
+
+  const validateStep = (i: number): string | null => {
+    if (i === 0) {
+      if (!selectedClientId) return 'Selecione o cliente.';
+      if (!propertyName.trim()) return 'Informe a propriedade/fazenda.';
+      if (!Number(areaSize)) return 'Informe a área (ha).';
+    }
+    if (i === 1 && !serviceType) return 'Escolha o tipo de serviço topográfico.';
+    if (i === 4 && !responsibleTech.name.trim()) return 'Informe o nome do responsável técnico.';
+    return null;
+  };
+
+  const goNext = () => {
+    const err = validateStep(step);
+    if (err) { toast.error(err); return; }
+    setStep(s => Math.min(s + 1, TOPO_STEPS.length - 1));
+  };
+
+  const handleSave = async () => {
+    for (let i = 0; i < TOPO_STEPS.length; i++) {
+      const err = validateStep(i);
+      if (err) { setStep(i); toast.error(err); return; }
+    }
     setIsSaving(true);
     try {
       const client = clients.find(c => c.id === selectedClientId);
       const serviceLabel = TOPO_SERVICES.find(s => s.id === serviceType)?.label || 'Topografia';
-      
-      const docRef = await addDoc(collection(db, 'topography_services'), {
+      const priceCalc = computePricing(pricing, Number(areaSize));
+      const payload = {
         clientId: selectedClientId,
         clientName: client?.name || 'Cliente Desconhecido',
-        propertyName,
+        propertyName: propertyName.trim(),
         areaSize: parseFloat(areaSize),
         serviceType,
         serviceLabel,
         observations,
         scheduledDate,
         status: serviceStatus,
-        createdAt: serverTimestamp(),
-        createdBy: user?.uid,
-        technicalResponsible: user?.displayName || 'Técnico da Empresa',
+        technicalResponsible: responsibleTech.name.trim(),
+        responsibleTech: { ...responsibleTech, name: responsibleTech.name.trim(), registryNumber: responsibleTech.registryNumber.trim() },
         topoEquipment,
         targetRepresentative,
         technicalLicense,
         mapReportUrl: mapReportUrl || null,
-        points: newServicePoints
-      });
-
-      // Automatically integrate with Agenda by creating a notification
-      if (user) {
-        await addDoc(collection(db, 'notifications'), {
-          userId: user.uid,
-          title: 'Serviço Agendado na Agenda',
-          message: `O serviço de ${serviceLabel} para ${client?.name} foi integrado à agenda para o dia ${scheduledDate.split('-').reverse().join('/')}.`,
-          type: 'success',
-          read: false,
-          createdAt: new Date().toISOString(),
-          link: 'scheduling'
+        points: newServicePoints,
+        pricing,
+        value: priceCalc.total,
+      };
+      let saved: any;
+      if (editingId) {
+        await updateDoc(doc(db, 'topography_services', editingId), { ...payload, updatedAt: serverTimestamp() });
+        saved = { ...(services.find((s: any) => s.id === editingId) || {}), ...payload, id: editingId };
+        toast.success('Serviço de topografia atualizado!');
+      } else {
+        const docRef = await addDoc(collection(db, 'topography_services'), {
+          ...payload,
+          paymentStatus: 'pendente',
+          createdAt: serverTimestamp(),
+          createdBy: user?.uid,
         });
+        saved = { ...payload, id: docRef.id, paymentStatus: 'pendente' };
+        toast.success('Serviço de Topografia Registrado!', {
+          description: `${serviceLabel} (${areaSize} ha) na propriedade ${propertyName} para o cliente ${client?.name || 'Cliente'}.`,
+          duration: 5000,
+        });
+        // Aviso na agenda — isolado: se falhar, o serviço já está salvo.
+        try {
+          if (user) {
+            await addDoc(collection(db, 'notifications'), {
+              userId: user.uid,
+              title: 'Serviço Agendado na Agenda',
+              message: `O serviço de ${serviceLabel} para ${client?.name} foi integrado à agenda para o dia ${scheduledDate.split('-').reverse().join('/')}.`,
+              type: 'success',
+              read: false,
+              createdAt: new Date().toISOString(),
+              link: 'scheduling'
+            });
+          }
+        } catch (notifError) {
+          console.warn('Falha ao criar notificação (serviço já salvo):', notifError);
+        }
       }
-      
-      setSaveSuccess(true);
-      toast.success('Serviço de Topografia Registrado!', {
-        description: `${serviceLabel} (${areaSize} ha) na propriedade ${propertyName} para o cliente ${client?.name || 'Cliente'}.`,
-        duration: 5000,
-      });
-      setAreaSize('');
-      setServiceType(null);
-      setObservations('');
-      setSelectedClientId('');
-      setTargetRepresentative('');
-      setTechnicalLicense('');
-      setMapReportUrl('');
-      setNewServicePoints([]);
-      
-      setTimeout(() => setSaveSuccess(false), 3000);
+      setIsFormOpen(false);
+      resetForm();
+      await generateServiceReport(saved);
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'topography_services');
+      handleFirestoreError(error, editingId ? OperationType.UPDATE : OperationType.CREATE, 'topography_services');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const updatePayment = async (id: string, paymentStatus: 'pendente' | 'pago') => {
+    try {
+      await updateDoc(doc(db, 'topography_services', id), { paymentStatus, updatedAt: serverTimestamp() });
+      toast.success(paymentStatus === 'pago' ? 'Marcado como pago.' : 'Marcado como a receber.');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'topography_services');
     }
   };
 
@@ -540,6 +627,9 @@ export default function Topography() {
           ] as [string, string]),
         });
       }
+      if (service.pricing) {
+        sections.push({ title: 'Valor do Serviço', rows: computePricing(service.pricing, Number(service.areaSize) || 0).rows });
+      }
       sections.push({
         title: 'Conclusões e Observações',
         text: (service.observations ? service.observations + '\n\n' : '') +
@@ -557,8 +647,8 @@ export default function Topography() {
           city: client?.address?.city ? `${client.address.city}${client.address.state ? '/' + client.address.state : ''}` : undefined,
         },
         sections,
-        responsible: service.technicalResponsible || user?.displayName || undefined,
-        certification: (user as any)?.professionalCertification,
+        responsible: service.responsibleTech?.name || service.technicalResponsible || user?.displayName || undefined,
+        certification: registryLabel(service.responsibleTech) || (user as any)?.professionalCertification,
       });
       pdf.save(`Relatorio_Topografia_${(service.clientName || 'Cliente').replace(/\s+/g, '_')}.pdf`);
     } catch (error) {
@@ -584,111 +674,87 @@ export default function Topography() {
     }
   };
 
-  return (
-    <div className="flex flex-col gap-6 h-full overflow-y-auto pr-2 pb-10">
-      <header className={PAGE_HEADER_CLASS} data-page-header>
-        <PageTitle icon={PageIcon} title="Topografia" subtitle="Levantamentos, medições e georreferenciamento" />
-        
-        <div className="px-4 py-2 bg-slate-50 text-slate-600 rounded-2xl text-[10px] font-bold uppercase tracking-widest border border-slate-100 hidden md:block">
-           Módulo de Precision Mapping
-        </div>
-      </header>
+  const readOnly = (user?.effectiveRole ?? user?.role) === 'staff' || (user?.effectiveRole ?? user?.role) === 'consultant';
+  const canEditService = (s: any) => !readOnly && (['admin', 'manager', 'hr'].includes((user?.effectiveRole ?? user?.role) as string) || s.createdBy === user?.uid);
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2">
-          <form onSubmit={(e) => { e.preventDefault(); runExclusive('Topography.handleSave', () => handleSave(e)); }} className="space-y-8">
-            <section className="glass-card p-8 space-y-6">
-              <div className="flex items-center gap-2 mb-2">
-                 <User className="w-5 h-5 text-slate-500" />
-                 <h2 className="font-display font-bold text-slate-800">Identificação do Projeto</h2>
+  // ─── Mini painel ───
+  const statusOfTopo = (s: any) => s.status || 'Planejado';
+  const openServices = services.filter((s: any) => statusOfTopo(s) !== 'Entregue');
+  const delivered = services.filter((s: any) => statusOfTopo(s) === 'Entregue');
+  const toReceive = services.filter((s: any) => s.paymentStatus !== 'pago' && Number(s.value) > 0);
+  const kpis = [
+    { label: 'Serviços em Andamento', value: openServices.length, hint: `${openServices.filter((s: any) => statusOfTopo(s) === 'Planejado').length} planejado(s) · ${openServices.filter((s: any) => statusOfTopo(s) !== 'Planejado').length} em campo/escritório`, icon: Compass, tone: 'emerald' as const },
+    { label: 'Valor a Receber', value: formatBRL(toReceive.reduce((a: number, s: any) => a + (Number(s.value) || 0), 0)), hint: `${toReceive.length} serviço(s) com cobrança pendente`, icon: Wallet, tone: 'slate' as const },
+    { label: 'Entregues', value: delivered.length, hint: `${delivered.filter((s: any) => isThisMonth(s.updatedAt || s.createdAt)).length} neste mês`, icon: CheckCircle2, tone: 'emerald' as const },
+    { label: 'Área Levantada', value: `${openServices.reduce((a: number, s: any) => a + (Number(s.areaSize) || 0), 0).toLocaleString('pt-BR')} ha`, hint: `${services.reduce((a: number, s: any) => a + (s.points?.length || 0), 0)} pontos GPS coletados no total`, icon: Ruler, tone: 'amber' as const },
+  ];
+
+  const filteredServices = services.filter((s: any) => {
+    const t = searchTerm.toLowerCase();
+    const matches = (s.clientName || '').toLowerCase().includes(t) || (s.propertyName || '').toLowerCase().includes(t) || (s.serviceLabel || '').toLowerCase().includes(t);
+    return matches && (statusFilter === 'all' || statusOfTopo(s) === statusFilter);
+  });
+
+  const selectedClientTopo = clients.find(c => c.id === selectedClientId);
+  const priceCalcTopo = computePricing(pricing, Number(areaSize));
+
+  const renderTopoStep = () => {
+    switch (step) {
+      case 0:
+        return (
+          <div className="space-y-5">
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">Cliente</label>
+              <select value={selectedClientId} onChange={(e) => handleClientChange(e.target.value)} className="w-full glass-input bg-white/60">
+                <option value="">Selecione o cliente...</option>
+                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            {selectedClientId && (
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Propriedade / Fazenda</label>
+                {availableProperties.length > 0 ? (
+                  <select value={availableProperties.includes(propertyName) ? propertyName : ''} onChange={(e) => { setPropertyName(e.target.value); suggestTopoArea(selectedClientId, e.target.value); }} className="w-full glass-input bg-white/60">
+                    <option value="">Escolha a fazenda...</option>
+                    {availableProperties.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                ) : (
+                  <input type="text" value={propertyName} onChange={(e) => setPropertyName(e.target.value)} className="w-full glass-input" placeholder="Este cliente não tem fazenda cadastrada — digite o nome" />
+                )}
+                {availableProperties.length > 0 && (
+                  <p className="text-[10px] text-emerald-600 font-bold">
+                    {availableProperties.length === 1 ? 'Fazenda puxada automaticamente do cadastro do cliente.' : `${availableProperties.length} fazendas cadastradas para este cliente.`}
+                  </p>
+                )}
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                 <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Cliente / Propriedade</label>
-                    <select 
-                      required
-                      value={selectedClientId}
-                      onChange={(e) => handleClientChange(e.target.value)}
-                      className="w-full glass-input bg-white/50"
-                    >
-                      <option value="">Selecione um cliente...</option>
-                      {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                 </div>
-
-                 {showPropertySelect && (
-                   <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Selecionar Propriedade</label>
-                      <select 
-                        required
-                        value={propertyName}
-                        onChange={(e) => setPropertyName(e.target.value)}
-                        className="w-full glass-input bg-slate-50/30 border-slate-200"
-                      >
-                        <option value="">Escolha a propriedade...</option>
-                        {availableProperties.map(p => <option key={p} value={p}>{p}</option>)}
-                      </select>
-                   </div>
-                 )}
-
-                 {propertyName && !showPropertySelect && (
-                   <div className="space-y-2 animate-in fade-in">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Propriedade Vinculada</label>
-                      <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-100 rounded-2xl">
-                         <Compass className="w-4 h-4 text-emerald-600" />
-                         <span className="text-xs font-bold text-emerald-700">{propertyName}</span>
-                         <span className="ml-auto text-[9px] font-bold text-emerald-500 uppercase">Auto</span>
-                      </div>
-                   </div>
-                 )}
-
-                 <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Área Estimada (Hectares)</label>
-                    <div className="relative">
-                       <input 
-                         required
-                         type="number"
-                         step="0.01"
-                         value={areaSize}
-                         onChange={(e) => setAreaSize(e.target.value)}
-                         placeholder="Ex: 45.5"
-                         className="w-full glass-input bg-white/50 pr-12"
-                       />
-                       <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">ha</span>
-                    </div>
-                 </div>
-
-                 <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Data Agendada de Execução</label>
-                    <input 
-                      required
-                      type="date"
-                      value={scheduledDate}
-                      onChange={(e) => setScheduledDate(e.target.value)}
-                      className="w-full glass-input bg-slate-50/50 border-slate-200"
-                    />
-                 </div>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Área estimada (ha)</label>
+                <input type="number" step="0.01" value={areaSize} onChange={(e) => setAreaSize(e.target.value)} placeholder="Ex: 45.5" className="w-full glass-input" />
               </div>
-            </section>
-
-            <section className="glass-card p-8 space-y-6">
-              <div className="flex items-center gap-2 mb-2">
-                 <Layers className="w-5 h-5 text-slate-500" />
-                 <h2 className="font-display font-bold text-slate-800">Tipo de Serviço Topográfico</h2>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Data agendada de execução</label>
+                <input type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} className="w-full glass-input" />
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            </div>
+          </div>
+        );
+      case 1:
+        return (
+          <div className="space-y-5">
+            <div className="text-[10px] font-bold text-slate-500 uppercase">Tipo de serviço topográfico</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                  {TOPO_SERVICES.map((service) => (
                    <button
                      key={service.id}
                      type="button"
                      onClick={() => setServiceType(service.id)}
                      className={cn(
-                       "flex items-center gap-4 p-5 rounded-2xl border-2 transition-all text-left group",
+                       "flex items-center gap-3 p-3 rounded-2xl border-2 transition-all text-left group",
                        serviceType === service.id 
-                        ? "bg-emerald-600 border-emerald-600 text-white shadow-xl shadow-emerald-100 scale-[1.02]" 
-                        : "bg-white/40 border-white/60 hover:bg-white/60 hover:border-slate-200"
+                        ? "bg-emerald-600 border-emerald-600 text-white shadow-lg shadow-emerald-100" 
+                        : "bg-slate-50 border-slate-200 hover:border-emerald-300"
                      )}
                    >
                      <div className={cn(
@@ -706,98 +772,45 @@ export default function Topography() {
                      )}
                    </button>
                  ))}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Equipamento de levantamento</label>
+                <select value={topoEquipment} onChange={(e) => setTopoEquipment(e.target.value)} className="w-full glass-input bg-white/60">
+                  <option value="rtk_gnss">Receptor GNSS RTK</option>
+                  <option value="estacao_total">Estação Total Óptica</option>
+                  <option value="drone_laser">Drone UAV (Lidar / Fotogrametria)</option>
+                  <option value="gps_geodesico">GPS Geodésico de Dupla Frequência</option>
+                </select>
               </div>
-            </section>
-
-            {/* CORREÇÃO 3 - Detalhes Técnicos Extras */}
-            <section className="glass-card p-8 space-y-6">
-              <div className="flex items-center gap-2 mb-2">
-                 <Compass className="w-5 h-5 text-slate-500" />
-                 <h2 className="font-display font-bold text-slate-800">Parâmetros Técnicos & Credenciamento</h2>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Situação</label>
+                <select value={serviceStatus} onChange={(e) => setServiceStatus(e.target.value)} className="w-full glass-input bg-white/60">
+                  <option value="Planejado">Planejado / Agendado</option>
+                  <option value="Campo Concluído">Etapa de Campo Concluída</option>
+                  <option value="Pós-Processamento">Pós-Processamento e Desenho</option>
+                  <option value="Entregue">Laudo e Mapa Entregue</option>
+                </select>
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Equipamento de Levantamento</label>
-                     <select
-                       value={topoEquipment}
-                       onChange={(e) => setTopoEquipment(e.target.value)}
-                       className="w-full glass-input bg-white/50"
-                     >
-                       <option value="rtk_gnss">Receptor GNSS RTK</option>
-                       <option value="estacao_total">Estação Total Óptica</option>
-                       <option value="drone_laser">Drone UAV (Lidar / Fotogrametria)</option>
-                       <option value="gps_geodesico">GPS Geodésico de Dupla Frequência</option>
-                     </select>
-                  </div>
-
-                  <div className="space-y-2">
-                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Profissional Credenciado</label>
-                     <input
-                       type="text"
-                       placeholder="Ex: Eng. Agrimensor Carlos Mendes"
-                       value={targetRepresentative}
-                       onChange={(e) => setTargetRepresentative(e.target.value)}
-                       className="w-full glass-input bg-white/50"
-                     />
-                  </div>
-
-                  <div className="space-y-2">
-                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">CREA / ART do Profissional</label>
-                     <input
-                       type="text"
-                       placeholder="Ex: CREA-SP 50621458 / ART 2026-X"
-                       value={technicalLicense}
-                       onChange={(e) => setTechnicalLicense(e.target.value)}
-                       className="w-full glass-input bg-white/50"
-                     />
-                  </div>
-
-                  <div className="space-y-2">
-                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status Inicial do Projeto</label>
-                     <select
-                       value={serviceStatus}
-                       onChange={(e) => setServiceStatus(e.target.value)}
-                       className="w-full glass-input bg-white/50"
-                     >
-                       <option value="Planejado">Planejado / Agendado</option>
-                       <option value="Campo Concluído">Etapa de Campo Concluída</option>
-                       <option value="Pós-Processamento">Pós-Processamento e Desenho</option>
-                       <option value="Entregue">Laudo e Mapa Entregue</option>
-                     </select>
-                  </div>
-
-                  <div className="space-y-2 md:col-span-2">
-                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Link do Laudo / Mapa Final (Laudo URL)</label>
-                     <input
-                       type="url"
-                       placeholder="Ex: https://drive.google.com/share-map-url"
-                       value={mapReportUrl}
-                       onChange={(e) => setMapReportUrl(e.target.value)}
-                       className="w-full glass-input bg-white/50"
-                     />
-                  </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Acompanhante no campo</label>
+                <input type="text" value={targetRepresentative} onChange={(e) => setTargetRepresentative(e.target.value)} className="w-full glass-input" placeholder="Ex: proprietário, gerente da fazenda" />
               </div>
-            </section>
-
-            <section className="glass-card p-8 space-y-4">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Observações Adicionais / Requisitos Técnicos</label>
-              <textarea 
-                rows={4}
-                value={observations}
-                onChange={(e) => setObservations(e.target.value)}
-                placeholder="Descreva equipamentos necessários, urgência ou marcos de divisa existentes..."
-                className="w-full glass-input bg-white/50"
-              />
-            </section>
-
-            {/* GPS Mapping & Points of Interest (Opcional) */}
-            <section className="glass-card p-8 space-y-6">
-              <div className="flex items-center gap-2 mb-2">
-                 <MapPin className="w-5 h-5 text-slate-500" />
-                 <h2 className="font-display font-bold text-slate-800">Mapeamento GPS / Pontos de Interesse (Opcional)</h2>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Link do mapa / planta final</label>
+                <input type="url" value={mapReportUrl} onChange={(e) => setMapReportUrl(e.target.value)} className="w-full glass-input" placeholder="https://..." />
               </div>
-              
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">Observações / requisitos técnicos (vão para o PDF)</label>
+              <textarea rows={3} value={observations} onChange={(e) => setObservations(e.target.value)} className="w-full glass-input text-xs" placeholder="Marcos existentes, urgência, condições de acesso..." />
+            </div>
+          </div>
+        );
+      case 2:
+        return (
+          <div className="space-y-5">
+            <p className="text-xs text-slate-500">Opcional: capture pontos pelo GPS do aparelho. Com 3 ou mais marcos de divisa, o PDF calcula área e perímetro. Também dá para capturar depois, pelo botão GPS do serviço.</p>
               {/* Capture Point Tool */}
               <div className="p-5 bg-slate-50/30 border border-slate-100 rounded-3xl space-y-4">
                  <div className="flex items-center justify-between">
@@ -938,97 +951,94 @@ export default function Topography() {
                    </div>
                 </div>
               )}
-            </section>
-
-            <div className="flex pt-4">
-              <button 
-                type={saveSuccess ? "button" : "submit"}
-                disabled={isSaving || (user?.effectiveRole ?? user?.role) === 'staff' || (user?.effectiveRole ?? user?.role) === 'consultant'}
-                onClick={() => {
-                  if (saveSuccess) {
-                    navigate('/scheduling');
-                  }
-                }}
-                className={cn(
-                  "relative w-full py-5 rounded-3xl text-sm font-bold shadow-2xl transition-all flex items-center justify-center gap-3",
-                  saveSuccess ? "bg-emerald-500 text-white shadow-emerald-100" : (((user?.effectiveRole ?? user?.role) === 'staff' || (user?.effectiveRole ?? user?.role) === 'consultant') ? "bg-slate-400 text-white cursor-not-allowed" : "bg-emerald-600 text-white shadow-emerald-100 hover:bg-emerald-700 active:scale-[0.98]"),
-                  isSaving && "opacity-50 cursor-not-allowed"
-                )}
-              >
-                {saveSuccess ? (
-                  <div className="flex flex-col items-center gap-1">
-                    <div className="flex items-center gap-2">
-                       <CheckCircle2 className="w-5 h-5" /> Serviço Registrado com Sucesso!
-                    </div>
-                    <span className="text-[10px] opacity-80 font-medium">Clique para ver na Agenda</span>
-                  </div>
-                ) : (
-                  <>
-                    <Save className="w-5 h-5" /> {(user?.effectiveRole ?? user?.role) === 'staff' || (user?.effectiveRole ?? user?.role) === 'consultant' ? 'Apenas Leitura (Sem Permissão)' : (isSaving ? 'Registrando...' : 'Registrar Serviço Topográfico')}
-                    {!((user?.effectiveRole ?? user?.role) === 'staff' || (user?.effectiveRole ?? user?.role) === 'consultant') && <ChevronRight className="w-4 h-4 ml-1 opacity-50" />}
-                  </>
-                )}
-              </button>
+            {(() => { const m = boundaryMetrics(newServicePoints); return m ? (
+              <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-2xl text-xs text-emerald-800 font-bold">
+                Área pelos marcos: {m.areaHa.toLocaleString('pt-BR', { maximumFractionDigits: 4 })} ha · Perímetro: {m.perimeterM.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} m
+              </div>
+            ) : null; })()}
+          </div>
+        );
+      case 3:
+        return (
+          <div className="space-y-4">
+            <p className="text-xs text-slate-500">Monte o preço do serviço. A memória de cálculo abaixo vai para o PDF.</p>
+            <PricingFields value={pricing} onChange={setPricing} areaHa={Number(areaSize) || 0} areaLabel="área levantada" />
+          </div>
+        );
+      case 4:
+        return (
+          <div className="space-y-5">
+            <ResponsibleFields value={responsibleTech} onChange={setResponsibleTech} />
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">Nº da ART / TRT deste serviço</label>
+              <input type="text" value={technicalLicense} onChange={(e) => setTechnicalLicense(e.target.value)} className="w-full glass-input" placeholder="Ex: MG20260012345" />
             </div>
-          </form>
+            <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs space-y-1.5">
+              <div className="text-[10px] font-bold text-slate-500 uppercase mb-1">Resumo do serviço</div>
+              <div className="flex justify-between"><span className="text-slate-500">Cliente / fazenda</span><span className="font-bold text-slate-700 text-right">{selectedClientTopo?.name || '—'} · {propertyName || '—'}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Serviço / área</span><span className="font-bold text-slate-700">{TOPO_SERVICES.find(s => s.id === serviceType)?.label || '—'} · {areaSize || 0} ha</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Pontos GPS</span><span className="font-bold text-slate-700">{newServicePoints.length}</span></div>
+              <div className="flex justify-between pt-1 border-t border-slate-200"><span className="text-slate-500">Valor do serviço</span><span className="font-extrabold text-emerald-700">{formatBRL(priceCalcTopo.total)}</span></div>
+            </div>
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-6 h-full overflow-y-auto pr-2 pb-10">
+      <header className={PAGE_HEADER_CLASS} data-page-header>
+        <PageTitle icon={PageIcon} title="Topografia" subtitle="Levantamentos, medições e georreferenciamento" />
+        <div className="flex items-center gap-3">
+          {readOnly ? (
+            <button disabled className="px-5 py-2.5 rounded-2xl font-bold flex items-center gap-2 bg-slate-300 text-slate-500 cursor-not-allowed text-xs">
+              <Plus className="w-4 h-4" /> Apenas Leitura
+            </button>
+          ) : (
+            <button onClick={openNew} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-2xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition-all">
+              <Plus className="w-4 h-4" /> Novo Serviço
+            </button>
+          )}
         </div>
+      </header>
 
-        <aside className="space-y-6">
-          <div className="glass-card p-6 bg-slate-800 text-white border-none space-y-4">
-             <div className="flex items-center gap-3">
-                <div className="p-2 bg-emerald-500/20 rounded-lg">
-                   <Info className="w-5 h-5 text-slate-400" />
-                </div>
-                <h3 className="font-bold">Diretrizes Técnicas</h3>
-             </div>
-             <p className="text-[11px] text-slate-400 leading-relaxed font-medium">
-                Todo levantamento topográfico deve seguir as normas <strong>NBR 13.133</strong> e, em casos de georreferenciamento, a <strong>3ª Edição da NTGIR (INCRA)</strong>.
-             </p>
-             <ul className="text-[10px] text-slate-500 space-y-2 font-bold uppercase tracking-tighter">
-                <li className="flex items-center gap-2"><div className="w-1 h-1 bg-emerald-500 rounded-full"></div> Tolerância de Erro Posicional</li>
-                <li className="flex items-center gap-2"><div className="w-1 h-1 bg-emerald-500 rounded-full"></div> Datum Oficial (SIRGAS 2000)</li>
-                <li className="flex items-center gap-2"><div className="w-1 h-1 bg-emerald-500 rounded-full"></div> Verificação de Redes de Apoio</li>
-             </ul>
-          </div>
+      <ServiceKpiCards items={kpis} />
 
-          <div className="glass-card p-6 border-t-4 border-t-yellow-500">
-             <h3 className="font-bold text-slate-700 flex items-center gap-2 mb-4">
-                <FileCheck className="w-4 h-4 text-amber-500" /> Status do Módulo
-             </h3>
-             <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                   <span className="text-[10px] font-bold text-slate-400 uppercase">Equipamento:</span>
-                   <span className="text-[10px] font-bold text-emerald-600 uppercase">RTK GNSS Ativo</span>
-                </div>
-                <div className="flex justify-between items-center text-xs">
-                   <span className="text-[10px] font-bold text-slate-400 uppercase">Signal Correction:</span>
-                   <span className="text-[10px] font-bold text-slate-500 uppercase">Ntrip Link OK</span>
-                </div>
-                <div className="w-full bg-slate-100 h-1.5 rounded-full mt-2">
-                   <div className="bg-emerald-500 h-full rounded-full w-4/5 shadow-sm shadow-emerald-100"></div>
-                </div>
-             </div>
-          </div>
-        </aside>
+      <div className="glass-card p-4 rounded-3xl border border-white/40 flex flex-col md:flex-row gap-3 items-center justify-between">
+        <div className="relative w-full md:w-80">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input type="text" placeholder="Buscar por cliente, fazenda ou serviço..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full glass-input pl-10 text-xs" />
+        </div>
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="glass-input text-xs font-bold bg-white/60 w-full md:w-56">
+          <option value="all">Todas as situações</option>
+          <option value="Planejado">Planejado</option>
+          <option value="Campo Concluído">Campo Concluído</option>
+          <option value="Pós-Processamento">Pós-Processamento</option>
+          <option value="Entregue">Entregue</option>
+        </select>
+      </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Recent Services List */}
         <section className="lg:col-span-3 glass-card p-8">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2">
               <FileCheck className="w-5 h-5 text-slate-500" />
-              <h3 className="font-display font-bold text-slate-800 uppercase tracking-tight">Serviços Recentes</h3>
+              <h3 className="font-display font-bold text-slate-800 uppercase tracking-tight">Serviços de Topografia</h3>
             </div>
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Sincronizado com Agenda</span>
           </div>
 
           <div className="space-y-3">
-            {services.length === 0 ? (
+            {filteredServices.length === 0 ? (
               <div className="text-center py-10 opacity-30">
                 <Satellite className="w-10 h-10 mx-auto mb-2" />
                 <p className="text-xs font-bold uppercase">Nenhum serviço registrado</p>
               </div>
             ) : (
-              services.map(service => {
+              filteredServices.map(service => {
               const servicePoints = service.points || [];
               const isExpanded = expandedGpsServiceId === service.id;
               return (
@@ -1077,7 +1087,7 @@ export default function Topography() {
                         <select
                           value={service.status || 'Planejado'}
                           onChange={(e) => updateServiceStatus(service.id, e.target.value)}
-                          disabled={!(['admin', 'manager'].includes((user?.effectiveRole ?? user?.role) as string) || service.createdBy === user?.uid)}
+                          disabled={!canEditService(service)}
                           title="Situação do serviço"
                           className={cn(
                             "px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest border outline-none disabled:opacity-80",
@@ -1093,6 +1103,24 @@ export default function Topography() {
                           <option value="Entregue">Entregue</option>
                         </select>
                       </div>
+                      {Number(service.value) > 0 && (
+                        <button
+                          onClick={() => canEditService(service) && updatePayment(service.id, service.paymentStatus === 'pago' ? 'pendente' : 'pago')}
+                          title={canEditService(service) ? 'Clique para alternar pago / a receber' : undefined}
+                          className={cn('py-1.5 px-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider border whitespace-nowrap', service.paymentStatus === 'pago' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200')}
+                        >
+                          {formatBRL(service.value)} · {service.paymentStatus === 'pago' ? 'Pago' : 'A receber'}
+                        </button>
+                      )}
+                      {canEditService(service) && (
+                        <button
+                          onClick={() => openEdit(service)}
+                          className="py-1.5 px-3 rounded-xl border bg-white border-slate-200 text-slate-600 hover:bg-slate-100 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm transition-all"
+                          title="Editar serviço"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" /> Editar
+                        </button>
+                      )}
                       <button
                         onClick={() => generateServiceReport(service)}
                         className="py-1.5 px-3 rounded-xl border bg-white border-slate-200 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm transition-all"
@@ -1125,9 +1153,10 @@ export default function Topography() {
                           Mapa
                         </a>
                       )}
-                      {!((user?.effectiveRole ?? user?.role) === 'staff' || (user?.effectiveRole ?? user?.role) === 'consultant') && (
-                        <button 
+                      {(user?.effectiveRole ?? user?.role) === 'admin' && (
+                        <button
                           onClick={() => setIsDeleteModalOpen(service.id)}
+                          title="Excluir serviço"
                           className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -1325,6 +1354,48 @@ export default function Topography() {
           </div>
         </section>
       </div>
+
+
+      {/* ─── Janela: novo / editar serviço ─── */}
+      <AnimatePresence>
+        {isFormOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" data-topo-form>
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white dark:bg-slate-900 w-full max-w-3xl rounded-[2rem] shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+              <div className="p-6 border-b border-slate-100 space-y-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 bg-emerald-100 rounded-2xl flex items-center justify-center text-emerald-600"><Map className="w-5 h-5" /></div>
+                    <div>
+                      <h3 className="text-lg font-display font-bold text-slate-800">{editingId ? 'Editar Serviço de Topografia' : 'Novo Serviço de Topografia'}</h3>
+                      <p className="text-[11px] text-slate-500">Etapa {step + 1} de {TOPO_STEPS.length} · {TOPO_STEPS[step]}</p>
+                    </div>
+                  </div>
+                  <button onClick={() => { setIsFormOpen(false); resetForm(); }} className="p-2 hover:bg-slate-100 rounded-xl" title="Fechar"><X className="w-5 h-5 text-slate-400" /></button>
+                </div>
+                <WizardSteps steps={TOPO_STEPS} current={step} onGo={(i) => { if (i <= step) setStep(i); }} />
+              </div>
+              <div className="p-6 overflow-y-auto flex-1">{renderTopoStep()}</div>
+              <div className="p-5 border-t border-slate-100 flex justify-between gap-3 bg-slate-50/60">
+                <button onClick={() => (step === 0 ? (setIsFormOpen(false), resetForm()) : setStep(s => s - 1))}
+                  className="px-5 py-2.5 border border-slate-200 rounded-2xl text-xs font-bold text-slate-500 hover:bg-white flex items-center gap-2">
+                  <ArrowLeft className="w-4 h-4" /> {step === 0 ? 'Cancelar' : 'Voltar'}
+                </button>
+                {step < TOPO_STEPS.length - 1 ? (
+                  <button onClick={goNext} className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-emerald-600/20">
+                    Avançar <ArrowRight className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button onClick={() => runExclusive('Topography.handleSave', handleSave)} disabled={isSaving}
+                    className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-emerald-600/20 disabled:opacity-50">
+                    <Save className="w-4 h-4" /> {isSaving ? 'Salvando...' : editingId ? 'Salvar e Gerar PDF' : 'Registrar Serviço e Gerar PDF'}
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <ConfirmationModal
         isOpen={!!isDeleteModalOpen}

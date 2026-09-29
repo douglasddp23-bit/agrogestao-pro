@@ -229,7 +229,8 @@ export async function buildServiceReportPDF(opts: {
   }
 
   // Assinatura do responsável técnico
-  if (y > 240) { doc.addPage(); y = 40; } else { y += 16; }
+  // Assinatura precisa de ~25 mm acima do rodapé (que começa em ~283 mm)
+  if (y > 250) { doc.addPage(); y = 40; } else { y += 14; }
   doc.setDrawColor(100, 116, 139);
   doc.line(w / 2 - 45, y, w / 2 + 45, y);
   doc.setFont('helvetica', 'bold');

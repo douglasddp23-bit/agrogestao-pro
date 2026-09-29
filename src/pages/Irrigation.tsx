@@ -1,521 +1,418 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Droplet, 
-  ArrowRight, 
-  ArrowLeft, 
-  FileText, 
-  Download, 
-  Calculator, 
-  Zap, 
-  Sprout, 
+import {
+  Droplet,
+  ArrowRight,
+  ArrowLeft,
+  FileText,
+  Download,
+  Calculator,
+  Zap,
+  Sprout,
   CloudRain,
   ShieldCheck,
   BookOpen,
-  UserCheck,
   User,
   CheckCircle2,
-  Info,
-  Printer,
-  Trash2
+  Trash2,
+  Plus,
+  X,
+  Search,
+  Wallet,
+  Clock,
+  LandPlot,
+  Edit3,
+  ChevronRight,
+  Save,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
-import { cn, formatDateTime, formatDate, handleFirestoreError, OperationType, todayLocalDateString } from '../lib/utils';
-import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, limit, deleteDoc, doc } from 'firebase/firestore';
+import { cn, formatDate, handleFirestoreError, OperationType, todayLocalDateString } from '../lib/utils';
+import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Client } from '../types';
 import { useAuth } from '../contexts/AuthContext';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import { drawBrandBanner, drawBrandFooter } from '../lib/pdfBranding';
+import { runExclusive } from '../lib/submitGuard';
+import { buildServiceReportPDF } from '../lib/pdfBranding';
 
 import ConfirmationModal from '../components/ConfirmationModal';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { Droplet as PageIcon } from 'lucide-react';
+import ServiceKpiCards, { formatBRL, isThisMonth, toDateAny } from '../components/service/ServiceKpiCards';
+import {
+  PricingFields, ResponsibleFields, WizardSteps, computePricing, emptyPricing, registryLabel, responsibleFromProfile,
+  ServicePricing, ResponsibleTech,
+} from '../components/service/ServiceFormParts';
 
-interface CalculationStep {
-  id: number;
-  title: string;
-  description: string;
-  icon: any;
-}
+// ─── Cálculos (mesmas fórmulas de antes; só saíram do componente para poderem
+//     ser usadas também no PDF de projetos já salvos) ──────────────────────────
+type Hydraulic = { length: number; diameter: number; flow: number; cFactor: number };
+type Pump = { staticHead: number; servicePressure: number; efficiency: number };
+type Demand = { eto: number; kc: number; area: number };
+type Soil = { cc: number; pmp: number; ds: number; z: number; f: number; ia: number };
 
-const STEPS: CalculationStep[] = [
-  { id: 1, title: 'Campos / Canais', description: 'Dimensionamento de tubulações, redes de campos e perda de carga', icon: Calculator },
-  { id: 2, title: 'Motobombas / Bombas', description: 'Cálculo de potência e altura manométrica de bombas', icon: Zap },
-  { id: 3, title: 'Necessidades', description: 'Demanda hídrica da cultura (ETc) e necessidades do solo', icon: Droplet },
-  { id: 4, title: 'Sistemas / Culturas', description: 'Escolha tecnológica de gotejadores ou aspersores', icon: Sprout },
-  { id: 5, title: 'Planejamento', description: 'Planejamento final, cronograma de irrigações e cronogramas', icon: FileText },
-];
+const emptyHydraulic = (): Hydraulic => ({ length: 0, diameter: 0, flow: 0, cFactor: 140 });
+const emptyPump = (): Pump => ({ staticHead: 0, servicePressure: 0, efficiency: 75 });
+const emptyDemand = (): Demand => ({ eto: 0, kc: 0, area: 0 });
+const emptySoil = (): Soil => ({ cc: 0, pmp: 0, ds: 0, z: 0, f: 0.5, ia: 0 });
 
-export default function Irrigation() {
-  const { user } = useAuth();
-  const [currentStep, setCurrentStep] = useState(1);
-  const [irrigationType, setIrrigationType] = useState<'drip' | 'sprinkler' | null>(null);
-  const [responsible, setResponsible] = useState('');
-  const [clients, setClients] = useState<Client[]>([]);
-  const [selectedClientId, setSelectedClientId] = useState('');
-  const [propertyName, setPropertyName] = useState('');
-  const [availableProperties, setAvailableProperties] = useState<string[]>([]);
-  const [showPropertySelect, setShowPropertySelect] = useState(false);
-  const [technicalJustification, setTechnicalJustification] = useState('');
-  const [planningNotes, setPlanningNotes] = useState('');
-  const [scheduledDate, setScheduledDate] = useState(todayLocalDateString());
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
-  const [projects, setProjects] = useState<any[]>([]);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<string | null>(null);
-
-  // Hydraulic Data
-  const [hydraulic, setHydraulic] = useState({
-    length: 0,
-    diameter: 0,
-    flow: 0,
-    cFactor: 140
-  });
-
-  // Pump Data
-  const [pump, setPump] = useState({
-    staticHead: 0,
-    servicePressure: 0,
-    efficiency: 75
-  });
-
-  // Demand Data
-  const [demand, setDemand] = useState({
-    eto: 0,
-    kc: 0,
-    area: 0
-  });
-
-  // Eficiência de aplicação (Ea, %) — valor típico por método, ajustável
-  const [appEfficiency, setAppEfficiency] = useState(0);
-
-  // Dados do solo para turno de rega (opcionais)
-  const [soil, setSoil] = useState({
-    cc: 0,   // capacidade de campo (% peso)
-    pmp: 0,  // ponto de murcha permanente (% peso)
-    ds: 0,   // densidade do solo (g/cm³)
-    z: 0,    // profundidade efetiva das raízes (cm)
-    f: 0.5,  // fator de disponibilidade (fração)
-    ia: 0,   // intensidade de aplicação do sistema (mm/h)
-  });
-
-  const selectIrrigationType = (type: 'drip' | 'sprinkler') => {
-    setIrrigationType(type);
-    setAppEfficiency(type === 'drip' ? 90 : 80);
-  };
-
-  useEffect(() => {
-    if (user && !responsible) {
-      setResponsible(user.displayName || '');
-    }
-  }, [user]);
-
-  useEffect(() => {
-    const q = query(collection(db, 'clients'), orderBy('name', 'asc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setClients(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client)));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'clients');
-    });
-
-    const qProjects = query(collection(db, 'irrigation_projects'), orderBy('createdAt', 'desc'), limit(5));
-    const unsubscribeProjects = onSnapshot(qProjects, (snapshot) => {
-      setProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
-
-    return () => {
-      unsubscribe();
-      unsubscribeProjects();
-    };
-  }, []);
-
-  // Calculations
-  const headLoss = useMemo(() => {
-    if (!hydraulic.length || !hydraulic.diameter || !hydraulic.flow) return 0;
-    // Hazen-Williams: hf = (10.65 * L * (Q/C)^1.852) / D^4.87
-    const qS = hydraulic.flow / 3600;
-    const dM = hydraulic.diameter / 1000;
-    const hf = (10.65 * hydraulic.length * Math.pow(qS / hydraulic.cFactor, 1.852)) / Math.pow(dM, 4.87);
-    return Number(hf.toFixed(2));
-  }, [hydraulic]);
-
-  const velocity = useMemo(() => {
-    if (!hydraulic.flow || !hydraulic.diameter) return 0;
-    // v = Q / A -> v = (Q/3600) / (pi * (D/2000)^2)
-    const qS = hydraulic.flow / 3600;
-    const area = Math.PI * Math.pow(hydraulic.diameter / 2000, 2);
-    return Number((qS / area).toFixed(2));
-  }, [hydraulic.flow, hydraulic.diameter]);
-
-  const totalHead = useMemo(() => {
-    return Number((pump.staticHead + pump.servicePressure + headLoss).toFixed(2));
-  }, [pump, headLoss]);
-
-  const pumpPower = useMemo(() => {
-    if (!hydraulic.flow || !totalHead) return 0;
-    const qLps = (hydraulic.flow * 1000) / 3600;
-    const power = (qLps * totalHead) / (75 * (pump.efficiency / 100));
-    return Number(power.toFixed(2));
-  }, [hydraulic.flow, totalHead, pump.efficiency]);
-
-  const netDemand = useMemo(() => {
-    return Number((demand.eto * demand.kc).toFixed(2));
-  }, [demand]);
-
-  // Lâmina bruta = ETc / Ea. Antes o volume diário usava só a lâmina líquida
-  // (ETc), ignorando as perdas do sistema — subdimensionava captação e bomba.
-  const grossDemand = useMemo(() => {
-    if (!netDemand || !appEfficiency) return 0;
-    return Number((netDemand / (appEfficiency / 100)).toFixed(2));
-  }, [netDemand, appEfficiency]);
-
-  const netWaterDay = useMemo(() => {
-    return Number((netDemand * demand.area * 10).toFixed(2));
-  }, [netDemand, demand.area]);
-
-  // Volume a captar por dia (já com as perdas do método de irrigação)
-  const totalWaterDay = useMemo(() => {
-    return Number((grossDemand * demand.area * 10).toFixed(2));
-  }, [grossDemand, demand.area]);
-
-  // Turno de rega e tempo de irrigação (opcional — só com os dados do solo).
-  // CRA = (CC − PMP)/10 · Ds · Z   [mm]   (CC e PMP em % de peso, Ds em g/cm³, Z em cm)
-  // IRN = CRA · f;  TR = IRN / ETc (arredondado para baixo);  LB = TR·ETc / Ea;  Ti = LB / Ia
-  const schedule = useMemo(() => {
-    const { cc, pmp, ds, z, f, ia } = soil;
-    if (!cc || !ds || !z || !f || cc <= pmp || !netDemand || !appEfficiency) return null;
-    const cra = ((cc - pmp) / 10) * ds * z;
-    const irnMax = cra * f;
+function computeIrrigation(h: Hydraulic, p: Pump, d: Demand, s: Soil, appEfficiency: number) {
+  // Hazen-Williams: hf = 10.65 * L * (Q/C)^1.852 / D^4.87
+  let headLoss = 0;
+  if (h.length && h.diameter && h.flow) {
+    const qS = h.flow / 3600;
+    const dM = h.diameter / 1000;
+    headLoss = Number(((10.65 * h.length * Math.pow(qS / h.cFactor, 1.852)) / Math.pow(dM, 4.87)).toFixed(2));
+  }
+  // v = Q / A
+  let velocity = 0;
+  if (h.flow && h.diameter) {
+    velocity = Number(((h.flow / 3600) / (Math.PI * Math.pow(h.diameter / 2000, 2))).toFixed(2));
+  }
+  const totalHead = Number((p.staticHead + p.servicePressure + headLoss).toFixed(2));
+  let pumpPower = 0;
+  if (h.flow && totalHead) {
+    const qLps = (h.flow * 1000) / 3600;
+    pumpPower = Number(((qLps * totalHead) / (75 * (p.efficiency / 100))).toFixed(2));
+  }
+  const netDemand = Number((d.eto * d.kc).toFixed(2));
+  // Lâmina bruta = ETc / Ea
+  const grossDemand = netDemand && appEfficiency ? Number((netDemand / (appEfficiency / 100)).toFixed(2)) : 0;
+  const netWaterDay = Number((netDemand * d.area * 10).toFixed(2));
+  const totalWaterDay = Number((grossDemand * d.area * 10).toFixed(2));
+  // Turno de rega (opcional): CRA = (CC − PMP)/10 · Ds · Z; IRN = CRA · f; TR = IRN / ETc; LB = TR·ETc / Ea; Ti = LB / Ia
+  let schedule: null | { cra: number; irnMax: number; trMax: number; tr: number; irn: number; lb: number; ti: number; warning: boolean } = null;
+  if (s.cc && s.ds && s.z && s.f && s.cc > s.pmp && netDemand && appEfficiency) {
+    const cra = ((s.cc - s.pmp) / 10) * s.ds * s.z;
+    const irnMax = cra * s.f;
     const trMax = irnMax / netDemand;
     const tr = Math.max(1, Math.floor(trMax));
     const irn = tr * netDemand;
     const lb = irn / (appEfficiency / 100);
-    const ti = ia ? lb / ia : 0;
-    return {
-      cra: Number(cra.toFixed(2)),
-      irnMax: Number(irnMax.toFixed(2)),
-      trMax: Number(trMax.toFixed(2)),
-      tr,
-      irn: Number(irn.toFixed(2)),
-      lb: Number(lb.toFixed(2)),
-      ti: Number(ti.toFixed(2)),
-      // TR < 1 dia: o solo não guarda a água de um dia inteiro — irrigar mais de uma vez por dia
-      warning: trMax < 1,
+    const ti = s.ia ? lb / s.ia : 0;
+    schedule = {
+      cra: Number(cra.toFixed(2)), irnMax: Number(irnMax.toFixed(2)), trMax: Number(trMax.toFixed(2)), tr,
+      irn: Number(irn.toFixed(2)), lb: Number(lb.toFixed(2)), ti: Number(ti.toFixed(2)), warning: trMax < 1,
     };
-  }, [soil, netDemand, appEfficiency]);
+  }
+  return { headLoss, velocity, totalHead, pumpPower, netDemand, grossDemand, appEfficiency, netWaterDay, totalWaterDay, schedule };
+}
 
-  const nextStep = () => setCurrentStep(prev => Math.min(prev + 1, 5));
-  const prevStep = () => setCurrentStep(prev => Math.max(prev - 1, 1));
+// ─── Situação ────────────────────────────────────────────────────────────────
+const STATUSES = ['Em Andamento', 'Concluído', 'Cancelado'] as const;
+const statusOf = (p: any): string => (p.status === 'Finalizado' ? 'Concluído' : p.status || 'Em Andamento');
+const STATUS_STYLE: Record<string, string> = {
+  'Em Andamento': 'bg-amber-100 text-amber-700',
+  'Concluído': 'bg-emerald-100 text-emerald-700',
+  'Cancelado': 'bg-slate-200 text-slate-600',
+};
+const systemLabel = (t?: string | null) => (t === 'drip' ? 'Gotejamento' : t === 'sprinkler' ? 'Aspersão' : 'Não definido');
+
+const STEPS = ['Cliente', 'Tubulação e Bomba', 'Demanda e Sistema', 'Valor do Serviço', 'Responsável e PDF'];
+
+const REFERENCES = [
+  'BERNARDO, S.; MANTOVANI, E. C.; SILVA, D. D.; SOARES, A. A. Manual de Irrigação. 9. ed. Viçosa: Ed. UFV, 2019.',
+  'ALLEN, R. G.; PEREIRA, L. S.; RAES, D.; SMITH, M. Crop evapotranspiration: Guidelines for computing water requirements. FAO Irrigation and Drainage Paper 56. Rome, 1998.',
+  'HAZEN, A.; WILLIAMS, G. S. Hydraulic Tables. New York: John Wiley & Sons, 1920.',
+  'ASSOCIAÇÃO BRASILEIRA DE NORMAS TÉCNICAS. NBR 14197: Equipamentos de irrigação — aspersão convencional — critérios para o projeto.',
+];
+
+// ─── PDF do projeto (mesmo padrão do Crédito Rural: logo, cliente, dados, responsável) ─
+async function generateIrrigationPDF(project: any, client?: Client) {
+  const h: Hydraulic = { ...emptyHydraulic(), ...(project.inputs?.hydraulic || {}) };
+  const p: Pump = { ...emptyPump(), ...(project.inputs?.pump || {}) };
+  const d: Demand = { ...emptyDemand(), ...(project.inputs?.demand || {}) };
+  const s: Soil = { ...emptySoil(), ...(project.inputs?.soil || {}) };
+  const ea = project.results?.appEfficiency || project.appEfficiency || 0;
+  const r = computeIrrigation(h, p, d, s, ea);
+  const qS = h.flow / 3600;
+  const qLps = (h.flow * 1000) / 3600;
+  const pricing = computePricing(project.pricing, d.area);
+  const resp: Partial<ResponsibleTech> = project.responsibleTech || { name: project.responsible };
+
+  const memoria = [
+    '1) Perda de carga — Hazen-Williams: hf = 10,65 · L · (Q/C)^1,852 · D^-4,87',
+    `   Q = ${h.flow} m³/h = ${qS.toFixed(6)} m³/s;  D = ${h.diameter} mm = ${(h.diameter / 1000).toFixed(4)} m`,
+    `   hf = 10,65 · ${h.length} · (${qS.toFixed(6)} / ${h.cFactor})^1,852 · ${(h.diameter / 1000).toFixed(4)}^-4,87 = ${r.headLoss} mca`,
+    `   Velocidade: v = Q / A = ${r.velocity} m/s${r.velocity > 2 ? '  (ACIMA de 2,0 m/s — rever diâmetro)' : ''}`,
+    '2) Altura manométrica e potência',
+    `   HMT = ${p.staticHead} + ${p.servicePressure} + ${r.headLoss} = ${r.totalHead} mca`,
+    `   P (cv) = Q(L/s) · HMT / (75 · rendimento) = (${qLps.toFixed(2)} · ${r.totalHead}) / (75 · ${p.efficiency / 100}) = ${r.pumpPower} cv`,
+    '3) Necessidade hídrica (FAO-56)',
+    `   ETc = ETo · Kc = ${d.eto} · ${d.kc} = ${r.netDemand} mm/dia`,
+    ea
+      ? `   Lâmina bruta = ETc / Ea = ${r.netDemand} / ${ea / 100} = ${r.grossDemand} mm/dia`
+      : '   Eficiência de aplicação não informada — lâmina bruta não calculada.',
+    `   Volume a captar = ${ea ? r.grossDemand : r.netDemand} · ${d.area} · 10 = ${ea ? r.totalWaterDay : r.netWaterDay} m³/dia`,
+    ...(r.schedule ? [
+      '4) Turno de rega',
+      `   CRA = (${s.cc} - ${s.pmp})/10 · ${s.ds} · ${s.z} = ${r.schedule.cra} mm;  IRN = CRA · ${s.f} = ${r.schedule.irnMax} mm`,
+      `   TR = IRN / ETc = ${r.schedule.trMax} -> TR adotado ${r.schedule.tr} dia(s);  lâmina bruta por irrigação = ${r.schedule.lb} mm` +
+        (r.schedule.ti ? `;  tempo de irrigação = ${r.schedule.ti} h` : ''),
+      ...(r.schedule.warning ? ['   ATENÇÃO: o solo não armazena 1 dia de consumo — irrigar mais de uma vez ao dia.'] : []),
+    ] : []),
+  ].join('\n');
+
+  const pdf = await buildServiceReportPDF({
+    documentTitle: 'Projeto de Irrigação — Memorial Técnico',
+    serviceName: `Sistema: ${systemLabel(project.type)} · Situação: ${statusOf(project)}`,
+    client: {
+      name: project.clientName,
+      cpf: client?.cpf,
+      property: project.propertyName,
+      city: client?.address?.city ? `${client.address.city}${client.address.state ? '/' + client.address.state : ''}` : undefined,
+    },
+    sections: [
+      {
+        title: 'Dados Técnicos do Projeto',
+        rows: [
+          ['Sistema de irrigação', systemLabel(project.type)],
+          ['Área irrigada', `${d.area} ha`],
+          ['Tubulação: comprimento / diâmetro', `${h.length} m / ${h.diameter} mm (C = ${h.cFactor})`],
+          ['Vazão do trecho', `${h.flow} m³/h`],
+          ['Desnível / pressão de serviço', `${p.staticHead} m / ${p.servicePressure} mca`],
+          ['Rendimento da bomba', `${p.efficiency} %`],
+          ['ETo / Kc', `${d.eto} mm/dia / ${d.kc}`],
+          ['Eficiência de aplicação (Ea)', ea ? `${ea} %` : '—'],
+          ['Data prevista de execução', project.scheduledDate ? formatDate(project.scheduledDate) : '—'],
+        ],
+      },
+      {
+        title: 'Resultados',
+        rows: [
+          ['Perda de carga (hf)', `${r.headLoss} mca`],
+          ['Velocidade na tubulação', `${r.velocity} m/s`],
+          ['Altura manométrica total (HMT)', `${r.totalHead} mca`],
+          ['Potência mínima da bomba', `${r.pumpPower} cv`],
+          ['Lâmina líquida (ETc)', `${r.netDemand} mm/dia`],
+          ['Lâmina bruta', ea ? `${r.grossDemand} mm/dia` : '—'],
+          ['Volume diário a captar', `${ea ? r.totalWaterDay : r.netWaterDay} m³/dia`],
+          ...(r.schedule ? [
+            ['Turno de rega adotado', `${r.schedule.tr} dia(s)`] as [string, string],
+            ['Lâmina bruta por irrigação', `${r.schedule.lb} mm`] as [string, string],
+            ...(r.schedule.ti ? [['Tempo de irrigação', `${r.schedule.ti} h`] as [string, string]] : []),
+          ] : []),
+        ],
+      },
+      { title: 'Memória de Cálculo', text: memoria },
+      { title: 'Valor do Serviço', rows: pricing.rows },
+      {
+        title: 'Justificativa Técnica e Planejamento',
+        text: [
+          project.technicalJustification || (project.type === 'drip'
+            ? 'O gotejamento foi selecionado visando a máxima eficiência no uso da água e energia, com aplicação direta na zona radicular.'
+            : project.type === 'sprinkler'
+              ? 'A aspersão foi escolhida pela versatilidade na cobertura de grandes áreas e adaptação a diferentes topografias.'
+              : ''),
+          project.planningNotes || 'Implantar conforme diâmetros e potências aqui descritos. Recomenda-se ventosas nos pontos altos e válvulas de descarga nos pontos baixos da rede.',
+        ].filter(Boolean).join('\n\n'),
+      },
+      { title: 'Referências', text: REFERENCES.join('\n') },
+    ],
+    responsible: resp.name || project.responsible || 'Responsável Técnico',
+    certification: registryLabel(resp),
+  });
+  pdf.save(`Projeto_Irrigacao_${(project.clientName || 'Cliente').replace(/\s+/g, '_')}.pdf`);
+}
+
+// ─── Página ──────────────────────────────────────────────────────────────────
+export default function Irrigation() {
+  const { user } = useAuth();
+  const role = (user?.effectiveRole ?? user?.role) as string;
+  const readOnly = role === 'staff' || role === 'consultant';
+  const isAdmin = role === 'admin';
+
+  const [clients, setClients] = useState<Client[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [viewing, setViewing] = useState<any | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<string | null>(null);
+
+  // Formulário (janela em etapas)
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [step, setStep] = useState(0);
+  const [isSaving, setIsSaving] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState('');
+  const [propertyName, setPropertyName] = useState('');
+  const [scheduledDate, setScheduledDate] = useState(todayLocalDateString());
+  const [irrigationType, setIrrigationType] = useState<'drip' | 'sprinkler' | null>(null);
+  const [technicalJustification, setTechnicalJustification] = useState('');
+  const [planningNotes, setPlanningNotes] = useState('');
+  const [hydraulic, setHydraulic] = useState<Hydraulic>(emptyHydraulic());
+  const [pump, setPump] = useState<Pump>(emptyPump());
+  const [demand, setDemand] = useState<Demand>(emptyDemand());
+  const [soil, setSoil] = useState<Soil>(emptySoil());
+  const [appEfficiency, setAppEfficiency] = useState(0);
+  const [pricing, setPricing] = useState<ServicePricing>(emptyPricing());
+  const [responsibleTech, setResponsibleTech] = useState<ResponsibleTech>(responsibleFromProfile(user));
+
+  useEffect(() => {
+    const unsubClients = onSnapshot(query(collection(db, 'clients'), orderBy('name', 'asc')), (snap) => {
+      setClients(snap.docs.map(d => ({ id: d.id, ...d.data() } as Client)));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'clients'));
+    const unsubProjects = onSnapshot(query(collection(db, 'irrigation_projects'), orderBy('createdAt', 'desc')), (snap) => {
+      setProjects(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setLoading(false);
+    }, (error) => { setLoading(false); handleFirestoreError(error, OperationType.LIST, 'irrigation_projects'); });
+    return () => { unsubClients(); unsubProjects(); };
+  }, []);
+
+  const calc = useMemo(
+    () => computeIrrigation(hydraulic, pump, demand, soil, appEfficiency),
+    [hydraulic, pump, demand, soil, appEfficiency]
+  );
+  const { headLoss, velocity, totalHead, pumpPower, netDemand, grossDemand, netWaterDay, totalWaterDay, schedule } = calc;
+  const priceCalc = computePricing(pricing, demand.area);
+
+  const selectedClient = clients.find(c => c.id === selectedClientId);
+  const clientProperties = (selectedClient?.properties || []).map(p => p.name).filter(Boolean);
 
   const handleClientChange = (clientId: string) => {
     setSelectedClientId(clientId);
-    const selectedClient = clients.find(c => c.id === clientId);
-    
-    if (selectedClient) {
-      const properties = selectedClient.properties?.map(p => p.name) || [];
-      setAvailableProperties(properties);
-      
-      if (properties.length === 1) {
-        setPropertyName(properties[0]);
-        setShowPropertySelect(false);
-      } else if (properties.length > 1) {
-        setPropertyName('');
-        setShowPropertySelect(true);
-      } else {
-        setPropertyName('');
-        setShowPropertySelect(false);
-      }
-    } else {
-      setAvailableProperties([]);
-      setShowPropertySelect(false);
-      setPropertyName('');
+    const props = (clients.find(c => c.id === clientId)?.properties || []).map(p => p.name).filter(Boolean);
+    setPropertyName(props.length === 1 ? props[0] : '');
+    if (props.length === 1) suggestArea(clientId, props[0]);
+  };
+
+  // Área da fazenda cadastrada já vem como sugestão da área do projeto
+  const suggestArea = (clientId: string, name: string) => {
+    const prop = (clients.find(c => c.id === clientId)?.properties || []).find(p => p.name === name);
+    if (prop?.areaHectares && !demand.area) setDemand(prev => ({ ...prev, area: Number(prop.areaHectares) || 0 }));
+  };
+
+  const selectIrrigationType = (type: 'drip' | 'sprinkler') => {
+    setIrrigationType(type);
+    if (!appEfficiency || irrigationType !== type) setAppEfficiency(type === 'drip' ? 90 : 80);
+  };
+
+  const resetForm = () => {
+    setEditingId(null); setStep(0);
+    setSelectedClientId(''); setPropertyName(''); setScheduledDate(todayLocalDateString());
+    setIrrigationType(null); setTechnicalJustification(''); setPlanningNotes('');
+    setHydraulic(emptyHydraulic()); setPump(emptyPump()); setDemand(emptyDemand()); setSoil(emptySoil());
+    setAppEfficiency(0); setPricing(emptyPricing()); setResponsibleTech(responsibleFromProfile(user));
+  };
+
+  const openNew = () => { resetForm(); setIsFormOpen(true); };
+
+  const openEdit = (p: any) => {
+    resetForm();
+    setEditingId(p.id);
+    setSelectedClientId(p.clientId || '');
+    setPropertyName(p.propertyName || '');
+    setScheduledDate(p.scheduledDate || todayLocalDateString());
+    setIrrigationType(p.type || null);
+    setTechnicalJustification(p.technicalJustification || '');
+    setPlanningNotes(p.planningNotes || '');
+    setHydraulic({ ...emptyHydraulic(), ...(p.inputs?.hydraulic || {}) });
+    setPump({ ...emptyPump(), ...(p.inputs?.pump || {}) });
+    setDemand({ ...emptyDemand(), ...(p.inputs?.demand || {}) });
+    setSoil({ ...emptySoil(), ...(p.inputs?.soil || {}) });
+    setAppEfficiency(p.results?.appEfficiency || 0);
+    setPricing({ ...emptyPricing(), ...(p.pricing || {}) });
+    setResponsibleTech(p.responsibleTech || { ...responsibleFromProfile(user), name: p.responsible || user?.displayName || '' });
+    setViewing(null);
+    setIsFormOpen(true);
+  };
+
+  const validateStep = (i: number): string | null => {
+    if (i === 0) {
+      if (!selectedClientId) return 'Selecione o cliente.';
+      if (!propertyName.trim()) return 'Informe a propriedade/fazenda.';
     }
+    if (i === 2) {
+      if (!demand.area) return 'Informe a área do projeto (ha).';
+      if (!irrigationType) return 'Escolha o sistema de irrigação (gotejamento ou aspersão).';
+    }
+    if (i === 4) {
+      if (!responsibleTech.name.trim()) return 'Informe o nome do responsável técnico.';
+    }
+    return null;
   };
 
-  const generatePDF = () => {
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const client = clients.find(c => c.id === selectedClientId);
-
-    drawBrandBanner(doc, { height: 40, subtitle: 'Soluções Hídricas e Projetos de Irrigação' });
-
-    doc.setTextColor(30, 41, 59);
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('MEMORIAL DESCRITIVO DE IRRIGAÇÃO', 20, 55);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Data: ${formatDate(new Date())}`, pageWidth - 20, 55, { align: 'right' });
-
-    doc.setDrawColor(226, 232, 240);
-    doc.line(20, 60, pageWidth - 20, 60);
-
-    doc.setFont('helvetica', 'bold');
-    doc.text('CLIENTE:', 20, 70);
-    doc.setFont('helvetica', 'normal');
-    doc.text(client?.name || 'Não selecionado', 45, 70);
-
-    doc.setFont('helvetica', 'bold');
-    doc.text('PROPRIEDADE:', 20, 76);
-    doc.setFont('helvetica', 'normal');
-    doc.text(propertyName || 'Não informado', 55, 76);
-
-    doc.setFont('helvetica', 'bold');
-    doc.text('TÉCNICO:', 20, 82);
-    doc.setFont('helvetica', 'normal');
-    doc.text(responsible || user?.displayName || 'N/A', 45, 82);
-
-    doc.setFont('helvetica', 'bold');
-    doc.text('SISTEMA:', 20, 88);
-    doc.setFont('helvetica', 'normal');
-    doc.text(irrigationType === 'drip' ? 'Gotejamento' : irrigationType === 'sprinkler' ? 'Aspersão' : 'Não definido', 45, 88);
-
-    doc.setFont('helvetica', 'bold');
-    doc.text('1. DIMENSIONAMENTO HIDRÁULICO', 20, 100);
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'italic');
-    doc.text('Critério de Hazen-Williams para perda de carga em condutos forçados.', 20, 105);
-
-    autoTable(doc, {
-      startY: 110,
-      head: [['Parâmetro de Entrada', 'Valor', 'Unidade']],
-      body: [
-        ['Comprimento da Tubulação (L)', hydraulic.length, 'm'],
-        ['Diâmetro Interno (D)', hydraulic.diameter, 'mm'],
-        ['Vazão do Trecho (Q)', hydraulic.flow, 'm³/h'],
-        ['Material (Coeficiente C)', hydraulic.cFactor, '-'],
-      ],
-      headStyles: { fillColor: [16, 185, 129] },
-      margin: { left: 20, right: 20 }
-    });
-
-    const hfStepY = (doc as any).lastAutoTable?.finalY + 10;
-    doc.setFont('helvetica', 'bold');
-    doc.text('Passo a Passo do Cálculo (Memória de Cálculo):', 20, hfStepY);
-    doc.setFont('helvetica', 'normal');
-    const qS = hydraulic.flow / 3600;
-    const dM = hydraulic.diameter / 1000;
-    const formulaText = [
-      `1. Conversão de Unidades:`,
-      `   Q = ${hydraulic.flow} m³/h -> ${qS.toFixed(6)} m³/s`,
-      `   D = ${hydraulic.diameter} mm -> ${dM.toFixed(4)} m`,
-      `2. Aplicação da Equação de Hazen-Williams:`,
-      `   hf = 10.65 * L * (Q/C)^1.852 * D^-4.87`,
-      `   hf = 10.65 * ${hydraulic.length} * (${qS.toFixed(6)} / ${hydraulic.cFactor})^1.852 * ${dM.toFixed(4)}^-4.87`,
-      `3. Resultado Final:`,
-      `   Perda de Carga (hf) = ${headLoss} mca`
-    ];
-    doc.text(formulaText, 25, hfStepY + 7);
-
-    // New Page for Pump
-    doc.addPage();
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
-    doc.text('2. DIMENSIONAMENTO DO CONJUNTO MOTOBOMBA', 20, 20);
-    
-    autoTable(doc, {
-      startY: 25,
-      head: [['Parâmetro de Entrada', 'Valor', 'Unidade']],
-      body: [
-        ['Altura Geométrica / Desnível', pump.staticHead, 'm'],
-        ['Pressão Requerida (Serviço)', pump.servicePressure, 'mca'],
-        ['Perda de Carga Total (hf)', headLoss, 'mca'],
-        ['Rendimento Estimado', pump.efficiency, '%'],
-      ],
-      headStyles: { fillColor: [59, 130, 246] },
-      margin: { left: 20, right: 20 }
-    });
-
-    const pumpStepY = (doc as any).lastAutoTable?.finalY + 10;
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Memória de Cálculo - Potência Requerida:', 20, pumpStepY);
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    const qLps = (hydraulic.flow * 1000) / 3600;
-    const pumpFormulaText = [
-      `1. Cálculo da Altura Manométrica Total (HMT):`,
-      `   HMT = Alt. Geométrica + Pressão Serviço + Perda Carga`,
-      `   HMT = ${pump.staticHead} + ${pump.servicePressure} + ${headLoss} = ${totalHead} mca`,
-      `2. Vazão em Litros por Segundo:`,
-      `   Q = (${hydraulic.flow} * 1000) / 3600 = ${qLps.toFixed(2)} L/s`,
-      `3. Cálculo da Potência (P):`,
-      `   P(cv) = (Q[L/s] * HMT[m]) / (75 * Rendimento)`,
-      `   P(cv) = (${qLps.toFixed(2)} * ${totalHead}) / (75 * ${pump.efficiency/100})`,
-      `4. Resultado Final:`,
-      `   Potência Mínima Calculada = ${pumpPower} cv`
-    ];
-    doc.text(pumpFormulaText, 25, pumpStepY + 7);
-
-    // New Page for Demand
-    doc.addPage();
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
-    doc.text('3. DEMANDA HÍDRICA E TIPO DE SISTEMA', 20, 20);
-
-    autoTable(doc, {
-      startY: 25,
-      head: [['Parâmetro de Demanda', 'Valor', 'Unidade']],
-      body: [
-        ['Evapotranspiração de Referência (ETo)', demand.eto, 'mm/dia'],
-        ['Coeficiente da Cultura (Kc)', demand.kc, '-'],
-        ['Área Total do Talhão', demand.area, 'ha'],
-        ['Eficiência de Aplicação (Ea)', appEfficiency || '-', '%'],
-      ],
-      headStyles: { fillColor: [249, 115, 22] },
-      margin: { left: 20, right: 20 }
-    });
-
-    const demandStepY = (doc as any).lastAutoTable?.finalY + 10;
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Cálculo da Necessidade Hídrica:', 20, demandStepY);
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    const demandFormulaText = [
-      `1. Lâmina Líquida (ETc):`,
-      `   ETc = ETo * Kc = ${demand.eto} * ${demand.kc} = ${netDemand} mm/dia`,
-      `2. Lâmina Bruta (perdas do método de irrigação):`,
-      appEfficiency
-        ? `   LB = ETc / Ea = ${netDemand} / ${appEfficiency / 100} = ${grossDemand} mm/dia`
-        : `   Eficiência de aplicação não informada — lâmina bruta não calculada.`,
-      `3. Volume de Água Diário a Captar:`,
-      `   Vol = LB * Área * 10 (m³/ha)`,
-      `   Vol = ${appEfficiency ? grossDemand : netDemand} * ${demand.area} * 10 = ${appEfficiency ? totalWaterDay : netWaterDay} m³/dia`,
-      ...(schedule ? [
-        `4. Turno de Rega (dados do solo):`,
-        `   CRA = (CC - PMP)/10 * Ds * Z = (${soil.cc} - ${soil.pmp})/10 * ${soil.ds} * ${soil.z} = ${schedule.cra} mm`,
-        `   IRN = CRA * f = ${schedule.irnMax} mm;  TR = IRN / ETc = ${schedule.trMax} -> TR adotado ${schedule.tr} dia(s)`,
-        `   Lâmina bruta por irrigação = ${schedule.lb} mm`
-          + (schedule.ti > 0 ? `;  Tempo de irrigação = ${schedule.lb} / ${soil.ia} = ${schedule.ti} h` : ''),
-        ...(schedule.warning ? [`   ATENÇÃO: solo não armazena 1 dia de consumo — irrigar mais de uma vez ao dia.`] : []),
-      ] : []),
-    ];
-    doc.text(demandFormulaText, 25, demandStepY + 7);
-
-    const justificationY = demandStepY + 7 + demandFormulaText.length * (doc.getFontSize() * doc.getLineHeightFactor() / doc.internal.scaleFactor) + 10;
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.text('JUSTIFICATIVA TÉCNICA DO SISTEMA ESCOLHIDO:', 20, justificationY);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    const justificationText = technicalJustification || 
-      (irrigationType === 'drip' 
-        ? "O sistema de gotejamento foi selecionado visando a máxima eficiência no uso da água e energia, reduzindo perdas por evaporação e garantindo a aplicação direta na zona radicular da cultura, ideal para cultivos intensivos e regiões com escassez hídrica."
-        : "O sistema de aspersão foi escolhido pela sua versatilidade na cobertura de grandes áreas e adaptabilidade a diferentes topografias, permitindo o controle do microclima e facilitando a mecanização agrícola em culturas de cobertura total.");
-    const splitJustification = doc.splitTextToSize(justificationText, pageWidth - 40);
-    doc.text(splitJustification, 20, justificationY + 7);
-
-    // References and Planning
-    doc.addPage();
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
-    doc.text('4. PLANEJAMENTO E REFERÊNCIAS', 20, 20);
-
-    doc.setFontSize(10);
-    doc.text('PLANEJAMENTO FINAL E CONSIDERAÇÕES:', 20, 35);
-    doc.setFont('helvetica', 'normal');
-    const planningText = planningNotes || "O projeto dimensionado deve ser implantado seguindo rigorosamente as especificações de diâmetros e potências aqui descritas. Recomenda-se a instalação de ventosas nos pontos altos e válvulas de descarga nos pontos baixos da rede para manutenção da integridade hidráulica do sistema.";
-    const splitPlanning = doc.splitTextToSize(planningText, pageWidth - 40);
-    doc.text(splitPlanning, 20, 42);
-
-    doc.setFont('helvetica', 'bold');
-    doc.text('REFERÊNCIAS BIBLIOGRÁFICAS:', 20, 70);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    const refs = [
-      'BERNARDO, S.; MANTOVANI, E. C.; SILVA, D. D.; SOARES, A. A. Manual de Irrigação. 9. ed. Viçosa: Ed. UFV, 2019.',
-      'ALLEN, R. G.; PEREIRA, L. S.; RAES, D.; SMITH, M. Crop evapotranspiration: Guidelines for computing water requirements. FAO Irrigation and Drainage Paper 56. Rome, 1998.',
-      'HAZEN, A.; WILLIAMS, G. S. Hydraulic Tables. New York: John Wiley & Sons, 1920.',
-      'ASSOCIAÇÃO BRASILEIRA DE NORMAS TÉCNICAS. NBR 14197:2020: Equipamentos de irrigação aspersão convencional — Critérios para o projeto.',
-      'ASAE - American Society of Agricultural Engineers. Standards of Irrigation and Drainage.'
-    ];
-    doc.text(refs.flatMap(r => doc.splitTextToSize(r, pageWidth - 40)), 20, 77);
-
-    const bottomY = doc.internal.pageSize.getHeight() - 40;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.setDrawColor(200, 200, 200);
-    doc.line(60, bottomY - 10, pageWidth - 60, bottomY - 10);
-    doc.text(responsible || user?.displayName || 'TECNICO RESPONSAVEL', pageWidth / 2, bottomY - 5, { align: 'center' });
-    doc.setFont('helvetica', 'normal');
-    doc.text('ASSINATURA DO RESPONSÁVEL TÉCNICO', pageWidth / 2, bottomY, { align: 'center' });
-
-    drawBrandFooter(doc);
-
-    doc.save(`Projeto_Irrigacao_${client?.name?.replace(/\s+/g, '_') || 'Cliente'}.pdf`);
+  const goNext = () => {
+    const err = validateStep(step);
+    if (err) { toast.error(err); return; }
+    setStep(s => Math.min(s + 1, STEPS.length - 1));
   };
+
+  const buildPayload = () => ({
+    clientId: selectedClientId,
+    clientName: selectedClient?.name || 'Cliente Desconhecido',
+    propertyName: propertyName.trim(),
+    type: irrigationType,
+    responsible: responsibleTech.name.trim(),
+    responsibleTech: { ...responsibleTech, name: responsibleTech.name.trim(), registryNumber: responsibleTech.registryNumber.trim() },
+    technicalJustification,
+    scheduledDate,
+    planningNotes,
+    pricing,
+    value: priceCalc.total,
+    results: { headLoss, totalHead, pumpPower, netDemand, grossDemand, appEfficiency, netWaterDay, totalWaterDay, schedule, velocity },
+    inputs: { hydraulic, pump, demand, soil },
+  });
 
   const handleSave = async () => {
-    if (!selectedClientId) {
-      toast.error('Por favor, selecione um cliente primeiro.');
-      return;
+    for (let i = 0; i < STEPS.length; i++) {
+      const err = validateStep(i);
+      if (err) { setStep(i); toast.error(err); return; }
     }
-    
     setIsSaving(true);
     try {
-      const client = clients.find(c => c.id === selectedClientId);
-      const serviceId = await addDoc(collection(db, 'irrigation_projects'), {
-        clientId: selectedClientId,
-        clientName: client?.name || 'Cliente Desconhecido',
-        propertyName,
-        type: irrigationType,
-        responsible,
-        technicalJustification,
-        scheduledDate,
-        planningNotes,
-        results: {
-          headLoss,
-          totalHead,
-          pumpPower,
-          netDemand,
-          grossDemand,
-          appEfficiency,
-          netWaterDay,
-          totalWaterDay,
-          schedule,
-          velocity
-        },
-        inputs: {
-          hydraulic,
-          pump,
-          demand,
-          soil
-        },
-        createdAt: serverTimestamp(),
-        createdBy: user?.uid,
-        status: 'Finalizado'
-      });
-
-      // Automatically integrate with Agenda by creating a notification.
-      // Isolado do try principal: se essa notificação falhar, o projeto já
-      // foi salvo — não pode aparecer como erro e fazer duplicar o cadastro.
-      try {
-        if (user) {
-          await addDoc(collection(db, 'notifications'), {
-            userId: user.uid,
-            title: 'Projeto de Irrigação Agendado',
-            message: `O projeto para ${client?.name} foi integrado à agenda para o dia ${scheduledDate.split('-').reverse().join('/')}.`,
-            type: 'success',
-            read: false,
-            createdAt: new Date().toISOString(),
-            link: 'scheduling'
-          });
+      const payload = buildPayload();
+      let saved: any;
+      if (editingId) {
+        await updateDoc(doc(db, 'irrigation_projects', editingId), { ...payload, updatedAt: serverTimestamp() });
+        const old = projects.find(p => p.id === editingId) || {};
+        saved = { ...old, ...payload, id: editingId };
+        toast.success('Projeto de irrigação atualizado!');
+      } else {
+        const ref = await addDoc(collection(db, 'irrigation_projects'), {
+          ...payload,
+          status: 'Em Andamento',
+          paymentStatus: 'pendente',
+          createdAt: serverTimestamp(),
+          createdBy: user?.uid,
+        });
+        saved = { ...payload, id: ref.id, status: 'Em Andamento', paymentStatus: 'pendente' };
+        toast.success('Projeto de irrigação criado!');
+        // Aviso na agenda — isolado: se falhar, o projeto já está salvo.
+        try {
+          if (user) {
+            await addDoc(collection(db, 'notifications'), {
+              userId: user.uid,
+              title: 'Projeto de Irrigação Agendado',
+              message: `O projeto para ${payload.clientName} foi integrado à agenda para o dia ${scheduledDate.split('-').reverse().join('/')}.`,
+              type: 'success',
+              read: false,
+              createdAt: new Date().toISOString(),
+              link: 'scheduling',
+            });
+          }
+        } catch (notifError) {
+          console.warn('Falha ao criar notificação (projeto já salvo):', notifError);
         }
-      } catch (notifError) {
-        console.warn('Falha ao criar notificação de agenda (projeto já foi salvo normalmente):', notifError);
       }
-
-      setSaveSuccess(true);
-      toast.success('Projeto de irrigação salvo com sucesso!');
-      setTimeout(() => setSaveSuccess(false), 3000);
-      generatePDF();
+      setIsFormOpen(false);
+      resetForm();
+      try { await generateIrrigationPDF(saved, clients.find(c => c.id === saved.clientId)); }
+      catch (e) { console.error(e); toast.error('Projeto salvo, mas o PDF não pôde ser gerado.'); }
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'irrigation_projects');
+      handleFirestoreError(error, editingId ? OperationType.UPDATE : OperationType.CREATE, 'irrigation_projects');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const updateProject = async (p: any, patch: Record<string, any>, msg: string) => {
+    try {
+      await updateDoc(doc(db, 'irrigation_projects', p.id), { ...patch, updatedAt: serverTimestamp() });
+      setViewing((v: any) => (v && v.id === p.id ? { ...v, ...patch } : v));
+      toast.success(msg);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'irrigation_projects');
     }
   };
 
@@ -523,55 +420,99 @@ export default function Irrigation() {
     try {
       await deleteDoc(doc(db, 'irrigation_projects', id));
       setIsDeleteModalOpen(null);
+      setViewing(null);
       toast.success('Projeto excluído com sucesso.');
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, 'irrigation_projects');
     }
   };
 
-  const renderStepContent = () => {
-    switch (currentStep) {
+  const downloadPDF = async (p: any) => {
+    try { await generateIrrigationPDF(p, clients.find(c => c.id === p.clientId)); }
+    catch (e) { console.error(e); toast.error('Não foi possível gerar o PDF.'); }
+  };
+
+  const canEditProject = (p: any) => !readOnly && (['admin', 'manager', 'hr'].includes(role) || p.createdBy === user?.uid);
+
+  // ─── Mini painel ──────────────────────────────────────────────────────────
+  const active = projects.filter(p => statusOf(p) === 'Em Andamento');
+  const done = projects.filter(p => statusOf(p) === 'Concluído');
+  const toReceive = projects.filter(p => statusOf(p) !== 'Cancelado' && p.paymentStatus !== 'pago');
+  const areaActive = active.reduce((s, p) => s + (Number(p.inputs?.demand?.area) || 0), 0);
+  const kpis = [
+    { label: 'Projetos em Andamento', value: active.length, hint: `${areaActive.toLocaleString('pt-BR')} ha em projeto`, icon: Droplet, tone: 'emerald' as const },
+    { label: 'Valor a Receber', value: formatBRL(toReceive.reduce((s, p) => s + (Number(p.value) || 0), 0)), hint: `${toReceive.filter(p => Number(p.value) > 0).length} projeto(s) com cobrança pendente`, icon: Wallet, tone: 'slate' as const },
+    { label: 'Projetos Concluídos', value: done.length, hint: `${done.filter(p => isThisMonth(p.updatedAt || p.createdAt)).length} neste mês`, icon: CheckCircle2, tone: 'emerald' as const },
+    { label: 'Volume Projetado', value: `${Math.round(active.reduce((s, p) => s + (Number(p.results?.totalWaterDay) || Number(p.results?.netWaterDay) || 0), 0)).toLocaleString('pt-BR')} m³/dia`, hint: 'Água a captar nos projetos em andamento', icon: CloudRain, tone: 'amber' as const },
+  ];
+
+  const filtered = projects.filter(p => {
+    const t = searchTerm.toLowerCase();
+    const matches = (p.clientName || '').toLowerCase().includes(t) || (p.propertyName || '').toLowerCase().includes(t) || (p.responsible || '').toLowerCase().includes(t);
+    return matches && (statusFilter === 'all' || statusOf(p) === statusFilter);
+  });
+
+  // ─── Etapas do formulário ─────────────────────────────────────────────────
+  const numInput = (label: string, value: number, onChange: (v: number) => void, ph: string) => (
+    <div className="space-y-1">
+      <label className="text-[10px] font-bold text-slate-500 uppercase">{label}</label>
+      <input type="number" step="any" value={value || ''} onChange={(e) => onChange(Number(e.target.value))} className="w-full glass-input" placeholder={ph} />
+    </div>
+  );
+  const resultBox = (label: string, value: React.ReactNode, strong = false) => (
+    <div className={cn('p-3 rounded-2xl border', strong ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-slate-50 border-slate-100')}>
+      <div className={cn('text-[9px] font-bold uppercase', strong ? 'text-emerald-100' : 'text-slate-500')}>{label}</div>
+      <div className={cn('text-lg font-mono font-bold', strong ? 'text-white' : 'text-slate-800')}>{value}</div>
+    </div>
+  );
+
+  const renderStep = () => {
+    switch (step) {
+      case 0:
+        return (
+          <div className="space-y-5">
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">Cliente</label>
+              <select value={selectedClientId} onChange={(e) => handleClientChange(e.target.value)} className="w-full glass-input bg-white/60">
+                <option value="">Selecione o cliente...</option>
+                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            {selectedClientId && (
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Propriedade / Fazenda</label>
+                {clientProperties.length > 0 ? (
+                  <select value={clientProperties.includes(propertyName) ? propertyName : ''} onChange={(e) => { setPropertyName(e.target.value); suggestArea(selectedClientId, e.target.value); }} className="w-full glass-input bg-white/60">
+                    <option value="">Escolha a fazenda...</option>
+                    {clientProperties.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                ) : (
+                  <input type="text" value={propertyName} onChange={(e) => setPropertyName(e.target.value)} className="w-full glass-input" placeholder="Este cliente não tem fazenda cadastrada — digite o nome" />
+                )}
+                {clientProperties.length > 0 && (
+                  <p className="text-[10px] text-emerald-600 font-bold">
+                    {clientProperties.length === 1 ? 'Fazenda puxada automaticamente do cadastro do cliente.' : `${clientProperties.length} fazendas cadastradas para este cliente.`}
+                  </p>
+                )}
+              </div>
+            )}
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">Data prevista de execução</label>
+              <input type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} className="w-full glass-input" />
+            </div>
+          </div>
+        );
       case 1:
         return (
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Comprimento do Trecho (m)</label>
-                <input 
-                  type="number" 
-                  value={hydraulic.length || ''}
-                  onChange={(e) => setHydraulic({...hydraulic, length: Number(e.target.value)})}
-                  className="w-full glass-input" 
-                  placeholder="Ex: 250" 
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Diâmetro Interno (mm)</label>
-                <input 
-                  type="number" 
-                  value={hydraulic.diameter || ''}
-                  onChange={(e) => setHydraulic({...hydraulic, diameter: Number(e.target.value)})}
-                  className="w-full glass-input" 
-                  placeholder="Ex: 50" 
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Vazão do Trecho (m³/h)</label>
-                <input 
-                  type="number" 
-                  value={hydraulic.flow || ''}
-                  onChange={(e) => setHydraulic({...hydraulic, flow: Number(e.target.value)})}
-                  className="w-full glass-input" 
-                  placeholder="Ex: 12.5" 
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Material da Tubulação</label>
-                <select 
-                  value={hydraulic.cFactor}
-                  onChange={(e) => setHydraulic({...hydraulic, cFactor: Number(e.target.value)})}
-                  className="w-full glass-input bg-white/50"
-                >
+          <div className="space-y-5">
+            <h4 className="text-xs font-bold text-slate-700 flex items-center gap-2"><Calculator className="w-4 h-4 text-emerald-600" /> Tubulação (perda de carga — Hazen-Williams)</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {numInput('Comprimento do trecho (m)', hydraulic.length, v => setHydraulic({ ...hydraulic, length: v }), 'Ex: 250')}
+              {numInput('Diâmetro interno (mm)', hydraulic.diameter, v => setHydraulic({ ...hydraulic, diameter: v }), 'Ex: 50')}
+              {numInput('Vazão do trecho (m³/h)', hydraulic.flow, v => setHydraulic({ ...hydraulic, flow: v }), 'Ex: 12.5')}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Material da tubulação</label>
+                <select value={hydraulic.cFactor} onChange={(e) => setHydraulic({ ...hydraulic, cFactor: Number(e.target.value) })} className="w-full glass-input bg-white/60">
                   <option value={150}>PVC ou PE (C=150)</option>
                   <option value={140}>PVC Antigo ou PE (C=140)</option>
                   <option value={130}>Aço Novo (C=130)</option>
@@ -579,163 +520,70 @@ export default function Irrigation() {
                 </select>
               </div>
             </div>
-
-            <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl">
-               <div className="flex justify-between items-center mb-2">
-                  <h4 className="text-[10px] font-bold text-emerald-600 uppercase">Perda de Carga Calculada (hf)</h4>
-                  <Info className="w-4 h-4 text-emerald-300" />
-               </div>
-               <div className="text-2xl font-mono font-bold text-emerald-800">{headLoss} <span className="text-sm font-normal">mca</span></div>
+            <h4 className="text-xs font-bold text-slate-700 flex items-center gap-2 pt-2"><Zap className="w-4 h-4 text-emerald-600" /> Motobomba</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {numInput('Altura geométrica (m)', pump.staticHead, v => setPump({ ...pump, staticHead: v }), 'Ex: 15')}
+              {numInput('Pressão de serviço (mca)', pump.servicePressure, v => setPump({ ...pump, servicePressure: v }), 'Ex: 20')}
+              {numInput('Rendimento da bomba (%)', pump.efficiency, v => setPump({ ...pump, efficiency: v }), 'Ex: 75')}
             </div>
-
-            <div className="p-4 bg-white/40 border border-slate-100 rounded-2xl">
-              <h5 className="flex items-center gap-2 text-[9px] font-bold text-slate-500 uppercase mb-3">
-                <BookOpen className="w-3.5 h-3.5" /> Referência Técnica (Hazen-Williams)
-              </h5>
-              <div className="font-mono text-[10px] text-slate-600 bg-white/80 p-3 rounded-lg overflow-x-auto whitespace-nowrap mb-2">
-                hf = 10.65 * L * (Q/C)^1.852 * D^-4.87
-              </div>
-              <div className="mt-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <div className="text-[10px] font-bold text-slate-400 uppercase mb-2">Passo a Passo do Cálculo:</div>
-                <div className="font-mono text-[9px] text-slate-500 space-y-1">
-                  <div>1. Q = {hydraulic.flow} m³/h {'->'} {(hydraulic.flow/3600).toFixed(6)} m³/s</div>
-                  <div>2. D = {hydraulic.diameter} mm {'->'} {(hydraulic.diameter/1000).toFixed(4)} m</div>
-                  <div>3. hf = 10.65 * {hydraulic.length} * ({(hydraulic.flow/3600).toFixed(6)} / {hydraulic.cFactor})^1.852 * {(hydraulic.diameter/1000).toFixed(4)}^-4.87</div>
-                  <div className="pt-1 border-t border-slate-200 text-emerald-600 font-bold">Res: {headLoss} mca</div>
-                </div>
-              </div>
-              <p className="text-[10px] text-slate-400 italic mt-3">
-                Cálculo baseado em fluidez linear para tubulações plásticas e metálicas. Conforme manual de irrigação (Bernardo, 2019).
-              </p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {resultBox('Perda de carga', `${headLoss} mca`)}
+              {resultBox('Velocidade', <span className={velocity > 2 ? 'text-rose-600' : ''}>{velocity} m/s</span>)}
+              {resultBox('HMT', `${totalHead} mca`)}
+              {resultBox('Potência', `${pumpPower} cv`, true)}
             </div>
-          </motion.div>
+            {velocity > 2 && (
+              <div className="p-3 bg-rose-50 border border-rose-100 rounded-2xl text-[11px] text-rose-700 flex gap-2">
+                <Zap className="w-4 h-4 shrink-0" /> Velocidade acima de 2,0 m/s: considere aumentar o diâmetro para evitar desgaste e golpe de aríete.
+              </div>
+            )}
+            <div className="font-mono text-[10px] text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1">
+              <div>hf = 10,65 · {hydraulic.length} · ({(hydraulic.flow / 3600).toFixed(6)} / {hydraulic.cFactor})^1,852 · {(hydraulic.diameter / 1000).toFixed(4)}^-4,87 = {headLoss} mca</div>
+              <div>HMT = {pump.staticHead} + {pump.servicePressure} + {headLoss} = {totalHead} mca</div>
+              <div>P = ({(hydraulic.flow * 1000 / 3600).toFixed(2)} · {totalHead}) / (75 · {pump.efficiency / 100}) = {pumpPower} cv</div>
+            </div>
+          </div>
         );
       case 2:
         return (
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Altura Geométrica (m)</label>
-                <input 
-                  type="number" 
-                  value={pump.staticHead || ''}
-                  onChange={(e) => setPump({...pump, staticHead: Number(e.target.value)})}
-                  className="w-full glass-input" 
-                  placeholder="Ex: 15" 
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Pressão de Serviço Requerida (mca)</label>
-                <input 
-                  type="number" 
-                  value={pump.servicePressure || ''}
-                  onChange={(e) => setPump({...pump, servicePressure: Number(e.target.value)})}
-                  className="w-full glass-input" 
-                  placeholder="Ex: 20" 
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Rendimento da Bomba (%)</label>
-                <input 
-                  type="number" 
-                  value={pump.efficiency || ''}
-                  onChange={(e) => setPump({...pump, efficiency: Number(e.target.value)})}
-                  className="w-full glass-input" 
-                  placeholder="Ex: 75" 
-                />
-              </div>
+          <div className="space-y-5">
+            <h4 className="text-xs font-bold text-slate-700 flex items-center gap-2"><Droplet className="w-4 h-4 text-emerald-600" /> Necessidade hídrica (FAO-56)</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {numInput('ETo (mm/dia)', demand.eto, v => setDemand({ ...demand, eto: v }), 'Ex: 6.2')}
+              {numInput('Kc (coef. da cultura)', demand.kc, v => setDemand({ ...demand, kc: v }), 'Ex: 0.85')}
+              {numInput('Área do projeto (ha)', demand.area, v => setDemand({ ...demand, area: v }), 'Ex: 10')}
             </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl">
-                 <h4 className="text-[10px] font-bold text-slate-500 uppercase mb-1">HMT (mca)</h4>
-                 <div className="text-xl font-mono font-bold text-slate-800">{totalHead}</div>
-              </div>
-              <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl">
-                 <h4 className="text-[10px] font-bold text-slate-600 uppercase mb-1">Potência (cv)</h4>
-                 <div className="text-xl font-mono font-bold text-slate-800">{pumpPower}</div>
-              </div>
+            <h4 className="text-xs font-bold text-slate-700 flex items-center gap-2 pt-1"><Sprout className="w-4 h-4 text-emerald-600" /> Sistema de irrigação</h4>
+            <div className="grid grid-cols-2 gap-3">
+              {([['drip', 'Gotejamento', 'Alta eficiência (90–95%)', Droplet], ['sprinkler', 'Aspersão', 'Versatilidade (75–85%)', CloudRain]] as const).map(([id, label, desc, Icon]) => (
+                <button key={id} type="button" onClick={() => selectIrrigationType(id)}
+                  className={cn('p-4 rounded-2xl border-2 flex items-center gap-3 text-left transition-all', irrigationType === id ? 'bg-emerald-50 border-emerald-500' : 'bg-white/50 border-slate-100 hover:border-emerald-200')}>
+                  <div className={cn('p-2 rounded-xl', irrigationType === id ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-400')}><Icon className="w-5 h-5" /></div>
+                  <div><div className="font-bold text-sm text-slate-700">{label}</div><div className="text-[10px] text-slate-400 font-bold uppercase">{desc}</div></div>
+                </button>
+              ))}
             </div>
-
-            <div className="p-4 bg-white/40 border border-slate-100 rounded-2xl">
-              <h5 className="flex items-center gap-2 text-[9px] font-bold text-slate-500 uppercase mb-3">
-                <BookOpen className="w-3.5 h-3.5" /> Referência para Dimensionamento Final
-              </h5>
-              <div className="font-mono text-[10px] text-slate-600 bg-white/80 p-3 rounded-lg overflow-x-auto whitespace-nowrap mb-2">
-                P(cv) = (Q * HMT) / (75 * Rendimento)
-              </div>
-              <div className="mt-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <div className="text-[10px] font-bold text-slate-400 uppercase mb-2">Passo a Passo do Cálculo:</div>
-                <div className="font-mono text-[9px] text-slate-500 space-y-1">
-                  <div>1. HMT = {pump.staticHead} + {pump.servicePressure} + {headLoss} = {totalHead} mca</div>
-                  <div>2. Q = {(hydraulic.flow * 1000 / 3600).toFixed(2)} L/s</div>
-                  <div>3. P = ({(hydraulic.flow * 1000 / 3600).toFixed(2)} * {totalHead}) / (75 * {pump.efficiency/100})</div>
-                  <div className="pt-1 border-t border-slate-200 text-slate-600 font-bold">Res: {pumpPower} cv</div>
+            {irrigationType && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">Eficiência de aplicação — Ea (%)</label>
+                  <input type="number" min={40} max={100} value={appEfficiency || ''} onChange={(e) => setAppEfficiency(Math.min(100, Math.max(0, Number(e.target.value))))} className="w-full glass-input" />
+                  <p className="text-[10px] text-slate-400">Valor típico já preenchido; ajuste conforme o equipamento.</p>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">Justificativa técnica do sistema</label>
+                  <textarea rows={2} value={technicalJustification} onChange={(e) => setTechnicalJustification(e.target.value)} className="w-full glass-input text-xs" placeholder="Por que este sistema para esta área/cultura..." />
                 </div>
               </div>
-              <p className="text-[10px] text-slate-400 italic mt-3">
-                Dimensionamento de potência útil requerida. Fórmula prática para estimativa de grupos motobomba (NBR 14197).
-              </p>
+            )}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {resultBox('Lâmina líquida (ETc)', `${netDemand} mm/dia`)}
+              {resultBox('Lâmina bruta', appEfficiency ? `${grossDemand} mm/dia` : '—')}
+              {resultBox('Vol. líquido', `${netWaterDay} m³/dia`)}
+              {resultBox('Vol. a captar', `${appEfficiency ? totalWaterDay : netWaterDay} m³/dia`, true)}
             </div>
-          </motion.div>
-        );
-      case 3:
-        return (
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-500 uppercase">ETo (Ref: Estação Climática) mm/dia</label>
-                <input 
-                  type="number" 
-                  value={demand.eto || ''}
-                  onChange={(e) => setDemand({...demand, eto: Number(e.target.value)})}
-                  className="w-full glass-input" 
-                  placeholder="Ex: 6.2" 
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Kc (Coeficiente da Cultura)</label>
-                <input 
-                  type="number" 
-                  value={demand.kc || ''}
-                  onChange={(e) => setDemand({...demand, kc: Number(e.target.value)})}
-                  className="w-full glass-input" 
-                  placeholder="Ex: 0.85" 
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Área do Projeto (Hectares)</label>
-                <input 
-                  type="number" 
-                  value={demand.area || ''}
-                  onChange={(e) => setDemand({...demand, area: Number(e.target.value)})}
-                  className="w-full glass-input" 
-                  placeholder="Ex: 10" 
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl">
-                 <h4 className="text-[10px] font-bold text-amber-600 uppercase mb-1">Lâmina Líquida (ETc)</h4>
-                 <div className="text-xl font-mono font-bold text-amber-800">{netDemand} <span className="text-[10px] font-normal">mm/dia</span></div>
-              </div>
-              <div className="p-4 bg-amber-600 text-white rounded-2xl shadow-lg shadow-amber-100">
-                 <h4 className="text-[10px] font-bold text-amber-100 uppercase mb-1">
-                   {appEfficiency ? `Lâmina Bruta (Ea ${appEfficiency}%)` : 'Lâmina Bruta'}
-                 </h4>
-                 {appEfficiency ? (
-                   <div className="text-xl font-mono font-bold">{grossDemand} <span className="text-[10px] font-normal">mm/dia</span> · {totalWaterDay} <span className="text-[10px] font-normal">m³/dia</span></div>
-                 ) : (
-                   <div className="text-xs font-bold text-amber-100">Escolha o método de irrigação na etapa 4 para aplicar a eficiência.</div>
-                 )}
-              </div>
-            </div>
-
             <details className="p-4 bg-white/40 border border-slate-100 rounded-2xl" open={!!soil.cc}>
-              <summary className="text-[10px] font-bold text-slate-500 uppercase cursor-pointer">
-                Turno de rega e tempo de irrigação (opcional — dados do solo)
-              </summary>
+              <summary className="text-[10px] font-bold text-slate-500 uppercase cursor-pointer">Turno de rega e tempo de irrigação (opcional — dados do solo)</summary>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
                 {([
                   ['cc', 'Capacidade de campo (% peso)', 'Ex: 28'],
@@ -745,17 +593,7 @@ export default function Irrigation() {
                   ['f', 'Fator de disponibilidade (0 a 1)', 'Ex: 0.5'],
                   ['ia', 'Intensidade de aplicação (mm/h)', 'Ex: 8'],
                 ] as const).map(([key, label, ph]) => (
-                  <div key={key} className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase">{label}</label>
-                    <input
-                      type="number"
-                      step="any"
-                      value={soil[key] || ''}
-                      onChange={(e) => setSoil({ ...soil, [key]: Number(e.target.value) })}
-                      className="w-full glass-input"
-                      placeholder={ph}
-                    />
-                  </div>
+                  <React.Fragment key={key}>{numInput(label, soil[key], v => setSoil({ ...soil, [key]: v }), ph)}</React.Fragment>
                 ))}
               </div>
               {schedule ? (
@@ -765,389 +603,246 @@ export default function Irrigation() {
                   <div>3. TR máx = IRN / ETc = {schedule.irnMax} / {netDemand} = {schedule.trMax} dias → TR adotado = {schedule.tr} dia(s)</div>
                   <div>4. Lâmina bruta por irrigação = {schedule.tr} × {netDemand} / {appEfficiency / 100} = {schedule.lb} mm</div>
                   {schedule.ti > 0 && <div>5. Tempo de irrigação = {schedule.lb} / {soil.ia} = {schedule.ti} h</div>}
-                  {schedule.warning && (
-                    <div className="text-rose-600 font-bold">Atenção: o solo não armazena a água de 1 dia inteiro — dividir a irrigação em mais de uma vez por dia.</div>
-                  )}
+                  {schedule.warning && <div className="text-rose-600 font-bold">Atenção: o solo não armazena a água de 1 dia inteiro — dividir a irrigação em mais de uma vez por dia.</div>}
                 </div>
               ) : (
-                <p className="text-[10px] text-slate-400 italic mt-3">
-                  Preencha CC, PMP, densidade, profundidade e fator f (e escolha o método na etapa 4) para calcular o turno de rega.
-                </p>
+                <p className="text-[10px] text-slate-400 italic mt-3">Preencha CC, PMP, densidade, profundidade e fator f (e escolha o sistema) para calcular o turno de rega.</p>
               )}
             </details>
-
-            <div className="p-4 bg-white/40 border border-slate-100 rounded-2xl">
-              <h5 className="flex items-center gap-2 text-[9px] font-bold text-slate-500 uppercase mb-3">
-                <BookOpen className="w-3.5 h-3.5" /> Referência FAO-56
-              </h5>
-              <div className="font-mono text-[10px] text-slate-600 bg-white/80 p-3 rounded-lg overflow-x-auto whitespace-nowrap mb-2">
-                ETc = ETo * Kc (Lâmina Bruta = ETc / Eficiência)
-              </div>
-              <div className="mt-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <div className="text-[10px] font-bold text-slate-400 uppercase mb-2">Passo a Passo do Cálculo:</div>
-                <div className="font-mono text-[9px] text-slate-500 space-y-1">
-                  <div>1. ETc = {demand.eto} * {demand.kc} = {netDemand} mm/dia</div>
-                  <div>2. Vol. líquido = {netDemand} * {demand.area} * 10 = {netWaterDay} m³/dia</div>
-                  {appEfficiency > 0 && <div>3. Lâmina bruta = {netDemand} / {appEfficiency / 100} = {grossDemand} mm/dia</div>}
-                  {appEfficiency > 0 && <div>4. Vol. a captar = {grossDemand} * {demand.area} * 10 = {totalWaterDay} m³/dia</div>}
-                  <div className="pt-1 border-t border-slate-200 text-amber-600 font-bold">Res: {appEfficiency > 0 ? totalWaterDay : netWaterDay} m³/dia</div>
-                </div>
-              </div>
-              <p className="text-[10px] text-slate-400 italic mt-3">
-                Necessidade hídrica teórica. Conforme Crop Evapotranspiração (FAO Paper 56).
-              </p>
-            </div>
-          </motion.div>
+          </div>
+        );
+      case 3:
+        return (
+          <div className="space-y-4">
+            <p className="text-xs text-slate-500">Monte o preço do serviço. A memória de cálculo abaixo vai para o PDF.</p>
+            <PricingFields value={pricing} onChange={setPricing} areaHa={demand.area} areaLabel="área irrigada" />
+          </div>
         );
       case 4:
         return (
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6 text-center">
-             <h4 className="font-display font-medium text-slate-600">Selecione o método de aplicação:</h4>
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <button 
-                  onClick={() => selectIrrigationType('drip')}
-                  className={cn(
-                    "p-8 rounded-3xl border-2 transition-all flex flex-col items-center gap-4",
-                    irrigationType === 'drip' ? "bg-emerald-50 border-emerald-500" : "bg-white/40 border-white/60 hover:border-emerald-200"
-                  )}
-                >
-                   <div className={cn("p-4 rounded-2xl", irrigationType === 'drip' ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-400")}>
-                      <Droplet className="w-10 h-10" />
-                   </div>
-                   <div>
-                      <div className="font-bold text-slate-700">Gotejamento</div>
-                      <div className="text-[10px] text-slate-400 font-bold uppercase mt-1">Alta Eficiência (90-95%)</div>
-                   </div>
-                </button>
-                <button 
-                  onClick={() => selectIrrigationType('sprinkler')}
-                  className={cn(
-                    "p-8 rounded-3xl border-2 transition-all flex flex-col items-center gap-4",
-                    irrigationType === 'sprinkler' ? "bg-slate-50 border-emerald-500" : "bg-white/40 border-white/60 hover:border-slate-200"
-                  )}
-                >
-                   <div className={cn("p-4 rounded-2xl", irrigationType === 'sprinkler' ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-400")}>
-                      <CloudRain className="w-10 h-10" />
-                   </div>
-                   <div>
-                      <div className="font-bold text-slate-700">Aspersão</div>
-                      <div className="text-[10px] text-slate-400 font-bold uppercase mt-1">Versatilidade (75-85%)</div>
-                   </div>
-                </button>
-             </div>
-             {irrigationType && (
-               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-                 <div className="p-4 bg-emerald-50 rounded-2xl text-emerald-700 text-[10px] flex items-center justify-center gap-2">
-                   <ShieldCheck className="w-4 h-4" />
-                   Lâmina bruta = ETc / Ea = {netDemand} / {appEfficiency / 100} = {grossDemand} mm/dia ({totalWaterDay} m³/dia a captar)
-                 </div>
-                 <div className="text-left space-y-2">
-                   <label className="text-[10px] font-bold text-slate-500 uppercase px-1">Eficiência de aplicação — Ea (%)</label>
-                   <input
-                     type="number"
-                     min={40}
-                     max={100}
-                     value={appEfficiency || ''}
-                     onChange={(e) => setAppEfficiency(Math.min(100, Math.max(0, Number(e.target.value))))}
-                     className="w-full glass-input"
-                   />
-                   <p className="text-[10px] text-slate-400 px-1">Valor típico já preenchido (gotejamento 90%, aspersão 80%). Ajuste conforme o equipamento e o teste de uniformidade.</p>
-                 </div>
-                 <div className="text-left space-y-2">
-                   <label className="text-[10px] font-bold text-slate-500 uppercase px-1">Justificativa Técnica da Escolha</label>
-                   <textarea 
-                     rows={3}
-                     value={technicalJustification}
-                     onChange={(e) => setTechnicalJustification(e.target.value)}
-                     placeholder="Descreva o porquê da escolha deste sistema para este talhão/cultura..."
-                     className="w-full glass-input text-xs"
-                   />
-                 </div>
-               </motion.div>
-             )}
-          </motion.div>
-        );
-      case 5:
-        return (
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
-             <div className="glass-card p-6 bg-emerald-600 text-white dashboard-stat-card shadow-emerald-200">
-                <div className="flex justify-between items-start">
-                   <div>
-                      <h3 className="font-display font-bold text-lg">Projeto Pronto para Emissão</h3>
-                      <p className="text-emerald-100 text-xs mt-1">O memorial contempla todos os passos de dimensionamento hidráulico e operacional.</p>
-                   </div>
-                   <ShieldCheck className="w-8 h-8 opacity-40" />
-                </div>
-                <button 
-                  onClick={generatePDF}
-                  className="mt-6 w-full py-3 bg-white text-emerald-700 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-emerald-50 transition-colors shadow-lg"
-                >
-                   <Printer className="w-4 h-4" /> Visualizar e Exportar PDF
-                </button>
-             </div>
-
-             <div className="space-y-4">
-                <div className="flex items-center gap-2 text-slate-400">
-                   <FileText className="w-4 h-4" />
-                   <h4 className="text-[10px] font-bold uppercase tracking-widest">Observações de Planejamento</h4>
-                </div>
-                <textarea 
-                  rows={4}
-                  value={planningNotes}
-                  onChange={(e) => setPlanningNotes(e.target.value)}
-                  placeholder="Adicione notas específicas sobre a execução do projeto, recomendações de instalação ou futuras ampliações..."
-                  className="w-full glass-input text-xs"
-                />
-             </div>
-
-             <div className="pt-6 border-t border-white/20">
-                <div className="space-y-1.5">
-                   <div className="flex items-center gap-2 mb-2">
-                      <UserCheck className="w-4 h-4 text-emerald-500" />
-                      <label className="text-[10px] font-bold text-slate-400 uppercase">Responsável Técnico (Gerado Automaticamente)</label>
-                   </div>
-                   <input 
-                     readOnly
-                     value={responsible}
-                     className="w-full glass-input font-bold text-slate-400 bg-slate-50 cursor-not-allowed" 
-                   />
-                </div>
-             </div>
-          </motion.div>
+          <div className="space-y-5">
+            <ResponsibleFields value={responsibleTech} onChange={setResponsibleTech} />
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">Observações de planejamento (vão para o PDF)</label>
+              <textarea rows={3} value={planningNotes} onChange={(e) => setPlanningNotes(e.target.value)} className="w-full glass-input text-xs" placeholder="Recomendações de instalação, etapas, ampliações futuras..." />
+            </div>
+            <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs space-y-1.5">
+              <div className="text-[10px] font-bold text-slate-500 uppercase mb-1">Resumo do projeto</div>
+              <div className="flex justify-between"><span className="text-slate-500">Cliente / fazenda</span><span className="font-bold text-slate-700 text-right">{selectedClient?.name || '—'} · {propertyName || '—'}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Sistema / área</span><span className="font-bold text-slate-700">{systemLabel(irrigationType)} · {demand.area} ha</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Potência / volume</span><span className="font-bold text-slate-700">{pumpPower} cv · {appEfficiency ? totalWaterDay : netWaterDay} m³/dia</span></div>
+              <div className="flex justify-between pt-1 border-t border-slate-200"><span className="text-slate-500">Valor do serviço</span><span className="font-extrabold text-emerald-700">{formatBRL(priceCalc.total)}</span></div>
+            </div>
+          </div>
         );
       default:
         return null;
     }
   };
 
+  // ─── Tela ─────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col gap-6 h-full overflow-y-auto pr-2 pb-10 custom-scrollbar">
       <header className={PAGE_HEADER_CLASS} data-page-header>
         <PageTitle icon={PageIcon} title="Irrigação" subtitle="Projetos e cálculos de engenharia hídrica com memorial técnico" />
-
-        <div className="flex items-center gap-4">
-           {showPropertySelect && (
-              <div className="text-right hidden sm:block animate-in fade-in slide-in-from-right-2">
-                 <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Selecionar Propriedade</div>
-                 <select 
-                   value={propertyName}
-                   onChange={(e) => setPropertyName(e.target.value)}
-                   className="text-xs font-bold text-slate-600 bg-transparent border-b border-emerald-500/40 focus:border-emerald-500 outline-none text-right appearance-none"
-                 >
-                    <option value="">Escolha...</option>
-                    {availableProperties.map(p => <option key={p} value={p}>{p}</option>)}
-                 </select>
-              </div>
-           )}
-           {!showPropertySelect && (
-              <div className="text-right hidden sm:block">
-                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Local do Projeto</div>
-                 <input 
-                   type="text"
-                   placeholder="Nome da Propriedade"
-                   value={propertyName}
-                   onChange={(e) => setPropertyName(e.target.value)}
-                   className="text-xs font-bold text-emerald-600 bg-transparent border-b border-emerald-500/20 focus:border-emerald-500 outline-none text-right"
-                 />
-              </div>
-           )}
-           <div className="text-right hidden xl:block ml-4">
-              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Execução Agendada</div>
-              <input 
-                type="date"
-                value={scheduledDate}
-                onChange={(e) => setScheduledDate(e.target.value)}
-                className="text-xs font-bold text-slate-600 bg-transparent border-b border-emerald-500/20 focus:border-emerald-500 outline-none text-right"
-              />
-           </div>
-           <div className="text-right hidden sm:block ml-4">
-              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Vincular Cliente</div>
-              <div className="text-xs font-bold text-slate-600 italic">Necessário para emissão</div>
-           </div>
-           <div className="relative">
-              <select 
-                value={selectedClientId}
-                onChange={(e) => handleClientChange(e.target.value)}
-                className="pl-9 pr-4 py-2.5 glass-input text-xs font-bold w-64 bg-white/50 border-emerald-500/20"
-              >
-                <option value="">Selecione o Cliente...</option>
-                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-500" />
-           </div>
+        <div className="flex items-center gap-3">
+          {readOnly ? (
+            <button disabled className="px-5 py-2.5 rounded-2xl font-bold flex items-center gap-2 bg-slate-300 text-slate-500 cursor-not-allowed text-xs">
+              <Plus className="w-4 h-4" /> Apenas Leitura
+            </button>
+          ) : (
+            <button onClick={openNew} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-2xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition-all">
+              <Plus className="w-4 h-4" /> Novo Projeto
+            </button>
+          )}
         </div>
       </header>
 
-      <div className="glass-card p-4 sm:p-6 mx-4 shadow-md bg-white/60 border-emerald-500/10">
-        <div className="grid grid-cols-5 gap-1 sm:gap-2 md:flex md:items-center md:justify-between w-full max-w-4xl mx-auto md:px-4">
-           {STEPS.map((step, idx) => (
-             <React.Fragment key={step.id}>
-               <button 
-                 onClick={() => setCurrentStep(step.id)}
-                 className={cn(
-                   "flex flex-col items-center justify-start gap-2.5 transition-all relative z-10 w-full group",
-                   currentStep >= step.id ? "text-emerald-700" : "text-slate-400"
-                 )}
-               >
-                  <div className={cn(
-                    "w-12 h-12 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center border-2 transition-all duration-300",
-                    currentStep === step.id ? "bg-emerald-600 text-white border-emerald-600 shadow-xl shadow-emerald-500/25 scale-110" :
-                    currentStep > step.id ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-white/80 border-slate-100 group-hover:border-emerald-200"
-                  )}>
-                     <step.icon className={cn("w-5 h-5 sm:w-7 sm:h-7", currentStep === step.id && "animate-pulse")} />
-                  </div>
-                  <span className={cn(
-                    "text-[9px] sm:text-[11px] md:text-xs font-bold uppercase tracking-tight text-center leading-tight whitespace-normal max-w-[70px] sm:max-w-[100px] md:max-w-none transition-colors",
-                    currentStep === step.id ? "text-emerald-800" : "text-slate-400"
-                  )}>
-                    {step.title}
-                  </span>
-               </button>
-               {idx < STEPS.length - 1 && (
-                 <div className="hidden md:block flex-1 px-2 lg:px-4 min-w-[10px]">
-                    <div className={cn(
-                      "h-[2px] w-full rounded-full transition-colors duration-500",
-                      currentStep > step.id ? "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]" : "bg-slate-200"
-                    )}></div>
-                 </div>
-               )}
-             </React.Fragment>
-           ))}
+      <ServiceKpiCards items={kpis} />
+
+      <div className="glass-card p-4 rounded-3xl border border-white/40 flex flex-col md:flex-row gap-3 items-center justify-between">
+        <div className="relative w-full md:w-80">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input type="text" placeholder="Buscar por cliente, fazenda ou responsável..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full glass-input pl-10 text-xs" />
         </div>
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="glass-input text-xs font-bold bg-white/60 w-full md:w-56">
+          <option value="all">Todas as situações</option>
+          {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-         <div className="lg:col-span-2 glass-card p-8 min-h-[500px] flex flex-col">
-            <div className="flex justify-between items-center mb-8 pb-6 border-b border-white/20">
-               <div>
-                  <h2 className="text-xl font-display font-bold text-slate-800">{STEPS[currentStep-1].title}</h2>
-                  <p className="text-xs text-slate-400 mt-1">{STEPS[currentStep-1].description}</p>
-               </div>
-               <div className="px-3 py-1 bg-slate-100 rounded-full text-[10px] font-bold text-slate-400">DIMENSIONAMENTO {currentStep}/5</div>
-            </div>
-
-            <div className="flex-1">
-               {renderStepContent()}
-            </div>
-
-            <div className="flex justify-between pt-10 border-t border-white/20 mt-10">
-               <button 
-                 onClick={prevStep}
-                 disabled={currentStep === 1}
-                 className="px-6 py-3 border border-slate-200 rounded-2xl text-sm font-bold text-slate-500 hover:bg-slate-50 transition-colors flex items-center gap-2 disabled:opacity-20"
-               >
-                 <ArrowLeft className="w-4 h-4" /> Voltar
-               </button>
-               <button 
-                 onClick={currentStep === 5 ? (((user?.effectiveRole ?? user?.role) === 'staff' || (user?.effectiveRole ?? user?.role) === 'consultant') ? undefined : handleSave) : nextStep}
-                 disabled={isSaving}
-                 className={cn(
-                   "px-8 py-3 rounded-2xl text-sm font-bold text-white transition-all flex items-center gap-2 shadow-lg",
-                   currentStep === 5 ? (saveSuccess ? "bg-emerald-500 shadow-emerald-100" : "bg-emerald-600 shadow-emerald-100") : "bg-emerald-600 shadow-emerald-100",
-                   isSaving && "opacity-50 cursor-not-allowed"
-                 )}
-               >
-                 {currentStep === 5 
-                   ? (saveSuccess 
-                       ? <><CheckCircle2 className="w-4 h-4" /> Concluído!</> 
-                       : (((user?.effectiveRole ?? user?.role) === 'staff' || (user?.effectiveRole ?? user?.role) === 'consultant') 
-                           ? 'Apenas Leitura' 
-                           : (isSaving ? 'Gerando...' : 'Concluir e Salvar'))) 
-                   : 'Avançar'} <ArrowRight className="w-4 h-4" />
-               </button>
-            </div>
-         </div>
-
-         <div className="space-y-6">
-            <div className="glass-card p-6 border-t-4 border-t-emerald-500">
-               <h3 className="font-bold text-slate-700 flex items-center gap-2 mb-4">
-                  <Calculator className="w-4 h-4 text-emerald-500" /> Resumo Dinâmico
-               </h3>
-               <div className="space-y-4">
-                  <div className="flex justify-between items-center py-2 border-b border-dashed border-slate-100">
-                     <span className="text-xs text-slate-400 font-medium">Velocidade Fluxo:</span>
-                     <div className="flex items-center gap-2">
-                        <span className={cn("text-xs font-bold", velocity > 2.0 ? "text-rose-500" : "text-slate-700")}>
-                          {velocity} m/s
-                        </span>
-                        {velocity > 2.0 && <Zap className="w-3 h-3 text-rose-500 animate-pulse" />}
-                     </div>
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {[1, 2, 3].map(i => <div key={i} className="glass-card h-56 rounded-3xl animate-pulse bg-slate-100/50" />)}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="glass-card p-12 rounded-3xl text-center flex flex-col items-center gap-3 text-slate-400">
+          <Droplet className="w-12 h-12 opacity-20" />
+          <p className="text-xs font-bold uppercase tracking-widest">Nenhum projeto de irrigação encontrado</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {filtered.map(p => {
+            const st = statusOf(p);
+            const area = Number(p.inputs?.demand?.area) || 0;
+            return (
+              <motion.div key={p.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-6 rounded-3xl flex flex-col gap-4 hover:border-emerald-500/40 transition-all group" data-irrigation-card>
+                <div className="flex justify-between items-start gap-3">
+                  <div className="min-w-0">
+                    <h3 className="font-display font-bold text-slate-800 truncate">{p.clientName}</h3>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center gap-1.5 mt-1 truncate">
+                      <LandPlot className="w-3 h-3 shrink-0" /> {p.propertyName || 'Propriedade não informada'}
+                    </p>
                   </div>
-                  <div className="flex justify-between items-center py-2 border-b border-dashed border-slate-100">
-                     <span className="text-xs text-slate-400 font-medium">Perda de Carga (hf):</span>
-                     <span className="text-xs font-bold text-slate-700">{headLoss} mca</span>
+                  <span className={cn('px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest whitespace-nowrap', STATUS_STYLE[st])}>{st}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100"><div className="text-[8px] font-bold text-slate-400 uppercase">Sistema</div><div className="text-[11px] font-bold text-slate-700 truncate">{systemLabel(p.type)}</div></div>
+                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100"><div className="text-[8px] font-bold text-slate-400 uppercase">Área</div><div className="text-[11px] font-bold text-slate-700">{area ? `${area} ha` : '—'}</div></div>
+                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100"><div className="text-[8px] font-bold text-slate-400 uppercase">Potência</div><div className="text-[11px] font-bold text-slate-700">{p.results?.pumpPower ?? '—'} cv</div></div>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-slate-400 font-medium">Valor do serviço</span>
+                  <span className="font-bold text-slate-800 flex items-center gap-2">
+                    {Number(p.value) > 0 ? formatBRL(p.value) : '—'}
+                    {Number(p.value) > 0 && (
+                      <span className={cn('px-1.5 py-0.5 rounded text-[8px] font-black uppercase', p.paymentStatus === 'pago' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>
+                        {p.paymentStatus === 'pago' ? 'Pago' : 'A receber'}
+                      </span>
+                    )}
+                  </span>
+                </div>
+                <div className="mt-auto pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate flex items-center gap-1.5">
+                    <User className="w-3 h-3 shrink-0" /> {p.responsibleTech?.name || p.responsible || '—'}
+                  </span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button onClick={() => downloadPDF(p)} title="Relatório em PDF" className="p-2 rounded-xl text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 transition-all"><Download className="w-4 h-4" /></button>
+                    {canEditProject(p) && (
+                      <button onClick={() => openEdit(p)} title="Editar projeto" className="p-2 rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-all"><Edit3 className="w-4 h-4" /></button>
+                    )}
+                    <button onClick={() => setViewing(p)} className="text-emerald-600 hover:text-emerald-700 font-bold text-[10px] uppercase tracking-widest flex items-center gap-1 pl-1">
+                      Ver Detalhes <ChevronRight className="w-3 h-3" />
+                    </button>
                   </div>
-                  <div className="flex justify-between items-center py-2 border-b border-dashed border-slate-100">
-                     <span className="text-xs text-slate-400 font-medium">HMT Total:</span>
-                     <span className="text-xs font-bold text-slate-700">{totalHead} mca</span>
-                  </div>
-                  <div className="flex justify-between items-center py-2 border-b border-dashed border-slate-100">
-                     <span className="text-xs text-slate-400 font-medium">Potência Calculada:</span>
-                     <span className="text-xs font-bold text-emerald-600">{pumpPower} cv</span>
-                  </div>
-               </div>
-            </div>
-
-            {velocity > 2.0 && (
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.9 }} 
-                animate={{ opacity: 1, scale: 1 }}
-                className="p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-start gap-3"
-              >
-                 <Zap className="w-5 h-5 text-rose-500 shrink-0 mt-1" />
-                 <div>
-                    <div className="text-xs font-bold text-rose-700 uppercase">Alerta de Engenharia</div>
-                    <p className="text-[10px] text-rose-600 mt-1">Velocidade do fluxo ({velocity} m/s) acima do limite recomendado (2.0 m/s). Considere aumentar o diâmetro da tubulação para evitar desgaste e golpes de aríete.</p>
-                 </div>
+                </div>
               </motion.div>
-            )}
+            );
+          })}
+        </div>
+      )}
 
-            <div className="glass-card p-6">
-               <h3 className="font-bold text-slate-700 flex items-center gap-2 mb-4">
-                  <FileText className="w-4 h-4 text-emerald-500" /> Projetos Recentes
-               </h3>
-               <div className="space-y-3">
-                  {projects.length === 0 ? (
-                    <div className="text-[10px] text-slate-400 italic py-4 text-center">Nenhum projeto salvo.</div>
-                  ) : (
-                    projects.map(p => (
-                      <div key={p.id} className="p-3 bg-white/50 border border-white/60 rounded-xl hover:border-emerald-200 transition-colors group relative">
-                        <div className="text-[10px] font-bold text-slate-700 truncate pr-6">{p.propertyName || 'Sem Nome'}</div>
-                        <div className="flex justify-between items-center mt-1">
-                          <span className="text-[9px] text-slate-400">{p.clientName}</span>
-                          <span className="text-[9px] font-bold text-emerald-600">{formatDate(typeof p.createdAt?.toDate === 'function' ? p.createdAt.toDate() : p.createdAt)}</span>
-                        </div>
-                        {!((user?.effectiveRole ?? user?.role) === 'staff' || (user?.effectiveRole ?? user?.role) === 'consultant') && (
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setIsDeleteModalOpen(p.id);
-                            }}
-                            className="absolute right-2 top-2 p-1 text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all focus:opacity-100"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        )}
+      {/* ─── Janela: novo / editar projeto ─── */}
+      <AnimatePresence>
+        {isFormOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" data-irrigation-form>
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white dark:bg-slate-900 w-full max-w-3xl rounded-[2rem] shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+              <div className="p-6 border-b border-slate-100 space-y-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 bg-emerald-100 rounded-2xl flex items-center justify-center text-emerald-600"><Droplet className="w-5 h-5" /></div>
+                    <div>
+                      <h3 className="text-lg font-display font-bold text-slate-800">{editingId ? 'Editar Projeto de Irrigação' : 'Novo Projeto de Irrigação'}</h3>
+                      <p className="text-[11px] text-slate-500">Etapa {step + 1} de {STEPS.length} · {STEPS[step]}</p>
+                    </div>
+                  </div>
+                  <button onClick={() => { setIsFormOpen(false); resetForm(); }} className="p-2 hover:bg-slate-100 rounded-xl" title="Fechar"><X className="w-5 h-5 text-slate-400" /></button>
+                </div>
+                <WizardSteps steps={STEPS} current={step} onGo={(i) => { if (i <= step) setStep(i); }} />
+              </div>
+              <div className="p-6 overflow-y-auto flex-1">{renderStep()}</div>
+              <div className="p-5 border-t border-slate-100 flex justify-between gap-3 bg-slate-50/60">
+                <button onClick={() => (step === 0 ? (setIsFormOpen(false), resetForm()) : setStep(s => s - 1))}
+                  className="px-5 py-2.5 border border-slate-200 rounded-2xl text-xs font-bold text-slate-500 hover:bg-white flex items-center gap-2">
+                  <ArrowLeft className="w-4 h-4" /> {step === 0 ? 'Cancelar' : 'Voltar'}
+                </button>
+                {step < STEPS.length - 1 ? (
+                  <button onClick={goNext} className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-emerald-600/20">
+                    Avançar <ArrowRight className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button onClick={() => runExclusive('Irrigation.save', handleSave)} disabled={isSaving}
+                    className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-emerald-600/20 disabled:opacity-50">
+                    <Save className="w-4 h-4" /> {isSaving ? 'Salvando...' : editingId ? 'Salvar e Gerar PDF' : 'Criar Projeto e Gerar PDF'}
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── Janela: detalhes ─── */}
+      <AnimatePresence>
+        {viewing && (() => {
+          const p = viewing;
+          const st = statusOf(p);
+          const pc = computePricing(p.pricing, Number(p.inputs?.demand?.area) || 0);
+          const r = p.results || {};
+          return (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" data-irrigation-details>
+              <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+                className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-[2rem] shadow-2xl p-7 flex flex-col gap-5 max-h-[92vh] overflow-y-auto">
+                <div className="flex justify-between items-start gap-4">
+                  <div>
+                    <h3 className="text-2xl font-display font-bold text-slate-800">{p.clientName}</h3>
+                    <p className="text-sm text-slate-500">{p.propertyName} · {systemLabel(p.type)}</p>
+                  </div>
+                  <button onClick={() => setViewing(null)} className="p-2 hover:bg-slate-100 rounded-xl"><X className="w-5 h-5 text-slate-400" /></button>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {resultBox('Área', `${p.inputs?.demand?.area ?? '—'} ha`)}
+                  {resultBox('Potência', `${r.pumpPower ?? '—'} cv`)}
+                  {resultBox('HMT', `${r.totalHead ?? '—'} mca`)}
+                  {resultBox('Vol. a captar', `${r.totalWaterDay || r.netWaterDay || 0} m³/dia`)}
+                </div>
+                <div className="p-4 bg-emerald-50/70 border border-emerald-100 rounded-2xl text-xs space-y-1">
+                  <div className="text-[10px] font-bold text-emerald-700 uppercase mb-1">Valor do serviço</div>
+                  {p.pricing ? pc.rows.map(([k, v], i) => (
+                    <div key={k + i} className={cn('flex justify-between gap-4', i === pc.rows.length - 1 ? 'pt-1 border-t border-emerald-200 font-extrabold text-emerald-800' : 'text-slate-600')}><span>{k}</span><span className="font-mono">{v}</span></div>
+                  )) : <div className="text-slate-500">Projeto antigo, sem preço cadastrado. Use “Editar” para incluir.</div>}
+                </div>
+                <div className="text-xs text-slate-600 flex items-center gap-2">
+                  <User className="w-4 h-4 text-emerald-600" />
+                  <span className="font-bold">{p.responsibleTech?.name || p.responsible || '—'}</span>
+                  {registryLabel(p.responsibleTech) && <span className="text-slate-400">· {registryLabel(p.responsibleTech)}</span>}
+                  {p.scheduledDate && <span className="ml-auto flex items-center gap-1 text-slate-400"><Clock className="w-3.5 h-3.5" /> {formatDate(p.scheduledDate)}</span>}
+                </div>
+                {canEditProject(p) && (
+                  <div className="space-y-3">
+                    <div>
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Situação do projeto</div>
+                      <div className="flex gap-2">
+                        {STATUSES.map(s => (
+                          <button key={s} onClick={() => updateProject(p, { status: s }, `Situação: ${s}`)}
+                            className={cn('flex-1 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all', st === s ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200')}>{s}</button>
+                        ))}
                       </div>
-                    ))
-                  )}
-               </div>
+                    </div>
+                    {Number(p.value) > 0 && (
+                      <div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Pagamento</div>
+                        <div className="flex gap-2">
+                          {(['pendente', 'pago'] as const).map(s => (
+                            <button key={s} onClick={() => updateProject(p, { paymentStatus: s }, s === 'pago' ? 'Marcado como pago.' : 'Marcado como a receber.')}
+                              className={cn('flex-1 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all', (p.paymentStatus || 'pendente') === s ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200')}>{s === 'pago' ? 'Pago' : 'A receber'}</button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
+                  <button onClick={() => downloadPDF(p)} className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2"><FileText className="w-4 h-4" /> Relatório em PDF</button>
+                  {canEditProject(p) && <button onClick={() => openEdit(p)} className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2"><Edit3 className="w-4 h-4" /> Editar</button>}
+                  {isAdmin && <button onClick={() => setIsDeleteModalOpen(p.id)} className="py-3 px-4 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-2xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2" title="Excluir projeto"><Trash2 className="w-4 h-4" /></button>}
+                </div>
+              </motion.div>
             </div>
-
-            <div className="glass-card p-6 bg-slate-800 text-white border-none shadow-xl shadow-slate-900/20">
-               <h3 className="font-bold mb-3 flex items-center gap-2">
-                  <BookOpen className="w-4 h-4 text-emerald-400" /> Nota de Engenharia
-               </h3>
-               <p className="text-[11px] text-slate-300 leading-relaxed mb-4">
-                  Os cálculos utilizam coeficientes de rugosidade normatizados. Recomenda-se um fator de segurança de 15% na escolha final da motobomba comercial.
-               </p>
-               <div className="pt-4 border-t border-white/10 flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-500/20 flex items-center justify-center font-bold text-emerald-400 text-xs">i</div>
-                  <div className="text-[10px] text-slate-400 uppercase font-bold tracking-tight">Cálculo em Tempo Real</div>
-               </div>
-            </div>
-         </div>
-      </div>
+          );
+        })()}
+      </AnimatePresence>
 
       <ConfirmationModal
         isOpen={!!isDeleteModalOpen}

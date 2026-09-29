@@ -30,6 +30,7 @@ import { toast } from 'sonner';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { drawBrandBanner, drawBrandFooter } from '../lib/pdfBranding';
+import ServiceKpiCards, { isThisMonth } from '../components/service/ServiceKpiCards';
 
 import ConfirmationModal from '../components/ConfirmationModal';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
@@ -378,6 +379,21 @@ export default function Regularization() {
     doc.save(`Regularizacao_${service.internalProtocol ? service.internalProtocol + '_' : ''}${(service.clientName || 'Cliente').replace(/\s/g, '_')}.pdf`);
   };
 
+  // ─── Mini painel ───
+  const openProtocols = services.filter(s => s.status !== 'Concluido');
+  const now = new Date();
+  const daysTo = (d?: string) => { const dt = d ? parseDateInput(d) : null; return dt ? Math.ceil((dt.getTime() - now.getTime()) / 864e5) : null; };
+  const overdue = openProtocols.filter(s => { const n = daysTo(s.deadline); return n !== null && n < 0; });
+  const dueSoon = openProtocols.filter(s => { const n = daysTo(s.deadline); return n !== null && n >= 0 && n <= 30; });
+  const doneProtocols = services.filter(s => s.status === 'Concluido');
+  const docsPending = openProtocols.reduce((acc, s) => acc + Object.values(s.documents || {}).filter(Boolean).length, 0);
+  const kpis = [
+    { label: 'Protocolos em Aberto', value: openProtocols.length, hint: `${openProtocols.filter(s => s.status === 'Pendente').length} pendente(s) · ${openProtocols.filter(s => s.status === 'Em Andamento').length} em andamento`, icon: ClipboardList, tone: 'emerald' as const },
+    { label: 'Prazos Vencidos', value: overdue.length, hint: overdue.length ? 'Prazo legal já passou' : 'Nenhum prazo vencido', icon: AlertCircle, tone: (overdue.length ? 'rose' : 'slate') as 'rose' | 'slate' },
+    { label: 'Vencem em 30 dias', value: dueSoon.length, hint: `${docsPending} documento(s) em regularização`, icon: Clock, tone: 'amber' as const },
+    { label: 'Concluídos', value: doneProtocols.length, hint: `${doneProtocols.filter(s => isThisMonth((s as any).updatedAt || s.createdAt)).length} neste mês`, icon: CheckCircle2, tone: 'emerald' as const },
+  ];
+
   const filteredServices = services.filter(s => 
     (s.clientName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (s.propertyName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -411,6 +427,8 @@ export default function Regularization() {
           )}
         </div>
       </header>
+
+      <ServiceKpiCards items={kpis} />
 
       <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
         {loading ? (

@@ -45,6 +45,7 @@ import { ServiceAnalysis, Client } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, todayLocalDateString, formatDate } from '../lib/utils';
 import { buildServiceReportPDF } from '../lib/pdfBranding';
+import ServiceKpiCards, { formatBRL, isThisMonth } from '../components/service/ServiceKpiCards';
 
 import ConfirmationModal from '../components/ConfirmationModal';
 import PronafWizard from '../components/PronafWizard';
@@ -383,11 +384,15 @@ export default function RuralCredit() {
     return matchesSearch && matchesStatus;
   });
 
+  const activeProjects = projects.filter(p => p.status !== 'Concluído' && p.status !== 'Cancelado');
   const stats = {
-    totalValue: projects.reduce((acc, p) => acc + (p.value || 0), 0),
-    totalCost: projects.reduce((acc, p) => acc + (p.cost || 0), 0),
+    activeCount: activeProjects.length,
+    activeValue: activeProjects.reduce((acc, p) => acc + (p.value || 0), 0),
+    activeCost: activeProjects.reduce((acc, p) => acc + (p.cost || 0), 0),
     pendingCount: projects.filter(p => p.status === 'Pendente').length,
+    analysisCount: projects.filter(p => p.status === 'Em Análise').length,
     completedCount: projects.filter(p => p.status === 'Concluído').length,
+    completedMonth: projects.filter(p => p.status === 'Concluído' && isThisMonth(p.updatedAt)).length,
   };
 
   return (
@@ -415,51 +420,12 @@ export default function RuralCredit() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="glass p-5 rounded-3xl border border-white/40 shadow-sm">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-600">
-                <DollarSign className="w-5 h-5" />
-              </div>
-              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Total Solicitado</span>
-            </div>
-            <div className="text-2xl font-display font-bold text-slate-800">
-              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(stats.totalValue)}
-            </div>
-          </div>
-
-          <div className="glass p-5 rounded-3xl border border-white/40 shadow-sm">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600">
-                <BadgePercent className="w-5 h-5" />
-              </div>
-              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Custo de Execução (2%)</span>
-            </div>
-            <div className="text-2xl font-display font-bold text-emerald-600">
-              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(stats.totalCost)}
-            </div>
-          </div>
-
-          <div className="glass p-5 rounded-3xl border border-white/40 shadow-sm">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600">
-                <Clock className="w-5 h-5" />
-              </div>
-              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Em Análise</span>
-            </div>
-            <div className="text-2xl font-display font-bold text-slate-800">{stats.pendingCount}</div>
-          </div>
-
-          <div className="glass p-5 rounded-3xl border border-white/40 shadow-sm">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-600">
-                <CheckCircle2 className="w-5 h-5" />
-              </div>
-              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Concluídos</span>
-            </div>
-            <div className="text-2xl font-display font-bold text-slate-800">{stats.completedCount}</div>
-          </div>
-        </div>
+        <ServiceKpiCards items={[
+          { label: 'Projetos Ativos', value: stats.activeCount, hint: `${stats.pendingCount} pendente(s) · ${stats.analysisCount} em análise`, icon: Landmark, tone: 'emerald' },
+          { label: 'Total Solicitado', value: formatBRL(stats.activeValue), hint: 'Soma dos projetos ativos', icon: DollarSign, tone: 'slate' },
+          { label: 'Custo de Execução (2%)', value: formatBRL(stats.activeCost), hint: 'A receber dos projetos ativos', icon: BadgePercent, tone: 'amber' },
+          { label: 'Concluídos', value: stats.completedCount, hint: `${stats.completedMonth} neste mês`, icon: CheckCircle2, tone: 'emerald' },
+        ]} />
       </header>
 
       {/* Filters & Search */}

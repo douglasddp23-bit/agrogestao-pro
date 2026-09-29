@@ -59,7 +59,6 @@ const PAGE_LOADERS: Record<string, () => Promise<{ default: React.ComponentType<
   financial: () => import('../../pages/Financial'),
   reports: () => import('../../pages/Reports'),
   inventory: () => import('../../pages/Inventory'),
-  property_map: () => import('../../pages/PropertyMap'),
   hr: () => import('../../pages/HR'),
   vehicles: () => import('../../pages/Vehicles'),
   users: () => import('../../pages/Users'),
@@ -88,7 +87,6 @@ const InventoryPage = React.lazy(PAGE_LOADERS.inventory);
 const IrrigationPage = React.lazy(PAGE_LOADERS.analysis_irrigation);
 const MessagesPage = React.lazy(PAGE_LOADERS.messages);
 const ProfilePage = React.lazy(PAGE_LOADERS.profile);
-const PropertyMapPage = React.lazy(PAGE_LOADERS.property_map);
 const RegularizationPage = React.lazy(PAGE_LOADERS.analysis_documentation);
 const ReportsPage = React.lazy(PAGE_LOADERS.reports);
 const RuralCreditPage = React.lazy(PAGE_LOADERS.analysis_credit);
@@ -118,7 +116,7 @@ const shakeVariants = {
   }
 };
 
-type Page = 'dashboard' | 'clients' | 'scheduling' | 'analysis' | 'analysis_irrigation' | 'analysis_documentation' | 'analysis_topography' | 'analysis_credit' | 'property_map' | 'judicial-expertise' | 'judicial_expertise' | 'rural-valuation' | 'rural_valuation' | 'hr' | 'messages' | 'documents' | 'users' | 'profile' | 'financial' | 'inventory' | 'field_visits' | 'contracts' | 'reports' | 'vehicles' | 'audit_logs';
+type Page = 'dashboard' | 'clients' | 'scheduling' | 'analysis' | 'analysis_irrigation' | 'analysis_documentation' | 'analysis_topography' | 'analysis_credit' | 'judicial-expertise' | 'judicial_expertise' | 'rural-valuation' | 'rural_valuation' | 'hr' | 'messages' | 'documents' | 'users' | 'profile' | 'financial' | 'inventory' | 'field_visits' | 'contracts' | 'reports' | 'vehicles' | 'audit_logs';
 
 const getRoleBadgeClass = (role?: UserRole) => {
   switch (role) {
@@ -194,7 +192,7 @@ export default function MainApp() {
       navigate('/scheduling', { replace: true });
       return;
     }
-    if (currentPath === 'pest_disease' || currentPath === 'environmental_xray') {
+    if (currentPath === 'pest_disease' || currentPath === 'environmental_xray' || currentPath === 'property_map') {
       toast.info('Esta página foi retirada do sistema.');
       navigate('/dashboard', { replace: true });
       return;
@@ -521,7 +519,6 @@ export default function MainApp() {
       case 'rural_valuation':
         return <RuralPropertyValuationPage />;
       case 'analysis': return <AnalysisPage typeFilter={undefined} />;
-      case 'property_map': return <PropertyMapPage />;
       case 'analysis_irrigation': return <IrrigationPage />;
       case 'analysis_documentation': return <RegularizationPage />;
       case 'analysis_topography': return <TopographyPage />;

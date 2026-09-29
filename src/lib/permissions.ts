@@ -120,7 +120,6 @@ export const NAV_ACCESS: Record<string, UserRole[]> = {
   hr:                    ['consultant', 'hr', 'manager', 'admin'],
   users:                 ['hr', 'admin'],
   audit_logs:            ['admin'],
-  property_map:          ['manager', 'admin'],
 };
 
 export function canAccessNav(role: UserRole, navKey: string): boolean {

@@ -47,6 +47,7 @@ import autoTable from 'jspdf-autotable';
 
 import ConfirmationModal from '../components/ConfirmationModal';
 import EfficiencyReport from '../components/EfficiencyReport';
+import ServiceKpiCards from '../components/service/ServiceKpiCards';
 import AuditTrail from '../components/AuditTrail';
 import { toast } from 'sonner';
 
@@ -910,62 +911,12 @@ export default function Analysis({ typeFilter }: AnalysisProps) {
       </header>
 
       {/* MINI PAINEL DE ANÁLISES */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="glass-card p-5 rounded-3xl border border-white/40 dark:border-slate-800 flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Análises em Aberto</p>
-            <h3 className="text-2xl font-display font-extrabold text-slate-800 dark:text-slate-100 mt-1">{kpi.open}</h3>
-            <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 mt-0.5 block">
-              {typeFilter ? 'Aguardando laudo/resultado' : kpi.openDetail}
-            </span>
-          </div>
-          <div className="w-12 h-12 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-2xl flex items-center justify-center">
-            <FlaskConical className="w-6 h-6" />
-          </div>
-        </div>
-
-        <div className="glass-card p-5 rounded-3xl border border-white/40 dark:border-slate-800 flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Atrasadas</p>
-            <h3 className={cn("text-2xl font-display font-extrabold mt-1", kpi.late > 0 ? "text-rose-600 dark:text-rose-400" : "text-slate-800 dark:text-slate-100")}>{kpi.late}</h3>
-            <span className={cn("text-[10px] font-medium mt-0.5 block", kpi.late > 0 ? "text-rose-600 dark:text-rose-400" : "text-slate-500 dark:text-slate-400")}>
-              Data agendada já passou
-            </span>
-          </div>
-          <div className="w-12 h-12 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 rounded-2xl flex items-center justify-center">
-            <AlertCircle className="w-6 h-6" />
-          </div>
-        </div>
-
-        <div className="glass-card p-5 rounded-3xl border border-white/40 dark:border-slate-800 flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Concluídas no Mês</p>
-            <h3 className="text-2xl font-display font-extrabold text-slate-800 dark:text-slate-100 mt-1">{kpi.doneMonth}</h3>
-            <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 mt-0.5 block">
-              {kpi.doneYear} no ano
-            </span>
-          </div>
-          <div className="w-12 h-12 bg-slate-50 dark:bg-emerald-950/40 text-slate-600 dark:text-slate-400 rounded-2xl flex items-center justify-center">
-            <CheckCircle2 className="w-6 h-6" />
-          </div>
-        </div>
-
-        <div className="glass-card p-5 rounded-3xl border border-white/40 dark:border-slate-800 flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Prazo Médio do Laudo</p>
-            <h3 className="text-2xl font-display font-extrabold text-amber-600 dark:text-amber-400 mt-1">
-              {kpi.avgDays === null ? '—' : `${kpi.avgDays} ${kpi.avgDays === 1 ? 'dia' : 'dias'}`}
-            </h3>
-            <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400 mt-0.5 block">
-              {kpi.avgBase ? `Da coleta à conclusão (${kpi.avgBase} nos últimos 90 dias)` : 'Sem conclusões nos últimos 90 dias'}
-            </span>
-          </div>
-          <div className="w-12 h-12 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-2xl flex items-center justify-center">
-            <Clock className="w-6 h-6" />
-          </div>
-        </div>
-      </div>
-
+      <ServiceKpiCards items={[
+        { label: 'Análises em Aberto', value: kpi.open, hint: typeFilter ? 'Aguardando laudo/resultado' : kpi.openDetail, icon: FlaskConical, tone: 'emerald' },
+        { label: 'Atrasadas', value: kpi.late, hint: 'Data agendada já passou', icon: AlertCircle, tone: kpi.late > 0 ? 'rose' : 'slate' },
+        { label: 'Concluídas no Mês', value: kpi.doneMonth, hint: `${kpi.doneYear} no ano`, icon: CheckCircle2, tone: 'slate' },
+        { label: 'Prazo Médio do Laudo', value: kpi.avgDays === null ? '—' : `${kpi.avgDays} ${kpi.avgDays === 1 ? 'dia' : 'dias'}`, hint: kpi.avgBase ? `Da coleta à conclusão (${kpi.avgBase} nos últimos 90 dias)` : 'Sem conclusões nos últimos 90 dias', icon: Clock, tone: 'amber' },
+      ]} />
       {showEfficiencyReport ? (
         <EfficiencyReport analyses={analyses} clients={clients} />
       ) : (

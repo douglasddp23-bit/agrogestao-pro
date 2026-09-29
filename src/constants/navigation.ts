@@ -2,7 +2,7 @@ import {
   LayoutDashboard, Users, ClipboardCheck, Map, Droplet, FileText,
   UsersRound, Clock, Wallet, ShieldCheck, DollarSign, BarChart3,
   Package, ClipboardList, FilePen, Car,
-  CalendarDays, History, Scale, Landmark, MapPinned
+  CalendarDays, History, Scale, Landmark
 } from 'lucide-react';
 import { UserRole } from '../lib/permissions';
 
@@ -33,7 +33,6 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'financial',              key: 'financial',           label: 'Financeiro',             icon: DollarSign,      group: 'Gestão' },
   { id: 'reports',                key: 'reports',             label: 'Relatórios',             icon: BarChart3,       group: 'Gestão' },
   { id: 'inventory',              key: 'inventory',           label: 'Estoque / Insumos',      icon: Package,         group: 'Gestão' },
-  { id: 'property_map',           key: 'property_map',        label: 'Mapa de Propriedades',   icon: MapPinned,       group: 'Gestão' },
 
   { id: 'hr',                     key: 'hr',                  label: 'Ponto Eletrônico',       icon: Clock,           group: 'Equipe/RH' },
   { id: 'vehicles',               key: 'vehicles',            label: 'Veículos / Km',          icon: Car,             group: 'Equipe/RH' },
