@@ -303,24 +303,29 @@ async function startServer() {
   app.post('/api/ai/generate-minuta', requireAuth, async (req, res) => {
     const { clientName, value, startDate, endDate, category, standardClauses, customGuidelines } = req.body;
     
+    const buildOfflineMinuta = () => {
+    // Sem IA configurada: minuta-padrão em texto limpo (vai para o contrato do cliente,
+    // então nada de avisos técnicos, markdown ou datas no formato AAAA-MM-DD).
+    const br = (d: any) => (d && /^\d{4}-\d{2}-\d{2}/.test(String(d)) ? String(d).slice(0, 10).split('-').reverse().join('/') : (d || '___/___/_____'));
+    const valorFmt = (Number(value) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const objeto = category || 'prestação de serviços técnicos agronômicos';
+    const offlineMinuta = `CONTRATO DE PRESTAÇÃO DE SERVIÇOS TÉCNICOS
+
+CONTRATADA: ${req.body.companyName || '______________________'}
+CONTRATANTE: ${clientName || '______________________'}${req.body.clientCpf ? `, CPF/CNPJ ${req.body.clientCpf}` : ''}
+
+1. DO OBJETO: O presente instrumento tem por objeto ${objeto}.
+2. DA VIGÊNCIA: De ${br(startDate)} a ${br(endDate)}.
+3. DO VALOR E DO PAGAMENTO: O valor total é de ${valorFmt}, pago nas parcelas e datas do cronograma deste contrato.
+4. DAS OBRIGAÇÕES: A CONTRATADA prestará os serviços por profissional habilitado, com a devida anotação de responsabilidade técnica (ART/TRT), e entregará os relatórios pertinentes; o CONTRATANTE garantirá o acesso à propriedade e as informações necessárias.
+5. DO FORO: Fica eleito o foro da comarca do domicílio do CONTRATANTE para dirimir dúvidas decorrentes deste contrato.`;
+    return offlineMinuta;
+    };
+
     try {
       const aiInstance = getGeminiClient();
       if (!aiInstance) {
-        const offlineMinuta = `### MINUTA DE CONTRATO PRESTACIONAL (GERADO EM MODO OFFLINE)
-        
-**CONTRATANTE:** ${clientName || '[Nome do Cliente]'}
-**VALOR DO CONTRATO:** R$ ${(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-**VIGÊNCIA:** De ${startDate || '[Data de Início]'} a ${endDate || '[Data de Fim]'}
-**CATEGORIA:** ${category || 'Prestação de Serviços Agrícolas'}
-
-#### CLÁUSULAS CONVENCIONAIS:
-1. **Do Objeto:** O presente instrumento tem por objeto a prestação de serviços de assessoramento agronômico especializado, focado em ${category || 'gestão de safras e talhões'}.
-2. **Do Pagamento:** O valor total contratual é de R$ ${(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}, a ser pago em parcelas acordadas entre as partes.
-3. **Direitos e Deveres:** O CONTRATADO obriga-se a prestar assistência técnica e relatórios periódicos, ao passo que o CONTRATANTE compromete-se a fornecer livre acesso à propriedade e insumos básicos.
-4. **Resolução de Conflitos:** Fica eleito o foro da comarca da sede do contratante para dirimir eventuais dúvidas ou controvérsias judiciais decorrentes do presente termo.
-
-*Nota do Sistema: Configure a chave de API Gemini (Settings > Secrets) para obter a geração com IA avançada.*`;
-        return res.json({ text: offlineMinuta });
+        return res.json({ text: buildOfflineMinuta() });
       }
 
       const systemInstruction = `Você é o AgroGestor AI, um assistente jurídico-agronômico sênior integrado ao AgroGestão Pro.
@@ -331,6 +336,7 @@ Seja preciso, adote um tom formal e profissional. Use formatação Markdown limp
       const prompt = `Gere uma minuta detalhada e formal de contrato de agronegócios baseada nos seguintes dados fornecidos:
 
 DADOS DO CONTRATO:
+- Empresa Contratada: ${req.body.companyName || 'a empresa contratada'}
 - Nome do Cliente (Contratante): ${clientName || 'Cliente Indefinido'}
 - Categoria / Objeto do Serviço: ${category || 'Prestação de Serviços Agrícolas em Geral'}
 - Valor Total do Contrato: R$ ${(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -342,7 +348,7 @@ ${standardClauses || '1. Prestação de Serviços Agronômicos sob demanda.\n2. 
 DIRETRIZES PERSONALIZADAS DO USUÁRIO (REQUISITOS ADICIONAIS):
 "${customGuidelines || 'Nenhum requisito adicional fornecido.'}"
 
-Por favor, seja direto, utilize formatação Markdown elegante. Vá diretamente à minuta do contrato pois ela será copiada/inserida diretamente na seção de termos do contrato.`;
+Por favor, seja direto e use TEXTO SIMPLES (sem Markdown, sem asteriscos ou #), com datas no formato DD/MM/AAAA. Vá diretamente à minuta do contrato pois ela será copiada/inserida diretamente na seção de termos do contrato.`;
 
       const result = await aiInstance.models.generateContent({
         model: "gemini-3.5-flash",
@@ -355,19 +361,7 @@ Por favor, seja direto, utilize formatação Markdown elegante. Vá diretamente 
       res.json({ text: result.text });
     } catch (error: any) {
       console.error('Erro ao gerar minuta por IA:', error);
-      const offlineMinuta = `### MINUTA DE CONTRATO PRESTACIONAL (FALHA DE CONEXÃO COM IA)
-        
-**CONTRATANTE:** ${clientName || '[Nome do Cliente]'}
-**VALOR DO CONTRATO:** R$ ${(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-**VIGÊNCIA:** De ${startDate || '[Data de Início]'} a ${endDate || '[Data de Fim]'}
-**CATEGORIA:** ${category || 'Prestação de Serviços Agrícolas'}
-
-#### CLÁUSULAS CONVENCIONAIS:
-1. **Do Objeto:** O presente instrumento tem por objeto a prestação de serviços de assessoramento agronômico especializado, focado em ${category || 'gestão de safras e talhões'}.
-2. **Do Pagamento:** O valor total contratual é de R$ ${(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}, a ser pago em parcelas acordadas entre as partes.
-
-*Nota do Sistema: Ocorreu um erro temporário ao conectar-se ao Gemini. Exibindo minuta offline.*`;
-      res.json({ text: offlineMinuta });
+      res.json({ text: buildOfflineMinuta() });
     }
   });
 

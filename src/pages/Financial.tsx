@@ -31,7 +31,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { BarChart, Bar, PieChart, Pie, Cell, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import SkeletonList from '../components/SkeletonList';
-import { formatDate, todayLocalDateString, formatCurrency } from '../lib/utils';
+import { formatDate, todayLocalDateString, formatCurrency, parseDecimalBR } from '../lib/utils';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { FinancialRecord, FinancialStatus, PaymentMethod, FinancialCategory, Client, ServiceAnalysis, ExpenseReport, UserRole } from '../types';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
@@ -340,7 +340,7 @@ function FinancialContent() {
     const client = clients.find(c => c.id === formClientId);
     if (!client) return;
 
-    const valNum = parseFloat(formValue.replace(',', '.'));
+    const valNum = parseDecimalBR(formValue);
     if (isNaN(valNum) || valNum <= 0) {
       toast.error("Insira um valor financeiro válido maior que zero.");
       return;
@@ -403,7 +403,7 @@ function FinancialContent() {
       return;
     }
 
-    const valNum = parseFloat(expenseFormValue.replace(',', '.'));
+    const valNum = parseDecimalBR(expenseFormValue);
     if (isNaN(valNum) || valNum <= 0) {
       toast.error("Insira um valor numérico de despesa válido maior que zero.");
       return;
@@ -1582,7 +1582,7 @@ function FinancialContent() {
                         </div>
                         <div>
                           <span className="text-slate-400 block uppercase font-bold text-[9px]">Valor do Serviço</span>
-                          <span className="font-bold text-emerald-700">{formatCurrency(parseFloat(formValue.replace(',', '.')))}</span>
+                          <span className="font-bold text-emerald-700">{formatCurrency(parseDecimalBR(formValue))}</span>
                         </div>
                         <div>
                           <span className="text-slate-400 block uppercase font-bold text-[9px]">Vencimento Cobrança</span>

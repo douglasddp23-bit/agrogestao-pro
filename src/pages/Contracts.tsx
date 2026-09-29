@@ -40,7 +40,7 @@ import SkeletonList from '../components/SkeletonList';
 import ConfirmationModal from '../components/ConfirmationModal';
 import SignaturePad from '../components/SignaturePad';
 import AuditTrail from '../components/AuditTrail';
-import { formatDateTime, formatDate, todayLocalDateString, formatCurrency } from '../lib/utils';
+import { formatDateTime, formatDate, todayLocalDateString, formatCurrency, parseDecimalBR, cn } from '../lib/utils';
 import { Contract, ContractPayment, ContractAdendum, ContractRevision, Client, FinancialRecord, ContractTemplate, ContractTemplateVersion } from '../types';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { FilePen as PageIcon } from 'lucide-react';
@@ -65,7 +65,7 @@ const statusBadge: Record<string, { label: string; color: string }> = {
 export const CONTRACT_TEMPLATES: Record<string, string> = {
   "Análises Agronômicas Avançadas": `CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE ANÁLISE AGRONÔMICA
 
-CONTRATADA: AgroGestão Pro Consultoria Agrícola Ltda.
+CONTRATADA: {EMPRESA}
 CONTRATANTE: {PRODUTOR}
 IDENTIFICAÇÃO DO INSTRUMENTO: {CONTRATO}
 
@@ -76,7 +76,7 @@ IDENTIFICAÇÃO DO INSTRUMENTO: {CONTRATO}
 
   "Projetos de Irrigação de Precisão": `CONTRATO DE ELABORAÇÃO DE PROJETO DE IRRIGAÇÃO DE PRECISÃO
 
-CONTRATADA: AgroGestão Pro Consultoria Agrícola Ltda.
+CONTRATADA: {EMPRESA}
 CONTRATANTE: {PRODUTOR}
 IDENTIFICAÇÃO DO INSTRUMENTO: {CONTRATO}
 
@@ -87,7 +87,7 @@ IDENTIFICAÇÃO DO INSTRUMENTO: {CONTRATO}
 
   "Regularização Ambiental de Imóveis": `CONTRATO DE CONSULTORIA PARA REGULARIZAÇÃO AMBIENTAL DE IMÓVEIS RURAIS
 
-CONTRATADA: AgroGestão Pro Consultoria Agrícola Ltda.
+CONTRATADA: {EMPRESA}
 CONTRATANTE: {PRODUTOR}
 IDENTIFICAÇÃO DO INSTRUMENTO: {CONTRATO}
 
@@ -98,7 +98,7 @@ IDENTIFICAÇÃO DO INSTRUMENTO: {CONTRATO}
 
   "Elaboração Consultoria Crédito Rural": `CONTRATO DE PRESTAÇÃO DE SERVIÇOS PARA ELABORAÇÃO DE CRÉDITO RURAL
 
-CONTRATADA: AgroGestão Pro Consultoria Agrícola Ltda.
+CONTRATADA: {EMPRESA}
 CONTRATANTE: {PRODUTOR}
 IDENTIFICAÇÃO DO INSTRUMENTO: {CONTRATO}
 
@@ -109,15 +109,70 @@ IDENTIFICAÇÃO DO INSTRUMENTO: {CONTRATO}
 
   "Levantamentos e Modelagem de Topografia": `CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE LEVANTAMENTO TOPOGRÁFICO E MODELAGEM
 
-CONTRATADA: AgroGestão Pro Consultoria Agrícola Ltda.
+CONTRATADA: {EMPRESA}
 CONTRATANTE: {PRODUTOR}
 IDENTIFICAÇÃO DO INSTRUMENTO: {CONTRATO}
 
 1. OBJETO DO CONTRATO: Execução de serviços de Levantamento Topográfico Planialtimétrico Cadastral, com geração de curvas de nível, modelagem digital do terreno (MDT) em 3D, demarcação física de talhões e delimitação precisa das divisas das glebas agrícolas indicadas pelo CONTRATANTE.
 2. PRAZO DE EXECUÇÃO: Vigência de {DATA_INICIO} com finalização de entregas físicas planejada para {DATA_FIM}.
 3. VALOR DO CONTRATO: Pelo trabalho de campo e modelagem em escritório, pactua-se {VALOR}, faturados em {PARCELAS} parcelas mensais.
-4. EQUIPAMENTOS E ACESSO: O CONTRATADO utilizará equipamentos georreferenciados (RTK, Drones) de alta precisão, responsabilizando-se pelo credenciamento técnico correspondente.`
+4. EQUIPAMENTOS E ACESSO: O CONTRATADO utilizará equipamentos georreferenciados (RTK, Drones) de alta precisão, responsabilizando-se pelo credenciamento técnico correspondente.`,
+
+  "Assistência Técnica e Extensão Rural": `CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE ASSISTÊNCIA TÉCNICA E EXTENSÃO RURAL
+
+CONTRATADA: {EMPRESA}
+CONTRATANTE: {PRODUTOR}
+IDENTIFICAÇÃO DO INSTRUMENTO: {CONTRATO}
+
+1. OBJETO DO CONTRATO: Prestação de assistência técnica agronômica às atividades produtivas do CONTRATANTE, com visitas técnicas periódicas, recomendações de manejo e relatórios de acompanhamento.
+2. PRAZO DE VIGÊNCIA: De {DATA_INICIO} a {DATA_FIM}.
+3. VALOR E PAGAMENTO: O CONTRATANTE pagará {VALOR}, em {PARCELAS} parcela(s), conforme o cronograma deste contrato.
+4. RESPONSABILIDADES: O CONTRATADO manterá profissional habilitado, com a devida anotação de responsabilidade técnica (ART/TRT), e registrará cada visita em relatório.`,
+
+  "Perícia Judicial": `CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE PERÍCIA / ASSISTÊNCIA TÉCNICA JUDICIAL
+
+CONTRATADA: {EMPRESA}
+CONTRATANTE: {PRODUTOR}
+IDENTIFICAÇÃO DO INSTRUMENTO: {CONTRATO}
+
+1. OBJETO DO CONTRATO: Atuação técnica em processo judicial (perícia ou assistência técnica), incluindo vistoria, análise de documentos, elaboração de laudo ou parecer e resposta aos quesitos.
+2. PRAZO DE VIGÊNCIA: De {DATA_INICIO} a {DATA_FIM}, ou até a entrega do laudo/parecer.
+3. HONORÁRIOS: O CONTRATANTE pagará {VALOR}, em {PARCELAS} parcela(s).
+4. INDEPENDÊNCIA TÉCNICA: O trabalho observará as normas técnicas aplicáveis e a legislação processual vigente.`,
+
+  "Avaliação de Imóveis Rurais": `CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE AVALIAÇÃO DE IMÓVEL RURAL
+
+CONTRATADA: {EMPRESA}
+CONTRATANTE: {PRODUTOR}
+IDENTIFICAÇÃO DO INSTRUMENTO: {CONTRATO}
+
+1. OBJETO DO CONTRATO: Elaboração de laudo de avaliação de imóvel rural conforme a ABNT NBR 14.653-3, incluindo vistoria, pesquisa de mercado e tratamento dos dados.
+2. PRAZO DE VIGÊNCIA: De {DATA_INICIO} a {DATA_FIM}.
+3. VALOR E PAGAMENTO: O CONTRATANTE pagará {VALOR}, em {PARCELAS} parcela(s).
+4. RESPONSABILIDADE TÉCNICA: O laudo será assinado por profissional habilitado, com a respectiva ART/TRT.`,
+
+  "Outros Serviços Técnicos": `CONTRATO DE PRESTAÇÃO DE SERVIÇOS TÉCNICOS
+
+CONTRATADA: {EMPRESA}
+CONTRATANTE: {PRODUTOR}
+IDENTIFICAÇÃO DO INSTRUMENTO: {CONTRATO}
+
+1. OBJETO DO CONTRATO: {OBJETO}.
+2. PRAZO DE VIGÊNCIA: De {DATA_INICIO} a {DATA_FIM}.
+3. VALOR E PAGAMENTO: O CONTRATANTE pagará {VALOR}, em {PARCELAS} parcela(s).`
 };
+
+// Nomes legíveis para tipos gravados como código em versões antigas
+const CATEGORY_LABELS: Record<string, string> = {
+  assistencia_tecnica: 'Assistência Técnica', analise: 'Análises Agronômicas', irrigacao: 'Projeto de Irrigação',
+  topografia: 'Topografia', regularizacao: 'Regularização Ambiental', credito: 'Crédito Rural',
+  pericia: 'Perícia Judicial', avaliacao: 'Avaliação de Imóvel', outro: 'Outros Serviços',
+};
+export const categoryLabel = (c?: string) => (c ? CATEGORY_LABELS[c] || c : '—');
+
+// Contratos antigos têm o nome do sistema gravado como empresa contratada
+export const fixContractorName = (text: string, company: string) =>
+  (text || '').replace(/AgroGestão Pro Consultoria Agr[íi]cola Ltda\.?/g, company).replace(/\{EMPRESA\}/g, company);
 
 interface DiffLine {
   text: string;
@@ -255,7 +310,7 @@ export default function Contracts() {
         errors.mainClause = 'O parágrafo de cláusula principal é obrigatório.';
       }
     } else if (step === 3) {
-      const valTotal = parseFloat(formTotalValue.replace(',', '.'));
+      const valTotal = parseDecimalBR(formTotalValue);
       if (!formTotalValue || isNaN(valTotal) || valTotal <= 0) {
         errors.totalValue = 'Insira um valor contratual total válido (maior que zero).';
       }
@@ -286,7 +341,7 @@ export default function Contracts() {
         ? `${client.address.street}, ${client.address.number} - ${client.address.city}/${client.address.state}`
         : '';
 
-      const numericValue = formTotalValue ? parseFloat(formTotalValue.replace(',', '.')) : 0;
+      const numericValue = formTotalValue ? parseDecimalBR(formTotalValue) : 0;
 
       // Get Firebase Auth token
       let token = '';
@@ -313,6 +368,7 @@ export default function Contracts() {
           clientPhone: clientPhone,
           clientAddress: clientAddress,
           value: numericValue,
+          companyName: getPdfBranding().companyName,
           startDate: formStartDate,
           endDate: formEndDate,
           category: formObject,
@@ -369,7 +425,9 @@ export default function Contracts() {
   const expiringCount = expiringContracts.length;
 
   // 3. Total signed contracts
-  const signedContracts = contracts.filter(c => !!c.signatureBase64 || !!c.signedAt);
+  // Assinado = assinatura eletrônica OU contrato já Ativo/Concluído (assinatura física lançada no sistema)
+  const isSigned = (c: Contract) => !!c.signatureBase64 || !!c.signedAt || ['active', 'ativo', 'completed', 'concluido'].includes(c.status as string);
+  const signedContracts = contracts.filter(isSigned);
   const signedCount = signedContracts.length;
 
   // 4. Financial metrics
@@ -396,9 +454,9 @@ export default function Contracts() {
 
     // Populate counts from Firestore
     contracts.forEach(c => {
-      if (c.signatureBase64 || c.signedAt) {
-        // Use signedAt or fall back to createdAt
-        const dateStr = c.signedAt || c.createdAt || '';
+      if (isSigned(c)) {
+        // Data da assinatura; sem ela, o início da vigência (ou a criação)
+        const dateStr = c.signedAt || c.startDate || c.createdAt || '';
         if (dateStr) {
           const yearMonth = dateStr.slice(0, 7); // "YYYY-MM"
           const found = result.find(m => m.monthKey === yearMonth);
@@ -538,9 +596,11 @@ export default function Contracts() {
   // Wizard Contract code generation on opening
   useEffect(() => {
     if (isAddModalOpen && !formContractNumber) {
+      // Número sequencial do ano (antes era aleatório de 3 dígitos: podia repetir e saía em outro padrão)
       const year = new Date().getFullYear();
-      const rand = Math.floor(100 + Math.random() * 900);
-      setFormContractNumber(`CTR-${year}-${rand}`);
+      const re = new RegExp(`^CTR?-${year}-(\\d+)$`);
+      const maxSeq = contracts.reduce((m, c) => { const x = (c.contractNumber || '').match(re); return x ? Math.max(m, Number(x[1])) : m; }, 0);
+      setFormContractNumber(`CT-${year}-${String(maxSeq + 1).padStart(3, '0')}`);
     }
   }, [isAddModalOpen]);
 
@@ -625,7 +685,7 @@ export default function Contracts() {
       toast.error('Por favor, verifique os campos obrigatórios nos passos correspondentes.');
       return;
     }
-    const valTotal = parseFloat(formTotalValue.replace(',', '.'));
+    const valTotal = parseDecimalBR(formTotalValue);
     if (isNaN(valTotal) || valTotal <= 0) {
       toast.error('Insira o valor contratual total válido.');
       return;
@@ -753,7 +813,7 @@ export default function Contracts() {
     const contractNum = formContractNumber || '[CTR-ANO-XXXX]';
     
     // Format total value
-    const valTotal = parseFloat(formTotalValue.replace(',', '.')) || 0;
+    const valTotal = parseDecimalBR(formTotalValue) || 0;
     const formattedVal = valTotal > 0 
       ? valTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
       : '[Valor do Contrato]';
@@ -768,7 +828,9 @@ export default function Contracts() {
       .replace(/{DATA_INICIO}/g, formattedStartDate)
       .replace(/{DATA_FIM}/g, formattedEndDate)
       .replace(/{PARCELAS}/g, String(formInstallmentsCount))
-      .replace(/{OBJETO}/g, category);
+      .replace(/{OBJETO}/g, category)
+      .replace(/{EMPRESA}/g, getPdfBranding().companyName)
+      .replace(/AgroGestão Pro Consultoria Agr[íi]cola Ltda\.?/g, getPdfBranding().companyName);
 
     setFormMainClause(textFilled);
     toast.success('Modelo de contrato preenchido e atualizado com dados reais do formulário!');
@@ -871,8 +933,9 @@ export default function Contracts() {
 
   // Generate Adendum / Addendums inside the contract
   const handleAddAdendum = async (contract: Contract) => {
-    if (!newAdendumText.trim()) return;
-    const valueNum = parseFloat(newAdendumValue.replace(',', '.')) || 0;
+    if (!newAdendumText.trim()) { toast.error('Descreva a cláusula do aditivo antes de anexar.'); return; }
+    // Aceita 1.500,00 e desconto com sinal de menos (-500)
+    const valueNum = parseDecimalBR(newAdendumValue) || 0;
 
     const newAdendum: ContractAdendum = {
       id: `ADD-${Date.now()}`,
@@ -1021,7 +1084,7 @@ export default function Contracts() {
   const handleSendInstallmentReminder = (contract: Contract, inst: ContractPayment) => {
     const client = clients.find(c => c.id === contract.clientId);
     const phone = client?.phone?.replace(/\D/g, '') || '';
-    const message = `Olá, ${contract.clientName}!\n\nLembramos que a parcela nº ${inst.installmentNumber} do Contrato *${contract.contractNumber}* (${contract.category}) no valor de *R$ ${inst.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}* possui vencimento em *${formatDate(inst.dueDate)}*.\n\nQualquer dúvida ou envio de comprovante, estamos à disposição!\n*AgroGestão Pro*`;
+    const message = `Olá, ${contract.clientName}!\n\nLembramos que a parcela nº ${inst.installmentNumber} do Contrato *${contract.contractNumber}* (${categoryLabel(contract.category)}) no valor de *R$ ${inst.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}* possui vencimento em *${formatDate(inst.dueDate)}*.\n\nQualquer dúvida ou envio de comprovante, estamos à disposição!\n*${contract.contractorCompany || getPdfBranding().companyName}*`;
     
     if (phone) {
       window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(message)}`, '_blank');
@@ -1036,7 +1099,7 @@ export default function Contracts() {
   const handleSendContractRenewalReminder = (contract: Contract) => {
     const client = clients.find(c => c.id === contract.clientId);
     const phone = client?.phone?.replace(/\D/g, '') || '';
-    const message = `Olá, ${contract.clientName}!\n\nInformamos que a vigência do seu Contrato *${contract.contractNumber}* (${contract.category}) encerra em *${formatDate(contract.endDate)}*.\n\nGostaríamos de alinhar a renovação dos serviços técnicos agronômicos para a próxima safra.\n\nPodemos agendar uma conversa técnica?\n*AgroGestão Pro*`;
+    const message = `Olá, ${contract.clientName}!\n\nInformamos que a vigência do seu Contrato *${contract.contractNumber}* (${categoryLabel(contract.category)}) encerra em *${formatDate(contract.endDate)}*.\n\nGostaríamos de alinhar a renovação dos serviços técnicos agronômicos para a próxima safra.\n\nPodemos agendar uma conversa técnica?\n*${contract.contractorCompany || getPdfBranding().companyName}*`;
     
     if (phone) {
       window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(message)}`, '_blank');
@@ -1153,7 +1216,7 @@ export default function Contracts() {
     
     doc.setFont('Helvetica', 'normal');
     doc.setFontSize(9.5);
-    const qualText = `De um lado, o PRESTADOR: AgroGestão Pro Consultoria Agronômica Ltda, com endereço sede na Av. Floresta, 1200. De outro lado, o CONTRATANTE: Sr(a). ${contract.clientName}, qualificado no banco de dados e registros adicionais desta plataforma rural.`;
+    const qualText = `De um lado, o PRESTADOR: ${contract.contractorCompany || getPdfBranding().companyName}. De outro lado, o CONTRATANTE: Sr(a). ${contract.clientName}, qualificado no banco de dados e registros adicionais desta plataforma rural.`;
     const splitQual = doc.splitTextToSize(qualText, 180);
     doc.text(splitQual, 15, 71);
 
@@ -1165,7 +1228,7 @@ export default function Contracts() {
     doc.setFontSize(9.5);
     const objTitle = `Ref: ${contract.category}`;
     doc.text(objTitle, 15, 101);
-    const clauseText = contract.clauses?.[0] || 'O presente contrato regula os serviços profissionais agronômicos gerais especificados no cronograma.';
+    const clauseText = fixContractorName(contract.clauses?.[0] || '', contract.contractorCompany || getPdfBranding().companyName) || 'O presente contrato regula os serviços profissionais agronômicos gerais especificados no cronograma.';
     const splitClause = doc.splitTextToSize(clauseText, 180);
     doc.text(splitClause, 15, 107);
 
@@ -1585,7 +1648,7 @@ export default function Contracts() {
                           </span>
                         </div>
                         <div className="flex justify-between items-center text-[10px]">
-                          <span className="text-slate-500 font-medium truncate max-w-[130px]">{c.category}</span>
+                          <span className="text-slate-500 font-medium truncate max-w-[130px]">{categoryLabel(c.category)}</span>
                           <button
                             onClick={() => {
                               setSelectedContract(c);
@@ -1633,7 +1696,7 @@ export default function Contracts() {
                           </span>
                         </div>
                         <div className="flex justify-between items-center text-[10px]">
-                          <span className="text-slate-500 font-medium truncate max-w-[130px]">{c.category}</span>
+                          <span className="text-slate-500 font-medium truncate max-w-[130px]">{categoryLabel(c.category)}</span>
                           <button
                             onClick={() => {
                               setSelectedContract(c);
@@ -1694,6 +1757,9 @@ export default function Contracts() {
               <option value="Topografia">Topografia</option>
               <option value="Crédito">Crédito</option>
               <option value="Regularização">Regularização</option>
+                  <option value="Assistência">Assistência Técnica</option>
+                  <option value="Perícia">Perícia</option>
+                  <option value="Avaliação">Avaliação</option>
             </select>
           </div>
 
@@ -1731,14 +1797,14 @@ export default function Contracts() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-widest border-b border-slate-200">
-                  <th className="px-6 py-4">Código</th>
-                  <th className="px-6 py-4">Produtor / Cliente</th>
-                  <th className="px-6 py-4">Objeto Técnica</th>
-                  <th className="px-6 py-4">Vigência</th>
-                  <th className="px-6 py-4 text-center">Parcelas</th>
-                  <th className="px-6 py-4 text-center">Status</th>
-                  <th className="px-6 py-4 text-right">Valor Global</th>
-                  <th className="px-6 py-4 text-center">Ações</th>
+                  <th className="px-3 py-3">Código</th>
+                  <th className="px-3 py-3">Produtor / Cliente</th>
+                  <th className="px-3 py-3">Objeto Técnica</th>
+                  <th className="px-3 py-3">Vigência</th>
+                  <th className="px-3 py-3 text-center">Parcelas</th>
+                  <th className="px-3 py-3 text-center">Status</th>
+                  <th className="px-3 py-3 text-right">Valor Global</th>
+                  <th className="px-3 py-3 text-center">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm">
@@ -1746,30 +1812,30 @@ export default function Contracts() {
                   const status = statusBadge[item.status] || statusBadge.em_elaboracao;
                   return (
                     <tr key={item.id} className="hover:bg-slate-50/50 transition-colors cursor-pointer" onClick={() => handleViewContract(item)}>
-                      <td className="px-6 py-4 font-mono font-bold text-slate-700 whitespace-nowrap">
+                      <td className="px-3 py-3 font-mono font-bold text-slate-700 whitespace-nowrap">
                         {item.contractNumber}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="font-bold text-slate-800 block">{item.clientName}</span>
+                      <td className="px-3 py-3">
+                        <span className="font-bold text-slate-800 block max-w-[180px] truncate" title={item.clientName}>{item.clientName}</span>
                       </td>
-                      <td className="px-6 py-4">
-                        <span className="font-medium text-slate-750 block truncate max-w-xs">{item.category}</span>
+                      <td className="px-3 py-3">
+                        <span className="font-medium text-slate-700 block truncate max-w-[180px]" title={categoryLabel(item.category)}>{categoryLabel(item.category)}</span>
                       </td>
-                      <td className="px-6 py-4 text-xs text-slate-500 whitespace-nowrap">
-                        {formatDate(item.startDate)} - {formatDate(item.endDate)}
+                      <td className="px-3 py-3 text-xs text-slate-500 leading-tight">
+                        <span className="block whitespace-nowrap">{formatDate(item.startDate) || '—'}</span><span className="block whitespace-nowrap">até {formatDate(item.endDate) || '—'}</span>
                       </td>
-                      <td className="px-6 py-4 text-center font-bold text-slate-600 whitespace-nowrap">
+                      <td className="px-3 py-3 text-center font-bold text-slate-600 whitespace-nowrap">
                         {item.installmentsCount}x
                       </td>
-                      <td className="px-6 py-4 text-center whitespace-nowrap">
+                      <td className="px-3 py-3 text-center whitespace-nowrap">
                         <span className={`px-2.5 py-1 text-[10px] font-bold border rounded-lg uppercase tracking-wider ${status.color}`}>
                           {status.label}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-right font-display font-bold text-slate-800 whitespace-nowrap">
+                      <td className="px-3 py-3 text-right font-display font-bold text-slate-800 whitespace-nowrap">
                         R$ {item.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </td>
-                      <td className="px-6 py-4 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-3 py-3 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-center items-center gap-1">
                           <button
                             onClick={() => { setSelectedContract(item); setDetailTab('geral'); }}
@@ -1787,6 +1853,7 @@ export default function Contracts() {
                             <FileText className="w-4 h-4" />
                           </button>
 
+                          {(user?.effectiveRole ?? user?.role) === 'admin' && (
                           <button
                             onClick={() => setIsDeleteModalOpen(item.id)}
                             className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg"
@@ -1794,6 +1861,7 @@ export default function Contracts() {
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -2240,8 +2308,8 @@ export default function Contracts() {
                                 <span className="font-bold text-slate-700 block">{ad.title}</span>
                                 <span className="text-slate-500 mt-0.5 block">{ad.description}</span>
                               </div>
-                              <span className="font-bold text-emerald-700 shrink-0 whitespace-nowrap">
-                                + {formatCurrency(ad.valueAdjustment)}
+                              <span className={cn("font-bold shrink-0 whitespace-nowrap", ad.valueAdjustment < 0 ? "text-rose-600" : "text-emerald-700")}>
+                                {ad.valueAdjustment < 0 ? '− ' : '+ '}{formatCurrency(Math.abs(ad.valueAdjustment))}
                               </span>
                             </div>
                           ))}
@@ -2264,7 +2332,7 @@ export default function Contracts() {
                               type="text"
                               value={newAdendumValue}
                               onChange={(e) => setNewAdendumValue(e.target.value)}
-                              placeholder="Reajuste R$ (+)"
+                              placeholder="Reajuste R$ (ex.: 500 ou -500)"
                               className="w-28 glass-input text-xs"
                             />
                             <button
@@ -2860,6 +2928,7 @@ export default function Contracts() {
 
               {/* Action output to generate simplified draft contract in PDF or delete */}
               <div className="flex justify-between items-center border-t pt-4 gap-2">
+                {(user?.effectiveRole ?? user?.role) === 'admin' && (
                 <button
                   type="button"
                   onClick={() => setIsDeleteModalOpen(selectedContract.id)}
@@ -2868,6 +2937,7 @@ export default function Contracts() {
                 >
                   <Trash2 className="w-4 h-4" /> Excluir Contrato
                 </button>
+                )}
                 <button
                   onClick={() => handleGenerateContractPDF(selectedContract)}
                   className="px-4 py-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl font-bold text-xs uppercase flex items-center gap-1.5"
@@ -2988,6 +3058,10 @@ export default function Contracts() {
                           <option value="Regularização Ambiental de Imóveis">Regularização Ambiental de Imóveis</option>
                           <option value="Elaboração Consultoria Crédito Rural">Elaboração Consultoria Crédito Rural</option>
                           <option value="Levantamentos e Modelagem de Topografia">Levantamentos e Modelagem de Topografia</option>
+                        <option value="Assistência Técnica e Extensão Rural">Assistência Técnica e Extensão Rural</option>
+                        <option value="Perícia Judicial">Perícia Judicial</option>
+                        <option value="Avaliação de Imóveis Rurais">Avaliação de Imóveis Rurais</option>
+                        <option value="Outros Serviços Técnicos">Outros Serviços Técnicos</option>
                         </select>
                       </div>
                     </div>

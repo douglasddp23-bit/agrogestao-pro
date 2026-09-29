@@ -322,7 +322,7 @@ export default function RemoteSignature({ contractId }: RemoteSignatureProps) {
         ? contract.clauses.join('\n\n') 
         : `O presente contrato tem como objeto a prestação de serviços de consultoria agronômica especializada, englobando análises de campo, recomendação técnica e faturamento periódico conforme cronograma pactuado no sistema de AgroGestão Pro.`;
         
-    const splitText = docPdf.splitTextToSize(clausesText, 180);
+    const splitText = docPdf.splitTextToSize((clausesText).replace(/AgroGestão Pro Consultoria Agr[íi]cola Ltda\.?/g, contract.contractorCompany || 'CONTRATADA'), 180);
     docPdf.text(splitText, 15, 143);
     
     // Add page if needed
@@ -530,12 +530,12 @@ export default function RemoteSignature({ contractId }: RemoteSignatureProps) {
                         className="overflow-hidden"
                       >
                         <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-2xl max-h-[220px] overflow-y-auto text-slate-600 text-[11px] leading-relaxed space-y-3 font-sans scrollbar-thin whitespace-pre-wrap">
-                          {typeof contract.clauses === 'string' 
-                            ? contract.clauses 
-                            : Array.isArray(contract.clauses) 
-                              ? contract.clauses.join('\n\n') 
-                              : `O presente contrato tem como objeto a prestação de serviços de consultoria agronômica especializada, englobando análises de campo, recomendação técnica e faturamento periódico conforme cronograma pactuado no sistema de AgroGestão Pro.`
-                          }
+                          {(typeof contract.clauses === 'string'
+                            ? contract.clauses
+                            : Array.isArray(contract.clauses)
+                              ? contract.clauses.join('\n\n')
+                              : 'O presente contrato tem como objeto a prestação de serviços técnicos conforme o cronograma pactuado.'
+                          ).replace(/AgroGestão Pro Consultoria Agr[íi]cola Ltda\.?/g, contract.contractorCompany || 'CONTRATADA')}
                         </div>
                       </motion.div>
                     )}
