@@ -404,7 +404,7 @@ export default function AuditLogs() {
               <option value="all">Módulos (Todos)</option>
               {uniqueCollections.map(c => (
                 <option key={c} value={c}>
-                  {c === 'contracts' ? 'Contratos' : c === 'financials' ? 'Financeiro' : c === 'clients' ? 'Clientes' : c === 'audit_logs' ? 'Auditoria' : c}
+                  {c === 'contracts' ? 'Contratos' : c === 'financials' ? 'Financeiro' : c === 'clients' ? 'Clientes' : c === 'audit_logs' ? 'Auditoria' : c === 'harvests' ? 'Colheitas' : c}
                 </option>
               ))}
             </select>

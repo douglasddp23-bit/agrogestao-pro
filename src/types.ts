@@ -94,6 +94,33 @@ export interface ClientDocument {
 
 export type AnalysisType = 'soil' | 'water' | 'foliar' | 'topography' | 'irrigation' | 'documentation' | 'credit' | 'environmental_xray';
 
+/** Unidade em que a colheita foi medida; todas convertem para sacas de 60 kg. */
+export type HarvestUnit = 'sc' | 'kg' | 't' | 'arroba';
+
+/**
+ * Colheita REAL de um talhão/área (coleção "harvests"). É o que alimenta o
+ * Relatório de Eficiência — nada ali é mais estimado por fórmula.
+ */
+export interface Harvest {
+  id: string;
+  clientId: string;
+  clientName: string;
+  propertyName: string;
+  plot?: string;          // talhão / gleba (opcional)
+  crop: string;
+  season: string;         // safra, ex.: "2025/2026"
+  harvestDate: string;    // AAAA-MM-DD
+  quantity: number;       // quantidade colhida, na unidade abaixo
+  unit: HarvestUnit;
+  areaHa: number;         // área colhida (ha)
+  analysisId?: string;    // análise de solo daquela área (opcional)
+  notes?: string;
+  createdBy: string;
+  createdByName?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface ServiceAnalysis {
   id: string;
   clientId: string;

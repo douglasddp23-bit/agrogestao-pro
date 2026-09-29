@@ -232,6 +232,29 @@ service cloud.firestore {
 
     // --- Projetos de irrigação / topografia / regularização ---
     // Antes: "incoming().createdBy == meu uid" deixava editar projeto de qualquer um.
+    // --- Colheita real por talhão/área (Relatório de Eficiência) ---
+    // Lança: Consultor, Gerente e Administrador, sempre em nome próprio; edita:
+    // gestão ou quem lançou; exclui: só o Administrador. RH não lança colheita.
+    function isValidHarvest(data) {
+      return data.keys().hasAll(['clientId', 'propertyName', 'harvestDate', 'quantity', 'unit', 'areaHa', 'createdBy'])
+             && data.clientId is string && data.clientId.size() > 0 && data.clientId.size() <= 128
+             && strMax(data.propertyName, 200) && data.propertyName.size() > 0
+             && data.harvestDate is string && data.harvestDate.size() == 10
+             && data.quantity is number && data.quantity > 0
+             && data.areaHa is number && data.areaHa > 0
+             && data.unit in ['sc', 'kg', 't', 'arroba']
+             && strMax(data.get('plot', ''), 120) && strMax(data.get('notes', ''), 1000);
+    }
+    match /harvests/{harvestId} {
+      allow list: if isStaff();
+      allow get: if isStaff() && isValidId(harvestId);
+      allow create: if isStaff() && getRole() != 'hr' && isValidId(harvestId)
+        && incoming().createdBy == request.auth.uid && isValidHarvest(incoming());
+      allow update: if isStaff() && isValidId(harvestId) && isValidHarvest(incoming())
+        && keepsField('createdBy') && (isManagement() || isOwnerOf('createdBy'));
+      allow delete: if isAdmin() && isValidId(harvestId);
+    }
+
     match /irrigation_projects/{projectId} {
       allow list: if isStaff();
       allow get: if isStaff() && isValidId(projectId);
