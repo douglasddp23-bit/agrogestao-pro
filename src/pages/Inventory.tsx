@@ -39,6 +39,7 @@ import { PERMISSIONS } from '../lib/permissions';
 import { UserRole } from '../types';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { Package as PageIcon } from 'lucide-react';
+import { getPdfBranding } from '../lib/pdfBranding';
 
 interface InventoryItemState {
   id: string;
@@ -383,7 +384,7 @@ export default function Inventory() {
     doc.setTextColor(255, 255, 255);
     doc.setFont("Helvetica", "bold");
     doc.setFontSize(22);
-    doc.text("AGROGESTÃO PRO", 15, 20);
+    doc.text(getPdfBranding().companyName.toUpperCase(), 15, 20);
     doc.setFont("Helvetica", "normal");
     doc.setFontSize(10);
     doc.text("RELATÓRIO DE BALANÇO DE ALMOXARIFADO", 15, 30);

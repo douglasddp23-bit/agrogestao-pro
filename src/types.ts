@@ -406,6 +406,7 @@ export interface Contract {
   approvalNotes?: string;
   approvedBy?: string;
   approvedAt?: string;
+  contractorCompany?: string; // nome da empresa contratada (Configurar Marca) no momento da criação
 }
 
 export interface ContractRevision {

@@ -50,6 +50,7 @@ import EfficiencyReport from '../components/EfficiencyReport';
 import ServiceKpiCards from '../components/service/ServiceKpiCards';
 import AuditTrail from '../components/AuditTrail';
 import { toast } from 'sonner';
+import { getPdfBranding } from '../lib/pdfBranding';
 
 interface AnalysisProps {
   typeFilter?: AnalysisType;
@@ -472,7 +473,7 @@ export default function Analysis({ typeFilter }: AnalysisProps) {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(24);
     doc.setFont('helvetica', 'bold');
-    doc.text('AGROGESTÃO', 20, 25);
+    doc.text(getPdfBranding().companyName.toUpperCase(), 20, 25);
     
     doc.setFontSize(10);
     doc.setFont('helvetica', 'italic');
@@ -571,7 +572,7 @@ export default function Analysis({ typeFilter }: AnalysisProps) {
     doc.text('CREA / Registro Profissional', pageWidth / 2, bottomY, { align: 'center' });
 
     doc.setTextColor(150, 150, 150);
-    doc.text(`Gerado via AgroGestão Connect em ${formatDateTime(new Date())}`, pageWidth / 2, bottomY + 15, { align: 'center' });
+    doc.text(`Emitido por ${getPdfBranding().companyName} em ${formatDateTime(new Date())}`, pageWidth / 2, bottomY + 15, { align: 'center' });
 
     doc.save(`Relatorio_${analysis.clientName.replace(/\s+/g, '_')}_${analysis.type}.pdf`);
   };

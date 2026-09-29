@@ -274,7 +274,7 @@ export default function RemoteSignature({ contractId }: RemoteSignatureProps) {
     docPdf.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
     docPdf.setFont('helvetica', 'bold');
     docPdf.setFontSize(22);
-    docPdf.text('AgroGestão Pro', 15, 20);
+    docPdf.text(contract.contractorCompany || 'Contrato de Prestação de Serviços', 15, 20);
     
     docPdf.setFont('helvetica', 'normal');
     docPdf.setFontSize(9);
@@ -300,7 +300,7 @@ export default function RemoteSignature({ contractId }: RemoteSignatureProps) {
     docPdf.setFont('helvetica', 'bold');
     docPdf.text('PARTES CONTRATANTES:', 15, 81);
     docPdf.setFont('helvetica', 'normal');
-    docPdf.text(`CONTRATADA: AgroGestão Pro Consultoria Agrícola Ltda.`, 15, 87);
+    docPdf.text(`CONTRATADA: ${contract.contractorCompany || '(conforme contrato)'}`, 15, 87);
     docPdf.text(`CONTRATANTE: ${contract.clientName}`, 15, 93);
     
     docPdf.setFont('helvetica', 'bold');
@@ -355,7 +355,7 @@ export default function RemoteSignature({ contractId }: RemoteSignatureProps) {
     docPdf.setTextColor(textColor[0], textColor[1], textColor[2]);
     docPdf.text('Assinado eletronicamente por:', 15, signatureY + 35);
     docPdf.setFont('helvetica', 'normal');
-    docPdf.text('AgroGestão Pro Ltda.', 15, signatureY + 41);
+    docPdf.text(contract.contractorCompany || 'CONTRATADA', 15, signatureY + 41);
     docPdf.setFontSize(8);
     docPdf.text('Representante Legal Técnico', 15, signatureY + 45);
     
@@ -410,7 +410,7 @@ export default function RemoteSignature({ contractId }: RemoteSignatureProps) {
           <p className="text-xs text-slate-500 leading-relaxed">{error}</p>
           <div className="pt-4">
             <p className="text-[10px] text-slate-400 leading-normal">
-              Se você recebeu este link por mensagem, entre em contato com o consultor responsável da AgroGestão Pro para que um novo link válido seja emitido.
+              Se você recebeu este link por mensagem, entre em contato com o consultor responsável para que um novo link válido seja emitido.
             </p>
           </div>
         </div>
@@ -429,7 +429,7 @@ export default function RemoteSignature({ contractId }: RemoteSignatureProps) {
             A
           </div>
           <div>
-            <span className="font-display font-black text-slate-800 text-sm tracking-tight block">AgroGestão Pro</span>
+            <span className="font-display font-black text-slate-800 text-sm tracking-tight block">{contract?.contractorCompany || 'Assinatura de Contrato'}</span>
             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Assinatura Eletrônica</span>
           </div>
         </div>
@@ -465,7 +465,7 @@ export default function RemoteSignature({ contractId }: RemoteSignatureProps) {
                 </h1>
                 
                 <p className="text-xs text-slate-300 mt-1.5 leading-relaxed">
-                  A AgroGestão Pro preparou o seu contrato técnico de prestação de serviços. Assine digitalmente agora mesmo na tela do seu celular com validade jurídica garantida.
+                  {contract?.contractorCompany ? `A ${contract.contractorCompany} preparou` : 'Preparamos'} o seu contrato técnico de prestação de serviços. Assine digitalmente agora mesmo na tela do seu celular com validade jurídica garantida.
                 </p>
 
                 <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between text-xs">
@@ -647,7 +647,7 @@ export default function RemoteSignature({ contractId }: RemoteSignatureProps) {
                 </span>
                 <h2 className="text-xl font-display font-black text-slate-800">Assinatura Concluída!</h2>
                 <p className="text-xs text-slate-500 leading-relaxed max-w-sm mx-auto">
-                  Parabéns, seu documento foi processado e arquivado com sucesso no sistema da AgroGestão Pro. O status do contrato foi atualizado para <strong>Ativo</strong>.
+                  Parabéns, seu documento foi processado e arquivado com sucesso. O status do contrato foi atualizado para <strong>Ativo</strong>.
                 </p>
               </div>
 
@@ -699,7 +699,7 @@ export default function RemoteSignature({ contractId }: RemoteSignatureProps) {
                 </button>
                 
                 <p className="text-[9px] text-slate-400 leading-normal">
-                  Uma cópia assinada deste documento também foi encaminhada para a central de relatórios de sua conta de cliente AgroGestão Pro.
+                  Guarde o PDF assinado baixado acima; a empresa também recebe a cópia assinada no sistema.
                 </p>
               </div>
             </motion.div>
@@ -710,7 +710,7 @@ export default function RemoteSignature({ contractId }: RemoteSignatureProps) {
 
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200 py-4 px-6 text-center text-[10px] text-slate-400">
-        © 2026 AgroGestão Pro S/A • Consultoria e Tecnologia Agronômica Integrada.
+        {contract?.contractorCompany ? `${contract.contractorCompany} · ` : ''}Assinatura eletrônica de contrato
       </footer>
     </div>
   );

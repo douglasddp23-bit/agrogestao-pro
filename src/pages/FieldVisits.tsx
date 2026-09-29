@@ -67,6 +67,7 @@ import iconRetina from 'leaflet/dist/images/marker-icon-2x.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { ClipboardList as PageIcon } from 'lucide-react';
+import { getPdfBranding } from '../lib/pdfBranding';
 
 let DefaultIcon = L.icon({
     iconUrl: iconMarker,
@@ -568,7 +569,7 @@ const { url: downloadUrl } = await saveFile(item.file, filename);
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(20);
     doc.setFont("Helvetica", "bold");
-    doc.text("AgroGestão Pro", 15, 15);
+    doc.text(getPdfBranding().companyName, 15, 15);
     doc.setFontSize(10);
     doc.setFont("Helvetica", "normal");
     doc.text(`Relatório Geral Consolidado de Visitas Técnicas (${filteredVisits.length} registradas)`, 15, 27);
@@ -605,7 +606,7 @@ const { url: downloadUrl } = await saveFile(item.file, filename);
     doc.setTextColor(255, 255, 255);
     doc.setFont("Helvetica", "bold");
     doc.setFontSize(22);
-    doc.text('AgroGestão Pro', 15, 18);
+    doc.text(getPdfBranding().companyName, 15, 18);
     doc.setFontSize(10);
     doc.setFont("Helvetica", "normal");
     doc.text('Relatório Técnico & Diário de Visita de Campo', 15, 28);
@@ -643,7 +644,7 @@ const { url: downloadUrl } = await saveFile(item.file, filename);
     const climateY = (doc as any).lastAutoTable.finalY + 8;
     doc.setFontSize(11);
     doc.setFont('Helvetica', 'bold');
-    doc.text('DADOS CLIMÁTICOS COLETADOS (ESTAÇÃO AGROGESTÃO)', 15, climateY);
+    doc.text('DADOS CLIMÁTICOS COLETADOS', 15, climateY);
 
     // Dynamic weather simulation corresponding to the visit parameters
     const climateData = [

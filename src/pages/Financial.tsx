@@ -45,6 +45,7 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import { FinancialRecord, FinancialStatus, PaymentMethod, FinancialCategory, Client, ServiceAnalysis, ExpenseReport, UserRole } from '../types';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { DollarSign as PageIcon } from 'lucide-react';
+import { getPdfBranding } from '../lib/pdfBranding';
 
 export default function Financial() {
   const { user } = useAuth();
@@ -636,7 +637,7 @@ function FinancialContent() {
 
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(20);
-    doc.text('AgroGestão Pro', 15, 15);
+    doc.text(getPdfBranding().companyName, 15, 15);
     doc.setFontSize(10);
     doc.text('Relatório Financeiro de Contas e Receitas', 15, 25);
     doc.text(`Data de Emissão: ${new Date().toLocaleDateString()}`, 140, 25);
@@ -677,7 +678,7 @@ function FinancialContent() {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(20);
     doc.setFont('Helvetica', 'bold');
-    doc.text('AgroGestão Pro', 15, 15);
+    doc.text(getPdfBranding().companyName, 15, 15);
     doc.setFontSize(10);
     doc.setFont('Helvetica', 'normal');
     doc.text(`Demonstrativo de Resultado de Exercício (DRE) - Competência: ${dreMonth}`, 15, 25);

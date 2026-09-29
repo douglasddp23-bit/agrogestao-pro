@@ -37,6 +37,7 @@ import { formatDate, formatCurrency } from '../lib/utils';
 import { Client, FieldVisit, FinancialRecord, ServiceAnalysis, Contract } from '../types';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { BarChart3 as PageIcon } from 'lucide-react';
+import { getPdfBranding } from '../lib/pdfBranding';
 
 export default function Reports() {
   const { user } = useAuth();
@@ -115,7 +116,7 @@ export default function Reports() {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(20);
     doc.setFont("Helvetica", "bold");
-    doc.text("AgroGestão Pro", 15, 15);
+    doc.text(getPdfBranding().companyName, 15, 15);
     doc.setFontSize(10);
     doc.setFont("Helvetica", "normal");
     doc.text(`Relatório Geral Consolidado de Visitas Técnicas (${visits.length} registradas)`, 15, 27);
@@ -171,7 +172,7 @@ export default function Reports() {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(20);
     doc.setFont("Helvetica", "bold");
-    doc.text("AgroGestão Pro", 15, 15);
+    doc.text(getPdfBranding().companyName, 15, 15);
     doc.setFontSize(10);
     doc.setFont("Helvetica", "normal");
     doc.text(`Relatório Geral Consolidado Financeiro e Balanços LCDPR (${financials.length} lançamentos)`, 15, 27);
@@ -216,7 +217,7 @@ export default function Reports() {
     doc.rect(0, 0, 210, 35, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(20);
-    doc.text("AgroGestão Pro", 15, 15);
+    doc.text(getPdfBranding().companyName, 15, 15);
     doc.setFontSize(10);
     doc.text(`Consolidado de Projetos e Laudos de Terras (${analyses.length} registros)`, 15, 27);
 
@@ -284,7 +285,7 @@ export default function Reports() {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(20);
     doc.setFont("Helvetica", "bold");
-    doc.text("AgroGestão Pro", 15, 15);
+    doc.text(getPdfBranding().companyName, 15, 15);
     doc.setFontSize(10);
     doc.setFont("Helvetica", "normal");
     doc.text(`Relatório Geral Consolidado de Safra e Culturas Ativas (${cropList.length} culturas sob gestão)`, 15, 27);
@@ -329,7 +330,7 @@ export default function Reports() {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(20);
     doc.setFont("Helvetica", "bold");
-    doc.text("AgroGestão Pro", 15, 15);
+    doc.text(getPdfBranding().companyName, 15, 15);
     doc.setFontSize(10);
     doc.setFont("Helvetica", "normal");
     doc.text(`Relatório Analítico de Solo e Nutrientes (${soilAnalyses.length} amostras sob controle)`, 15, 27);
@@ -408,7 +409,7 @@ export default function Reports() {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(20);
     doc.setFont("Helvetica", "bold");
-    doc.text("AgroGestão Pro", 15, 15);
+    doc.text(getPdfBranding().companyName, 15, 15);
     doc.setFontSize(10);
     doc.setFont("Helvetica", "normal");
     doc.text(`Relatório Geral de Produtores e Cadastros Agrícolas (${clients.length} cadastrados)`, 15, 27);
@@ -468,7 +469,7 @@ export default function Reports() {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(20);
     doc.setFont("Helvetica", "bold");
-    doc.text("AgroGestão Pro", 15, 15);
+    doc.text(getPdfBranding().companyName, 15, 15);
     doc.setFontSize(10);
     doc.setFont("Helvetica", "normal");
     doc.text(`Relatório Executivo de Métricas Financeiras e Fluxo de Caixa`, 15, 27);
@@ -707,7 +708,7 @@ export default function Reports() {
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(28);
       doc.setFont("Helvetica", "bold");
-      doc.text("AGROGESTÃO PRO", 20, 50);
+      doc.text(getPdfBranding().companyName.toUpperCase(), 20, 50);
       
       doc.setFontSize(11);
       doc.setFont("Helvetica", "normal");
@@ -746,7 +747,7 @@ export default function Reports() {
       doc.setTextColor(156, 163, 175);
       doc.text("Este material consolida todas as vistorias físicas, análises físico-químicas de solo,", 20, 240);
       doc.text("balanço fiscal de faturamento, monitoramento de pragas e termos contratuais sob responsabilidade", 20, 246);
-      doc.text("do time de consultores seniores da AgroGestão Pro.", 20, 252);
+      doc.text(`do time de consultores seniores da ${getPdfBranding().companyName}.`, 20, 252);
 
       // PAGE 2 — OPERATIONAL INSPECTIONS & CROP TRACKING
       doc.addPage();
@@ -883,7 +884,7 @@ export default function Reports() {
 
       doc.setFontSize(7.5);
       doc.setFont("Helvetica", "normal");
-      doc.text("AgroGestão Pro — Diretoria Técnica", 43, lastSignatureY + 5);
+      doc.text(`${getPdfBranding().companyName} — Diretoria Técnica`, 43, lastSignatureY + 5);
       doc.text("Assinatura do Produtor Contratante", 133, lastSignatureY + 5);
 
       // Save Report PDF

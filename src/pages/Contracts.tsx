@@ -54,6 +54,7 @@ import { formatDateTime, formatDate, todayLocalDateString, formatCurrency } from
 import { Contract, ContractPayment, ContractAdendum, ContractRevision, Client, FinancialRecord, ContractTemplate, ContractTemplateVersion } from '../types';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { FilePen as PageIcon } from 'lucide-react';
+import { getPdfBranding } from '../lib/pdfBranding';
 
 const statusBadge: Record<string, { label: string; color: string }> = {
   active: { label: 'Ativo', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
@@ -694,6 +695,8 @@ export default function Contracts() {
         createdBy: user?.uid || 'unknown',
         createdByRole: (user?.effectiveRole ?? user?.role) || 'staff',
         createdByName: user?.displayName || user?.email || 'Usuário',
+        // Nome da empresa contratada (a página pública de assinatura não lê as configurações)
+        contractorCompany: getPdfBranding().companyName,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -1144,7 +1147,7 @@ export default function Contracts() {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(22);
     doc.setFont('Helvetica', 'bold');
-    doc.text('AgroGestão Pro', 15, 20);
+    doc.text(getPdfBranding().companyName, 15, 20);
     doc.setFontSize(10);
     doc.setFont('Helvetica', 'normal');
     doc.text('CONTRATO DE PRESTAÇÃO DE SERVIÇOS AGRONÔMICOS', 15, 32);
@@ -1215,7 +1218,7 @@ export default function Contracts() {
     }
 
     doc.setFontSize(8);
-    doc.text('Representante AgroGestão Pro', 40, lastY + 5);
+    doc.text(`Representante ${contract.contractorCompany || getPdfBranding().companyName}`, 40, lastY + 5);
     doc.text(contract.signedByName || contract.clientName, 135, lastY + 5);
     doc.text('PRESTADOR', 52, lastY + 9);
     doc.text('CONTRATANTE', 145, lastY + 9);
@@ -1256,7 +1259,7 @@ export default function Contracts() {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(20);
     doc.setFont("Helvetica", "bold");
-    doc.text("AgroGestão Pro", 15, 15);
+    doc.text(getPdfBranding().companyName, 15, 15);
     doc.setFontSize(10);
     doc.setFont("Helvetica", "normal");
     doc.text(`Relatório Geral de Contratos Agronômicos (${filteredContracts.length} registros)`, 15, 27);

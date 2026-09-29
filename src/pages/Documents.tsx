@@ -38,6 +38,7 @@ import { useDossierLiveSync } from '../lib/dossierSyncObserver';
 import { useLocation } from 'react-router-dom';
 
 import ConfirmationModal from '../components/ConfirmationModal';
+import { getPdfBranding } from '../lib/pdfBranding';
 
 export default function Documents() {
   const location = useLocation();
@@ -312,7 +313,7 @@ export default function Documents() {
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(22);
         doc.setFont('helvetica', 'bold');
-        doc.text('AgroGestão Pro', 15, 20);
+        doc.text(getPdfBranding().companyName, 15, 20);
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
         doc.text('CONTRATO DE PRESTAÇÃO DE SERVIÇOS AGRONÔMICOS', 15, 32);
@@ -385,7 +386,7 @@ export default function Documents() {
         doc.line(120, lastY, 180, lastY);
 
         doc.setFontSize(8);
-        doc.text('Representante AgroGestão Pro', 40, lastY + 5);
+        doc.text(`Representante ${getPdfBranding().companyName}`, 40, lastY + 5);
         doc.text(selectedClient.name, 135, lastY + 5);
         doc.text('PRESTADOR', 52, lastY + 9);
         doc.text('CONTRATANTE', 145, lastY + 9);
@@ -494,7 +495,7 @@ export default function Documents() {
         doc.text('Engenheiro Agrônomo - Perito Judicial Oficial', pageWidth / 2, signY + 5, { align: 'center' });
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(8);
-        doc.text('CREA-MG / TJMG • AgroGestão Pro', pageWidth / 2, signY + 10, { align: 'center' });
+        doc.text(getPdfBranding().companyName, pageWidth / 2, signY + 10, { align: 'center' });
       } else if (folder.type === 'rural_valuation') {
         const val = folder.data || {};
         // Top Banner for Rural Valuation
@@ -592,7 +593,7 @@ export default function Documents() {
         doc.text('Engenheiro Agrônomo Responsável Técnico', pageWidth / 2, signValY + 5, { align: 'center' });
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(8);
-        doc.text('CREA-MG • AgroGestão Pro Consultoria', pageWidth / 2, signValY + 10, { align: 'center' });
+        doc.text(getPdfBranding().companyName, pageWidth / 2, signValY + 10, { align: 'center' });
       } else if (folder.type === 'field_visit') {
         const visit = folder.data || {};
         // Top Banner for Field Visit
@@ -693,7 +694,7 @@ export default function Documents() {
         doc.setTextColor(255, 255, 255);
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(24);
-        doc.text('AGROGESTÃO PRO', 20, 24);
+        doc.text(getPdfBranding().companyName.toUpperCase(), 20, 24);
         
         doc.setFont('helvetica', 'italic');
         doc.setFontSize(10);
@@ -705,7 +706,7 @@ export default function Documents() {
         doc.setTextColor(255, 255, 255);
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(9);
-        doc.text('PRONTUÁRIO TÉCNICO DE SERVIÇO • EMISSÃO E PROTOCOLO AGROGESTÃO', 20, 53);
+        doc.text('PRONTUÁRIO TÉCNICO DE SERVIÇO • EMISSÃO E PROTOCOLO', 20, 53);
         
         doc.setTextColor(30, 41, 59); // slate-800
         
@@ -836,7 +837,7 @@ export default function Documents() {
       doc.setFontSize(7.5);
       doc.setTextColor(148, 163, 184); // slate-400
       doc.text('Este documento oficial foi autogerado pelo sistema eletrônico seguro AgroGestão PRO com auditoria integrada.', pageWidth / 2, pageHeight - 14, { align: 'center' });
-      doc.text('Copyright © 2026 AgroGestão PRO - Todos os direitos reservados. Confidencial conforme normas LGPD.', pageWidth / 2, pageHeight - 9, { align: 'center' });
+      doc.text(`${getPdfBranding().companyName} — documento confidencial, tratado conforme a LGPD.`, pageWidth / 2, pageHeight - 9, { align: 'center' });
       
       const isContract = folder.type === 'contract';
       const isJudicial = folder.type === 'judicial_expertise';
