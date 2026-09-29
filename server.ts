@@ -835,6 +835,26 @@ Por favor, seja direto e use formatação Markdown limpa e amigável. Não adici
         }
       };
 
+      // Avisos só para quem precisa (valores financeiros não vão para "todos")
+      const localDay = (v: any) => { const s = String(v || ''); const d = new Date(s.length === 10 ? s + 'T12:00:00' : s); return isNaN(d.getTime()) ? null : d; };
+      const todayNoon = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12);
+      const daysUntil = (d: Date) => Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12).getTime() - todayNoon.getTime()) / 864e5);
+      let managerIds: string[] = [];
+      try {
+        const mgr = await db.collection('users').where('role', 'in', ['admin', 'manager']).get();
+        managerIds = mgr.docs.filter(d => !d.data().blocked).map(d => d.id);
+      } catch { /* sem gestores cadastrados */ }
+      const notifyUser = async (userId: string, title: string, message: string, link: string, type: string) => {
+        if (!userId) return;
+        try {
+          const prev = await db.collection('notifications').where('userId', '==', userId).where('title', '==', title).limit(5).get();
+          if (prev.docs.some(d => Date.now() - new Date(d.data().createdAt || 0).getTime() < 3 * 864e5)) return;
+          await db.collection('notifications').add({ userId, title, message, type, read: false, createdAt: new Date().toISOString(), link });
+        } catch (err) { console.error('[BACKGROUND SERVICE] Erro ao notificar usuário:', err); }
+      };
+      const notifyManagers = (title: string, message: string, link: string, type: string) =>
+        Promise.all(managerIds.map(id => notifyUser(id, title, message, link, type)));
+
       // 1. VERIFICAR CONTRATOS (contracts)
       try {
         const contractsSnap = await db.collection('contracts').get();
@@ -852,17 +872,17 @@ Por favor, seja direto e use formatação Markdown limpa e amigável. Não adici
               const item = {
                 id: doc.id,
                 clientName: data.clientName || 'Cliente não identificado',
-                title: data.title || 'Serviços Agrícolas',
+                title: [data.contractNumber, data.category].filter(Boolean).join(' — ') || 'Contrato',
                 endDate: data.endDate,
                 daysRemaining,
-                value: data.value || 0
+                value: data.totalValue || data.value || 0
               };
               resultSummary.expiringContracts.push(item);
               resultSummary.contractsExpiringCount++;
 
-              helperCheckAndNotify(
-                `⚠️ Contrato Vencendo: ${data.clientName || 'Cliente'}`,
-                `O contrato "${data.title || 'Serviços Agrícolas'}" vence em ${daysRemaining} dias (${formattedDate}).`,
+              notifyManagers(
+                `⚠️ Contrato Vencendo: ${data.contractNumber || data.clientName || 'Cliente'}`,
+                `O contrato ${data.contractNumber || ''} (${data.category || 'serviços'}) vence em ${daysRemaining} dias (${formattedDate}).`,
                 'contracts',
                 'alert'
               );
@@ -1003,10 +1023,10 @@ Por favor, seja direto e use formatação Markdown limpa e amigável. Não adici
         
         servicesSnap.forEach(doc => {
           const data = doc.data();
-          if (data.scheduledDate && data.status !== 'Concluido') {
-            const scheduledDate = new Date(data.scheduledDate);
-            const diffTime = scheduledDate.getTime() - today.getTime();
-            const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          const prazo = data.deadline || data.scheduledDate;
+          if (prazo && data.status !== 'Concluido') {
+            const scheduledDate = new Date(String(prazo).length === 10 ? prazo + 'T12:00:00' : prazo);
+            const daysRemaining = daysUntil(scheduledDate);
             if (daysRemaining >= 0 && daysRemaining <= 15) {
               const formattedDate = scheduledDate.toLocaleDateString('pt-BR');
               const item = {
@@ -1020,8 +1040,8 @@ Por favor, seja direto e use formatação Markdown limpa e amigável. Não adici
               resultSummary.regularizationsExpiringCount++;
 
               helperCheckAndNotify(
-                `⚠️ Prazo de Regularização Próximo: ${data.clientName || 'Cliente'}`,
-                `O prazo limite para regularização ambiental do imóvel de ${data.clientName} é ${formattedDate} (${daysRemaining} dias restantes).`,
+                `⚠️ Prazo de Regularização: ${data.internalProtocol || data.clientName || 'Cliente'}`,
+                `${data.deadline ? 'O prazo legal' : 'A data prevista'} do protocolo ${data.internalProtocol || ''} (${data.clientName}${data.organ ? ' — ' + data.organ : ''}) é ${formattedDate} (${daysRemaining} dias restantes).`,
                 'analysis_documentation',
                 'warning'
               );
@@ -1072,6 +1092,62 @@ Por favor, seja direto e use formatação Markdown limpa e amigável. Não adici
           // Ignorar silencioso
         }
       }
+
+      // 7. LAUDOS PERICIAIS com prazo de entrega em até 10 dias (ou vencido)
+      try {
+        const snap = await db.collection('judicial_expertises').get();
+        for (const doc of snap.docs) {
+          const e = doc.data();
+          const d = localDay(e.laudoDeadline);
+          if (!d || e.status !== 'ativo' || e.laudoStatus === 'entregue') continue;
+          const n = daysUntil(d);
+          if (n > 10) continue;
+          const title = n < 0 ? `⚖️ Laudo pericial ATRASADO: ${e.processNumber || ''}` : `⚖️ Prazo de laudo pericial: ${e.processNumber || ''}`;
+          const msg = n < 0 ? `O prazo do laudo (${d.toLocaleDateString('pt-BR')}) venceu há ${-n} dia(s).` : `O laudo deve ser entregue em ${n} dia(s) (${d.toLocaleDateString('pt-BR')}).`;
+          await notifyManagers(title, msg, 'judicial-expertise', 'alert');
+          if (e.createdBy && !managerIds.includes(e.createdBy)) await notifyUser(e.createdBy, title, msg, 'judicial-expertise', 'alert');
+        }
+      } catch (e: any) { console.warn('[BACKGROUND SERVICE] judicial_expertises:', e.message); }
+
+      // 8. PARCELAS DE CONTRATO vencendo em até 5 dias ou vencidas
+      try {
+        const snap = await db.collection('contracts').where('status', 'in', ['active', 'ativo', 'approved']).get();
+        for (const doc of snap.docs) {
+          const c = doc.data();
+          for (const p of (c.installments || [])) {
+            if (!p || p.status === 'paid') continue;
+            const d = localDay(p.dueDate); if (!d) continue;
+            const n = daysUntil(d); if (n > 5) continue;
+            const valor = Number(p.value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            await notifyManagers(
+              n < 0 ? `💰 Parcela vencida: ${c.contractNumber || c.clientName}` : `💰 Parcela a vencer: ${c.contractNumber || c.clientName}`,
+              `Parcela ${p.installmentNumber || ''} de ${c.clientName || 'cliente'} (${valor}) ${n < 0 ? `venceu em ${d.toLocaleDateString('pt-BR')}` : `vence em ${d.toLocaleDateString('pt-BR')}`}.`,
+              'contracts', n < 0 ? 'alert' : 'warning');
+          }
+        }
+      } catch (e: any) { console.warn('[BACKGROUND SERVICE] parcelas:', e.message); }
+
+      // 9. LANÇAMENTOS FINANCEIROS pendentes com vencimento passado
+      try {
+        const snap = await db.collection('financials').where('status', '==', 'pending').get();
+        const vencidos = snap.docs.map(d => d.data()).filter(f => { const d = localDay(f.dueDate); return d && daysUntil(d) < 0; });
+        if (vencidos.length) {
+          const total = vencidos.reduce((s, f) => s + (Number(f.value) || 0), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+          await notifyManagers(`📉 ${vencidos.length} lançamento(s) vencido(s)`, `Há ${vencidos.length} lançamento(s) pendente(s) com vencimento passado, somando ${total}.`, 'financial', 'alert');
+        }
+      } catch (e: any) { console.warn('[BACKGROUND SERVICE] financials:', e.message); }
+
+      // 10. AGENDA DE AMANHÃ: lembrete para o técnico designado
+      try {
+        const amanha = new Date(today.getTime() + 864e5);
+        const ymd = `${amanha.getFullYear()}-${String(amanha.getMonth() + 1).padStart(2, '0')}-${String(amanha.getDate()).padStart(2, '0')}`;
+        const snap = await db.collection('appointments').where('date', '==', ymd).get();
+        for (const doc of snap.docs) {
+          const a = doc.data();
+          if (a.status === 'cancelled' || a.status === 'completed') continue;
+          await notifyUser(a.technicianId, `📅 Amanhã: ${a.serviceType || 'visita'} — ${a.clientName || ''}`, `Você tem ${a.serviceType || 'um atendimento'} com ${a.clientName || 'cliente'} amanhã às ${a.time || '--:--'}.`, 'scheduling', 'info');
+        }
+      } catch (e: any) { console.warn('[BACKGROUND SERVICE] agenda:', e.message); }
 
       // Verificar delegações vencidas e desativar automaticamente
       await checkExpiredDelegations();
