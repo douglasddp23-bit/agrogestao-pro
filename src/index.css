@@ -1,6 +1,20 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@500;700&display=swap');
 @import "tailwindcss";
 
+/* Tons intermediários usados nas telas (ex.: border-slate-150) que o Tailwind
+   não traz de fábrica. Sem eles a borda caía na cor do texto (quase preta). */
+@theme {
+  --color-slate-150: #eaeff5;
+  --color-slate-250: #d9e0e9;
+  --color-slate-350: #b4bfcd;
+  --color-emerald-150: #bbf3d9;
+  --color-emerald-250: #86e8bf;
+}
+
+/* Ícone dentro de campo de busca: fica por cima do campo (o efeito de vidro
+   do campo o cobria e ele sumia). */
+.relative > svg.absolute { z-index: 1; }
+
 /* O modo escuro segue o botão de tema do sistema (classe "dark" no <html>),
    e não a configuração do Windows. Sem isto, num Windows em modo escuro os
    estilos "dark:" eram aplicados com o app no modo CLARO — textos quase
@@ -59,6 +73,9 @@ html, body {
   transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
 }
 
+/* Em @layer components: assim classes utilitárias da página (ex.: pl-9 para abrir espaço
+   para o ícone da busca) prevalecem sobre o padrão px-4. */
+@layer components {
 .glass {
   @apply bg-white/40 backdrop-blur-md border border-white/50 shadow-sm;
 }
@@ -69,6 +86,7 @@ html, body {
 
 .glass-input {
   @apply bg-white/60 backdrop-blur-sm border border-white/80 rounded-xl outline-none focus:ring-2 ring-emerald-500/20 text-sm px-4 py-2;
+}
 }
 
 ::-webkit-scrollbar {

@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 import { exportToExcel } from '../../lib/exportExcel';
@@ -27,7 +27,7 @@ export default function ExportExcelButton({ getRows, fileName, sheetName = 'Dado
       type="button"
       onClick={handle}
       title="Exportar a lista para Excel"
-      className="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 rounded-2xl text-xs font-bold flex items-center gap-2 transition-all"
+      className="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 rounded-2xl text-xs font-bold flex items-center gap-2 whitespace-nowrap shrink-0 transition-all"
     >
       <FileSpreadsheet className="w-4 h-4" /> Exportar Excel
     </button>

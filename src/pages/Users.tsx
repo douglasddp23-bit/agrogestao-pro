@@ -574,13 +574,13 @@ export default function Users() {
               placeholder="Buscar colaborador..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 pr-4 py-1.5 glass-input w-64 text-xs"
+              className="pl-9 pr-4 py-1.5 glass-input w-44 xl:w-60 text-xs"
             />
-            <Search className="w-3.5 h-3.5 absolute left-3 top-2 text-slate-400" />
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap lg:flex-nowrap items-center justify-end gap-2">
           <ExportExcelButton fileName="Colaboradores" getRows={() => filteredTeam.map((u: any) => ({
     'Nome': u.displayName || '', 'E-mail': u.email || '', 'Matrícula': u.registrationNumber || '',
     'Cargo': ROLE_LABELS[u.role as keyof typeof ROLE_LABELS] || u.role || '', 'Setor': u.department || '', 'Situação': u.blocked ? 'Bloqueado' : 'Ativo',
@@ -610,7 +610,7 @@ export default function Users() {
             <button 
               id="btn-global-delegation"
               onClick={() => setIsGlobalNewDelegationOpen(true)}
-              className="bg-amber-500 hover:bg-amber-600 text-white px-3.5 py-2 rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-amber-200 transition-all cursor-pointer"
+              className="bg-amber-500 hover:bg-amber-600 text-white px-3.5 py-2 rounded-xl text-sm font-bold flex items-center gap-2 whitespace-nowrap shadow-lg shadow-amber-200 transition-all cursor-pointer"
               title="Atribuir Nova Delegação de Permissões"
             >
               <UsersRound className="w-4 h-4" /> <span className="hidden sm:inline">Nova Delegação</span>
@@ -620,7 +620,7 @@ export default function Users() {
           {isManagement && (
             <button 
               onClick={() => setIsModalOpen(true)}
-              className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-200 cursor-pointer"
+              className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 whitespace-nowrap hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-200 cursor-pointer"
             >
               <UserPlus className="w-4 h-4" /> <span className="hidden sm:inline">Registrar</span>
             </button>

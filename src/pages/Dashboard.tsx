@@ -706,7 +706,7 @@ export default function Dashboard() {
   const statCards = [
     { label: 'Serviços Pendentes', value: stats.pendingAnalyses, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-500/10', unit: 'Aguardando' },
     { label: 'Relatórios Concluídos', value: stats.completedAnalyses, icon: CheckCircle2, color: 'text-emerald-700', bg: 'bg-emerald-500/10', unit: 'Entregues' },
-    { label: 'Propriedades Mapeadas', value: mappedPropertiesCount, icon: MapPin, color: 'text-slate-700', bg: 'bg-emerald-500/10', unit: 'Total' },
+    { label: 'Propriedades Cadastradas', value: mappedPropertiesCount, icon: MapPin, color: 'text-slate-700', bg: 'bg-emerald-500/10', unit: 'Total' },
     { label: 'Base de Clientes', value: stats.totalClients, icon: Users, color: 'text-slate-700', bg: 'bg-emerald-500/10', unit: 'Contatos' },
   ];
 

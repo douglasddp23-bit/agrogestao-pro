@@ -1006,19 +1006,19 @@ export default function JudicialExpertisePage() {
                   <div className="bg-slate-50/80 dark:bg-slate-900/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800/60 mb-3 space-y-1">
                     <div className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-200 font-bold truncate">
                       <span className="text-[10px] uppercase font-bold text-emerald-600">Autor:</span>
-                      <span className="truncate">{exp.requerente}</span>
+                      <span className="truncate">{exp.requerente || '—'}</span>
                     </div>
                     <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300 truncate">
                       <span className="text-[10px] uppercase font-bold text-slate-400">Réu:</span>
-                      <span className="truncate">{exp.requerido}</span>
+                      <span className="truncate">{exp.requerido || '—'}</span>
                     </div>
                   </div>
 
                   {/* Property Details */}
                   <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300 mb-3">
                     <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span className="font-medium truncate">{exp.propertyName}</span>
-                    <span className="text-[10px] text-slate-400">({exp.propertyArea || 0} ha)</span>
+                    <span className="font-medium truncate">{exp.propertyName || 'Imóvel não informado'}</span>
+                    {Number(exp.propertyArea) > 0 && <span className="text-[10px] text-slate-400">({exp.propertyArea} ha)</span>}
                   </div>
 
                   {/* Badges: Expertise Type & Honorários */}

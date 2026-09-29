@@ -60,7 +60,7 @@
         <li>histórico de alterações em Irrigação, Topografia, Regularização e Crédito.</li>
       </ul>
     </li>
-    <li>Tudo foi salvo no Git (16 salvamentos nesta rodada). <strong>Nada foi enviado ao GitHub</strong>, que só envio com a sua autorização.</li>
+    <li>Tudo foi salvo no Git (17 salvamentos nesta rodada). <strong>Nada foi enviado ao GitHub</strong>, que só envio com a sua autorização.</li>
   </ul>
 </div>
 
@@ -124,7 +124,9 @@
   <li>Análises: busca e filtros saíram do cabeçalho, onde estavam espremidos, para uma barra própria, igual a Irrigação e Topografia.</li>
   <li>Agendamentos: o campo de busca não corta mais.</li>
   <li>Estoque e Veículos: plural correto ("1 Alerta Ativo", "1 registro").</li>
-</ul>
+  <li><strong>Ícones de busca:</strong> em várias telas (Auditoria, Usuários, Financeiro, barra de busca do topo) o ícone da lupa ficava escondido atrás do campo ou em cima do texto digitado. A causa era uma única regra de estilo; corrigida uma vez, vale para todas as telas.</li>
+  <li><strong>Bordas escuras:</strong> 49 pontos usavam tons de cinza e verde que não existiam, e a borda saía quase preta (ex.: dias do calendário de Agendamentos). Os tons foram criados.</li>
+  <li>Usuários: botões do topo em uma linha só; Contratos: abas sem quebra de linha; Auditoria: "1 registro encontrado"; Perícia: mostra "—" quando falta autor/réu e não mostra "(0 ha)"; Dashboard: "Propriedades Mapeadas" virou "Propriedades Cadastradas" (o mapa foi retirado).</li></ul>
 
 <h2>3. Melhorias no código</h2><ul>
   <li><strong>288 importações sem uso removidas</strong> de 43 arquivos, com a correção automática do próprio TypeScript.</li>

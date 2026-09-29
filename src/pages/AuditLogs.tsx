@@ -483,7 +483,7 @@ export default function AuditLogs() {
         </div>
 
         <div className="text-right text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-          {filteredLogs.length} logs {filteredLogs.length === 1 ? 'encontrado' : 'encontrados'}
+          {filteredLogs.length} {filteredLogs.length === 1 ? 'registro encontrado' : 'registros encontrados'}
         </div>
       </div>
 
