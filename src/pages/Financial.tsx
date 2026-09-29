@@ -1089,6 +1089,7 @@ function FinancialContent() {
                               </button>
                             )}
 
+                            {(user?.effectiveRole ?? user?.role) === 'admin' && (
                             <button
                               onClick={() => setIsDeleteModalOpen(item.id)}
                               className="p-1 text-rose-500 hover:bg-rose-50 rounded"
@@ -1096,6 +1097,7 @@ function FinancialContent() {
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
+                            )}
                           </div>
                         </td>
                       )}

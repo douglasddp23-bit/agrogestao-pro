@@ -33,7 +33,7 @@ import { exportToExcel } from '../lib/exportExcel';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import SkeletonList from '../components/SkeletonList';
-import { formatDateTime, formatDate, cn, formatCurrency } from '../lib/utils';
+import { formatDateTime, formatDate, cn, formatCurrency, parseDecimalBR } from '../lib/utils';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { PERMISSIONS } from '../lib/permissions';
 import { UserRole } from '../types';
@@ -127,6 +127,8 @@ export default function Inventory() {
 
   const isAuthorized = (user?.effectiveRole ?? user?.role) === 'admin' || (user?.effectiveRole ?? user?.role) === 'manager' || (user?.effectiveRole ?? user?.role) === 'staff' || (user?.effectiveRole ?? user?.role) === 'consultant';
   const isAdmin = (user?.effectiveRole ?? user?.role) === 'admin' || (user?.effectiveRole ?? user?.role) === 'manager';
+  // Excluir insumo: só Administrador (regra do banco inventory_items → delete isAdmin).
+  const isRealAdmin = (user?.effectiveRole ?? user?.role) === 'admin';
 
   // Real-time Listeners
   useEffect(() => {
@@ -154,16 +156,16 @@ export default function Inventory() {
   const handleCreateItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAdmin) {
-      toast.error("Aparência restrita. Apenas administradores cadastram novos insumos.");
+      toast.error("Apenas Gerente ou Administrador cadastram novos insumos.");
       return;
     }
 
-    const qty = parseFloat(String(itemForm.currentQuantity).replace(',', '.'));
-    const min = parseFloat(String(itemForm.minQuantity).replace(',', '.'));
-    const cost = parseFloat(itemForm.unitCost.replace(',', '.'));
+    const qty = parseDecimalBR(itemForm.currentQuantity);
+    const min = parseDecimalBR(itemForm.minQuantity);
+    const cost = parseDecimalBR(itemForm.unitCost);
 
     if (isNaN(qty) || qty < 0 || isNaN(min) || min < 0 || isNaN(cost) || cost < 0) {
-      toast.error("Preencha valores numéricos positivos coerentes.");
+      toast.error("Confira quantidade atual, quantidade mínima e custo unitário: use só números (ex.: 15,50).");
       return;
     }
 
@@ -296,7 +298,7 @@ export default function Inventory() {
   };
 
   const handleDeleteItem = async () => {
-    if (!isAdmin) {
+    if (!isRealAdmin) {
       toast.error("Ações destrutivas indisponíveis.");
       return;
     }
@@ -304,11 +306,11 @@ export default function Inventory() {
 
     try {
       await deleteDoc(doc(db, 'inventory_items', isDeleteModalOpen));
-      toast.success("Insumo físico erradicado do inventário.");
+      toast.success("Insumo excluído do inventário.");
       setIsDeleteModalOpen(null);
     } catch (error) {
       console.error(error);
-      toast.error("Erro de deleção de insumo.");
+      toast.error("Não foi possível excluir o insumo.");
     }
   };
 
@@ -675,7 +677,7 @@ export default function Inventory() {
                         <div className="text-xs text-slate-450 italic">Visualização Limitada</div>
                       )}
 
-                      {isAdmin && (
+                      {isRealAdmin && (
                         <button 
                           onClick={() => setIsDeleteModalOpen(item.id)}
                           className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-all ml-auto"

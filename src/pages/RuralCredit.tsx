@@ -490,7 +490,7 @@ export default function RuralCredit() {
                   >
                     <FileText className="w-4 h-4" />
                   </button>
-                  {!((user?.effectiveRole ?? user?.role) === 'staff' || (user?.effectiveRole ?? user?.role) === 'consultant') && (
+                  {(user?.effectiveRole ?? user?.role) === 'admin' && (
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
@@ -574,7 +574,7 @@ export default function RuralCredit() {
                               </button>
                             ))}
 
-                            {!((user?.effectiveRole ?? user?.role) === 'staff' || (user?.effectiveRole ?? user?.role) === 'consultant') && (
+                            {(user?.effectiveRole ?? user?.role) === 'admin' && (
                               <>
                                 <div className="border-t border-slate-100 my-1" />
                                 <button

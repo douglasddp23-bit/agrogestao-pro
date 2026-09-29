@@ -350,3 +350,14 @@ export {
   type EnsureServiceFolderOptions
 } from './documentSync';
 
+/**
+ * Converte texto digitado em número aceitando o formato brasileiro:
+ * "R$ 1.234,56" → 1234.56 · "15,5" → 15.5 · "15.5" → 15.5 · "" → NaN.
+ */
+export function parseDecimalBR(value: unknown): number {
+  if (typeof value === 'number') return value;
+  let s = String(value ?? '').replace(/[^\d,.-]/g, '').trim();
+  if (!s) return NaN;
+  if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.'); // vírgula decimal: pontos são milhar
+  return Number(s);
+}

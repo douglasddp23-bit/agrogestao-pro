@@ -507,12 +507,14 @@ export default function Vehicles() {
                   >
                     <Wrench className="w-3.5 h-3.5 text-amber-600" /> Alterar Status
                   </button>
+                  {(user?.effectiveRole ?? user?.role) === 'admin' && (
                   <button 
                     onClick={() => setIsDeleteVehicleId(v.id)}
                     className="p-1.5 hover:bg-rose-50 rounded-lg text-rose-600 flex items-center gap-1"
                   >
                     <Trash2 className="w-3.5 h-3.5" /> Retirar Frota
                   </button>
+                  )}
                 </div>
               </div>
             ))

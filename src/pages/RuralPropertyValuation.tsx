@@ -8,6 +8,7 @@ import {
 import { saveFile, deleteStoredFile, handleFileLinkClick } from '../lib/fileStore';
 import { db, storage, ensureDocumentFolder } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
+import { isManagementRole, canEditOwnRecord } from '../lib/permissions';
 import { useNavigate } from 'react-router-dom';
 import { RuralPropertyValuation, Client } from '../types';
 import { 
@@ -70,6 +71,10 @@ const SOIL_CLASSES = [
 
 export default function RuralPropertyValuationPage() {
   const { user } = useAuth();
+  // Editar: gestão ou quem cadastrou; excluir: só gestão (igual à regra do banco).
+  const activeRole = (user?.effectiveRole ?? user?.role) as string;
+  const canDeleteRecord = isManagementRole(activeRole);
+  const canEditRecord = (rec: { createdBy?: string }) => canEditOwnRecord(activeRole, user?.uid, rec);
   const [confirmAction, confirmModal] = useConfirm();
   const navigate = useNavigate();
   const [valuations, setValuations] = useState<RuralPropertyValuation[]>([]);
@@ -1060,6 +1065,7 @@ export default function RuralPropertyValuationPage() {
                       <Download className="w-3 h-3" />
                       Laudo PDF
                     </button>
+                    {canEditRecord(val) && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -1070,6 +1076,8 @@ export default function RuralPropertyValuationPage() {
                     >
                       <Edit3 className="w-3.5 h-3.5" />
                     </button>
+                    )}
+                    {canDeleteRecord && (
                     <button
                       onClick={(e) => handleDeleteValuation(val.id, e)}
                       title="Excluir Avaliação"
@@ -1077,6 +1085,7 @@ export default function RuralPropertyValuationPage() {
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
+                    )}
                   </div>
                 </div>
               </motion.div>

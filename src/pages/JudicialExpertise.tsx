@@ -8,6 +8,7 @@ import {
 import { saveFile, deleteStoredFile, handleFileLinkClick } from '../lib/fileStore';
 import { db, storage, ensureDocumentFolder } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
+import { isManagementRole, canEditOwnRecord } from '../lib/permissions';
 import { useNavigate } from 'react-router-dom';
 import { JudicialExpertise, Client } from '../types';
 import {
@@ -68,6 +69,10 @@ const METODOLOGIAS_PREDEFINIDAS = [
 
 export default function JudicialExpertisePage() {
   const { user } = useAuth();
+  // Editar: gestão ou quem cadastrou; excluir: só gestão (igual à regra do banco).
+  const activeRole = (user?.effectiveRole ?? user?.role) as string;
+  const canDeleteRecord = isManagementRole(activeRole);
+  const canEditRecord = (rec: { createdBy?: string }) => canEditOwnRecord(activeRole, user?.uid, rec);
   const [confirmAction, confirmModal] = useConfirm();
   const navigate = useNavigate();
   const [expertises, setExpertises] = useState<JudicialExpertise[]>([]);
@@ -1067,6 +1072,7 @@ export default function JudicialExpertisePage() {
                       <Download className="w-3 h-3" />
                       Minuta PDF
                     </button>
+                    {canEditRecord(exp) && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -1077,6 +1083,8 @@ export default function JudicialExpertisePage() {
                     >
                       <Edit3 className="w-3.5 h-3.5" />
                     </button>
+                    )}
+                    {canDeleteRecord && (
                     <button
                       onClick={(e) => handleDeleteExpertise(exp.id, e)}
                       title="Excluir Perícia"
@@ -1084,6 +1092,7 @@ export default function JudicialExpertisePage() {
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
+                    )}
                   </div>
                 </div>
               </motion.div>

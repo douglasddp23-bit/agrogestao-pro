@@ -171,3 +171,10 @@ export const PERMISSIONS = {
   canCancelSchedule: (role: UserRole, isOwner = false) => hasRole(role, 'manager') || isOwner,
   canDeleteSchedule: (role: UserRole) => role === 'admin',
 };
+
+// Espelham as regras do banco (firestore.rules): isManagement() = admin, gerente ou RH;
+// "dono" = quem criou o registro. Usar para decidir se mostra Editar/Excluir.
+export const isManagementRole = (role?: string) => role === 'admin' || role === 'manager' || role === 'hr';
+export function canEditOwnRecord(role: string | undefined, uid: string | undefined, record: Record<string, any> | null | undefined, ownerField = 'createdBy'): boolean {
+  return isManagementRole(role) || (!!uid && !!record && record[ownerField] === uid);
+}
