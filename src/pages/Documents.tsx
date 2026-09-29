@@ -1045,7 +1045,7 @@ export default function Documents() {
   };
 
   return (
-    <div className="flex flex-col gap-8 h-full overflow-y-auto pr-2 pb-10">
+    <div className="flex flex-col gap-6 h-full overflow-y-auto pr-2 pb-10">
       <input 
         type="file" 
         className="hidden" 

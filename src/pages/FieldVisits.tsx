@@ -50,7 +50,8 @@ import { FieldVisit, FieldVisitCrop, FieldVisitPhoto, Client, ServiceAnalysis, U
 import { PERMISSIONS } from '../lib/permissions';
 import { logAudit } from '../lib/audit';
 import { useOfflineCache } from '../hooks/useOfflineCache';
-import { Database } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Database, CalendarCheck } from 'lucide-react';
 
 // Simple Leaflet wrapper to prevent server-side crash or build issues
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
@@ -160,7 +161,11 @@ export default function FieldVisits() {
   const [recommendations, setRecommendations] = useState('');
   const [nextVisitDate, setNextVisitDate] = useState('');
   const [linkedServiceId, setLinkedServiceId] = useState('');
-  
+  // Agendamento que originou esta visita (Agenda → "Registrar Visita")
+  const [linkedAppointmentId, setLinkedAppointmentId] = useState('');
+  const location = useLocation();
+  const navigate = useNavigate();
+
   // Dynamic Crops
   const [crops, setCrops] = useState<FieldVisitCrop[]>([
     { name: '', stage: '', estimatedArea: 0, observations: '' }
@@ -394,6 +399,7 @@ const { url: downloadUrl } = await saveFile(item.file, filename);
         recommendations,
         nextVisitDate: nextVisitDate || undefined,
         linkedServiceId: linkedServiceId || undefined,
+        linkedAppointmentId: linkedAppointmentId || undefined,
         syncStatus: 'synced',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -401,7 +407,7 @@ const { url: downloadUrl } = await saveFile(item.file, filename);
       };
 
       // If client property has GPS coords, let's copy them as fallback
-      const propInfo = client.properties.find(p => p.name === propertyName);
+      const propInfo = (client.properties || []).find(p => p.name === propertyName);
       if (propInfo?.latitude && propInfo?.longitude) {
         visitData.latitude = propInfo.latitude;
         visitData.longitude = propInfo.longitude;
@@ -437,7 +443,17 @@ const { url: downloadUrl } = await saveFile(item.file, filename);
         objective: visitData.objective || ''
       }).catch(err => console.warn('Falha silenciosa ao acionar notificações:', err));
 
-      toast.success('Visita de campo registrada com sucesso!');
+      // Visita feita a partir de um agendamento: o agendamento vira "Concluído"
+      // (a Agenda mostra "Ver Visita" lendo o linkedAppointmentId da visita).
+      if (linkedAppointmentId) {
+        try {
+          await updateDoc(doc(db, 'appointments', linkedAppointmentId), { status: 'completed' });
+        } catch (apErr) {
+          console.warn('Visita salva, mas não foi possível concluir o agendamento:', apErr);
+        }
+      }
+
+      toast.success(linkedAppointmentId ? 'Visita registrada e agendamento concluído!' : 'Visita de campo registrada com sucesso!');
       setIsNewModalOpen(false);
       resetForm();
     } catch (e: any) {
@@ -456,11 +472,37 @@ const { url: downloadUrl } = await saveFile(item.file, filename);
     setRecommendations('');
     setNextVisitDate('');
     setLinkedServiceId('');
+    setLinkedAppointmentId('');
     setCrops([{ name: '', stage: '', estimatedArea: 0, observations: '' }]);
     photoFiles.forEach(p => URL.revokeObjectURL(p.preview));
     setPhotoFiles([]);
     setCurrentStep(1);
   };
+
+  // Chegando da Agenda: "Registrar Visita" abre o formulário já preenchido com
+  // o cliente, a data e o objetivo do agendamento; "Ver Visita" abre a ficha.
+  useEffect(() => {
+    const st: any = location.state;
+    if (!st) return;
+    if (st.fromAppointment && clients.length > 0) {
+      const ap = st.fromAppointment;
+      resetForm();
+      setClientId(ap.clientId || '');
+      const props = clients.find(c => c.id === ap.clientId)?.properties || [];
+      if (props.length === 1) setPropertyName(props[0].name);
+      setVisitDate(ap.date || todayLocalDateString());
+      setObjective([ap.serviceType, ap.notes].filter(Boolean).join(' — '));
+      setLinkedAppointmentId(ap.id);
+      setIsNewModalOpen(true);
+      navigate(location.pathname, { replace: true, state: null });
+    } else if (st.openVisitId && visits.length > 0) {
+      const v = visits.find(x => x.id === st.openVisitId);
+      if (v) {
+        setSelectedVisit(v);
+        navigate(location.pathname, { replace: true, state: null });
+      }
+    }
+  }, [location.state, clients, visits]);
 
   // Delete action
   const handleDeleteVisit = async (id: string) => {
@@ -1054,6 +1096,15 @@ const { url: downloadUrl } = await saveFile(item.file, filename);
                     <FileText className="w-4 h-4" /> Relatório PDF
                   </button>
 
+                  {selectedVisit.linkedAppointmentId && (
+                    <button
+                      onClick={() => { setSelectedVisit(null); navigate('/scheduling'); }}
+                      className="px-3 py-1.5 text-xs font-bold rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 flex items-center gap-1.5"
+                      title="Esta visita foi registrada a partir de um agendamento"
+                    >
+                      <CalendarCheck className="w-3.5 h-3.5" /> Veio da Agenda
+                    </button>
+                  )}
                   <span className={`px-3 py-1.5 text-xs font-bold uppercase rounded-xl border flex items-center gap-1.5 ${syncBadge[selectedVisit.syncStatus]?.color}`}>
                     <Activity className="w-3.5 h-3.5" /> {syncBadge[selectedVisit.syncStatus]?.label}
                   </span>

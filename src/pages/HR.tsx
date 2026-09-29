@@ -782,7 +782,7 @@ export default function HR() {
   }, [hrLogs, logTypeFilter]);
 
   return (
-    <div className="flex flex-col gap-6 h-full p-2">
+    <div className="flex flex-col gap-6 h-full">
       {/* Header and custom navigation tab system */}
       <div className={PAGE_HEADER_CLASS} data-page-header>
         <PageTitle icon={PageIcon} title="Ponto Eletrônico" subtitle="Ponto, férias, licenças e folha de pagamento" />

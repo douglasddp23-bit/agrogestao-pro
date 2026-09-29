@@ -290,6 +290,7 @@ export interface FieldVisit {
   recommendations: string;
   nextVisitDate?: string;
   linkedServiceId?: string; // Análise/serviço vinculado
+  linkedAppointmentId?: string; // Agendamento que originou a visita (Agenda → Registrar Visita)
   syncStatus: VisitStatus;  // 'pending_sync' = registrado offline, aguardando sync
   createdAt: string;
   updatedAt: string;

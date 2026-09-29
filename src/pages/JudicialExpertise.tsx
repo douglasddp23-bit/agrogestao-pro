@@ -766,7 +766,7 @@ export default function JudicialExpertisePage() {
   };
 
   return (
-    <div className="flex flex-col gap-6 p-1 sm:p-2 pb-16">
+    <div className="flex flex-col gap-6 pb-16">
       {confirmModal}
       {/* HEADER */}
       <header className={PAGE_HEADER_CLASS} data-page-header>

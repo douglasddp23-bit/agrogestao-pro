@@ -571,8 +571,15 @@ export default function MainApp() {
               {branding.companyName ? branding.companyName.substring(0, 1).toUpperCase() : 'A'}
             </div>
           )}
-          <div>
-            <span className="font-display font-bold text-xl tracking-tight text-slate-800 leading-none block truncate max-w-[130px]">
+          <div className="min-w-0">
+            {/* Nome longo: diminui a letra e quebra em até 2 linhas (antes era cortado com "...") */}
+            <span
+              className={cn(
+                "font-display font-bold tracking-tight text-slate-800 leading-tight block max-w-[165px] break-words line-clamp-3",
+                (branding.companyName || '').length > 24 ? "text-sm" : (branding.companyName || '').length > 14 ? "text-base" : "text-xl"
+              )}
+              title={branding.companyName}
+            >
               {branding.companyName}
             </span>
             <div className="flex items-center gap-1.5 mt-1">

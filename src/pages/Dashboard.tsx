@@ -789,7 +789,7 @@ export default function Dashboard() {
   }, [allContracts, allInventoryItems, vehicles, vacationRequests]);
 
   return (
-    <div className="flex flex-col gap-8 pb-10">
+    <div className="flex flex-col gap-6 pb-10">
       {/* Top Header and Personalization Button */}
       <div className={PAGE_HEADER_CLASS} data-page-header>
         <PageTitle icon={PageIcon} title="Dashboard" subtitle="Visão geral da operação, métricas em tempo real e controle pessoal" />

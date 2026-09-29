@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  collection, addDoc, onSnapshot, query, orderBy, getDocs, updateDoc, doc, deleteDoc 
+import {
+  collection, addDoc, onSnapshot, query, orderBy, getDocs, updateDoc, doc, deleteDoc, where
 } from 'firebase/firestore';
+import { useNavigate } from 'react-router-dom';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { Appointment, Client, UserProfile } from '../types';
@@ -27,6 +28,20 @@ export default function Scheduling() {
   const [clients, setClients] = useState<Client[]>([]);
   const [technicians, setTechnicians] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  // Agenda ↔ Visitas de Campo: qual visita foi registrada a partir de cada
+  // agendamento (a visita guarda linkedAppointmentId). Atualiza em tempo real,
+  // inclusive quando a visita é registrada em outro computador.
+  const [visitByAppointment, setVisitByAppointment] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const q = query(collection(db, 'field_visits'), where('linkedAppointmentId', '>', ''));
+    return onSnapshot(q, (snap) => {
+      const map: Record<string, string> = {};
+      snap.forEach(d => { const apId = d.data().linkedAppointmentId; if (apId) map[apId] = d.id; });
+      setVisitByAppointment(map);
+    }, (err) => console.warn('[Agenda] Não foi possível ler as visitas vinculadas:', err));
+  }, []);
 
   // Route Optimizer Modal State
   const [isRouteModalOpen, setIsRouteModalOpen] = useState(false);
@@ -130,7 +145,7 @@ export default function Scheduling() {
       snapshot.forEach(docSnap => {
         clientsData.push({ id: docSnap.id, ...docSnap.data() } as Client);
       });
-      setClients(clientsData.sort((a,b) => a.name.localeCompare(b.name)));
+      setClients(clientsData.sort((a,b) => (a.name || '').localeCompare(b.name || '')));
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'clients');
     });
@@ -141,7 +156,7 @@ export default function Scheduling() {
       snapshot.forEach(docSnap => {
         usersData.push({ uid: docSnap.id, ...docSnap.data() } as UserProfile);
       });
-      setTechnicians(usersData.sort((a,b) => a.displayName.localeCompare(b.displayName)));
+      setTechnicians(usersData.sort((a,b) => (a.displayName || '').localeCompare(b.displayName || '')));
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'users');
     });
@@ -859,7 +874,7 @@ export default function Scheduling() {
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-y-auto px-1 gap-6 pb-12">
+    <div className="flex-1 flex flex-col overflow-y-auto gap-6 pb-12">
       {/* ─── HEADER ROW ─── */}
       <div id="scheduling-header" className={PAGE_HEADER_CLASS} data-page-header>
         <PageTitle icon={PageIcon} title="Agendamentos" subtitle="Agenda de visitas e consultorias da equipe" />
@@ -1273,7 +1288,26 @@ export default function Scheduling() {
                           </button>
                         )}
 
-                        <button 
+                        {/* Agenda → Visita de Campo */}
+                        {visitByAppointment[app.id] ? (
+                          <button
+                            onClick={() => navigate('/field_visits', { state: { openVisitId: visitByAppointment[app.id] } })}
+                            className="py-1.5 px-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer flex items-center justify-center gap-1 border border-emerald-200"
+                            title="Abrir a visita de campo registrada para este agendamento"
+                          >
+                            <ClipboardList className="w-3.5 h-3.5" /> Ver Visita
+                          </button>
+                        ) : (!app.isVirtual && app.status !== 'cancelled') && (
+                          <button
+                            onClick={() => navigate('/field_visits', { state: { fromAppointment: { id: app.id, clientId: app.clientId, date: app.date, serviceType: app.serviceType, notes: app.notes || '' } } })}
+                            className="py-1.5 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer flex items-center justify-center gap-1 shadow-sm"
+                            title="Registrar a visita de campo deste agendamento (já vem preenchida)"
+                          >
+                            <ClipboardList className="w-3.5 h-3.5" /> Registrar Visita
+                          </button>
+                        )}
+
+                        <button
                           onClick={() => handleOpenEditModal(app)}
                           className="py-1.5 px-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer flex items-center justify-center gap-1 border border-slate-200"
                           title="Editar agendamento"

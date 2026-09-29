@@ -7,6 +7,34 @@
    brancos sobre fundo claro (ex.: títulos das páginas). */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ── Botões do cabeçalho padrão das páginas (PageHeader) ──────────────────
+   Cada página tinha botões de um jeito (tamanhos de 12 a 18 px, uns em
+   MAIÚSCULAS, cantos diferentes). Aqui todos ficam iguais; a COR continua
+   dizendo a função: verde = ação principal, escuro = impressão, claro/vidro =
+   exportar/secundário. Regra fora de @layer: vale por cima das classes. */
+[data-page-header] button {
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  font-weight: 600;
+}
+[data-page-header] button:is(.bg-emerald-600, .bg-slate-800, .bg-slate-900, .glass, .bg-slate-100, .bg-white, .bg-slate-50) {
+  padding: 0.5rem 1rem;
+  border-radius: 0.75rem;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+}
+/* Abas dentro do cabeçalho (Ponto Eletrônico, Relatórios...): só a tipografia */
+[data-page-header] div:is(.p-1, .p-0\.5) > button {
+  padding: 0.375rem 0.75rem;
+  min-height: 0;
+}
+[data-page-header] button svg {
+  width: 1rem;
+  height: 1rem;
+}
+
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Space Grotesk", sans-serif;

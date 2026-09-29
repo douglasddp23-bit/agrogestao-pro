@@ -274,7 +274,7 @@ export default function PropertyMap() {
                   className="w-full glass-input text-xs h-10 py-1"
                 >
                   <option value="-1">Selecione a Propriedade</option>
-                  {selectedClient.properties.map((p, idx) => (
+                  {(selectedClient.properties || []).map((p, idx) => (
                     <option key={idx} value={idx}>{p.name} {p.areaHectares ? `(${p.areaHectares} ha)` : ''}</option>
                   ))}
                 </select>

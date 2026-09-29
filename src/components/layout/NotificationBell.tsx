@@ -4,13 +4,14 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/firebase';
-import { collection, onSnapshot, query, where, orderBy, doc, limit, writeBatch } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, orderBy, doc, limit, writeBatch, setDoc } from 'firebase/firestore';
 import { AppNotification } from '../../types';
 import { cn, handleFirestoreError, OperationType, formatDateTime } from '../../lib/utils';
 
 // Avisos gerais (userId 'all') são compartilhados por todos: não dá para marcar
-// o documento como lido para um só usuário, então guardamos localmente quais
-// cada pessoa já viu.
+// o documento como lido para um só usuário. Quais cada pessoa já leu fica na
+// ficha dela (users/{uid}.readBroadcastIds) — assim o aviso lido num computador
+// aparece lido também no outro. O localStorage fica só como reserva offline.
 const broadcastKey = (uid: string) => `agrogestao-read-broadcasts-${uid}`;
 
 function loadReadBroadcasts(uid: string): Set<string> {
@@ -43,6 +44,17 @@ export default function NotificationBell() {
   useEffect(() => {
     if (!user) return;
     setReadBroadcasts(loadReadBroadcasts(user.uid));
+    // Lidos em qualquer computador (ficha do usuário no banco)
+    const unsubRead = onSnapshot(doc(db, 'users', user.uid), (snap) => {
+      const ids: string[] = snap.data()?.readBroadcastIds || [];
+      if (ids.length) {
+        setReadBroadcasts(prev => {
+          const next = new Set<string>([...prev, ...ids]);
+          saveReadBroadcasts(user.uid, next);
+          return next;
+        });
+      }
+    }, () => { /* sem acesso: fica o controle local */ });
     const path = 'notifications';
     // Sem orderBy/limit no Firestore: userId + createdAt exigiria um índice composto que não
     // existe no projeto (o sininho nunca carregava). Ordenamos e cortamos aqui.
@@ -68,8 +80,9 @@ export default function NotificationBell() {
     return () => {
       unsub();
       unsubFallback?.();
+      unsubRead();
     };
-  }, [user]);
+  }, [user?.uid]);
 
   const markAllAsRead = async () => {
     if (!user) return;
@@ -81,6 +94,11 @@ export default function NotificationBell() {
       unreadBroadcast.forEach(n => next.add(n.id));
       setReadBroadcasts(next);
       saveReadBroadcasts(user.uid, next);
+      try {
+        await setDoc(doc(db, 'users', user.uid), { readBroadcastIds: Array.from(next).slice(-200) }, { merge: true });
+      } catch {
+        // offline: fica marcado neste PC e sincroniza na próxima vez que marcar
+      }
     }
 
     if (unreadPersonal.length === 0) return;

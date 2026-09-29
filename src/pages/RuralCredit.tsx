@@ -146,7 +146,7 @@ export default function RuralCredit() {
       const client = clients.find(c => c.id === formData.clientId);
       if (client && client.properties) {
         setClientProperties(client.properties);
-        if (client.properties.length === 1) {
+        if ((client.properties || []).length === 1) {
           setFormData(prev => ({ ...prev, propertyName: client.properties[0].name }));
         } else {
           setFormData(prev => ({ ...prev, propertyName: '' }));

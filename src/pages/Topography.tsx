@@ -468,7 +468,7 @@ export default function Topography() {
   };
 
   return (
-    <div className="flex flex-col gap-8 h-full overflow-y-auto pr-2 pb-10">
+    <div className="flex flex-col gap-6 h-full overflow-y-auto pr-2 pb-10">
       <header className={PAGE_HEADER_CLASS} data-page-header>
         <PageTitle icon={PageIcon} title="Topografia" subtitle="Levantamentos, medições e georreferenciamento" />
         

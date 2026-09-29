@@ -48,10 +48,17 @@ Testado com dois servidores simultâneos no mesmo banco:
 - ✅ Dados (clientes, serviços etc.) são lidos em tempo real do banco — sem risco de divergência.
 - Preferências que ficam só no PC (aceitável): ordem/visibilidade dos cartões do Dashboard, tour de boas-vindas, cache de notícias, notificações gerais marcadas como lidas.
 
+## Segunda rodada (itens 2 a 5 aprovados)
+- 🔧 **Agenda ↔ Visitas de Campo**: cada agendamento tem "Registrar Visita" (abre o formulário já preenchido com cliente, fazenda, data e objetivo). Ao salvar, o agendamento vira "Concluído" e o botão passa a "Ver Visita"; a ficha da visita mostra "Veio da Agenda". Testado com dois computadores: o outro PC atualizou sozinho.
+- 🔧 **Histórico do cliente** passou a mostrar os agendamentos (com "Visita registrada" quando houver).
+- 🔧 **Botões do cabeçalho** padronizados (mesmo tamanho, sem MAIÚSCULAS, mesmo arredondamento; a cor indica a função).
+- 🔧 **Margens** iguais em todas as páginas; nome longo da empresa aparece inteiro (letra menor, até 3 linhas).
+- 🔧 **Avisos gerais lidos** sincronizam entre os computadores (ficam na ficha do usuário). Testado: lido no PC A, sumiu no PC B.
+- 🔧 Cadastros sem lista de propriedades não quebram mais: salvar visita, editar cliente, Mapa de Propriedades.
+
 ## Pendentes de decisão
 1. Localização da propriedade: o cadastro de cliente não tem campo de latitude/longitude nem botão de GPS; só é possível importar o contorno (KML/Shapefile) no Mapa.
-2. Agendamento × Visita: não há vínculo entre o agendamento e a visita registrada.
-3. Padronização de botões: tamanhos e estilos diferem entre páginas (ex.: "Nova Proposta de Crédito" maior que os demais; uns em MAIÚSCULAS, outros não).
-4. Espaçamento externo das páginas varia levemente (algumas com margem interna extra).
-5. Notificações gerais marcadas como lidas não sincronizam entre PCs.
-6. Nome da empresa longo aparece cortado no topo do menu ("AgroGestão ...").
+2. ~~Agendamento × Visita~~ — feito.
+3. ~~Padronização de botões~~ — feito nos cabeçalhos; botões dentro dos formulários ainda variam.
+4. ~~Margens~~ — feito. ~~Nome da empresa cortado~~ — feito.
+5. ~~Avisos gerais lidos entre PCs~~ — feito.

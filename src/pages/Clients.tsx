@@ -47,6 +47,7 @@ import { createNotification } from '../lib/notifications';
 import { motion, AnimatePresence } from 'motion/react';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { Users as PageIcon } from 'lucide-react';
+import { CalendarClock } from 'lucide-react';
 import { handleFirestoreError, OperationType, cn, validateCPF, validateEmail, formatPhone, formatCPF, formatDate, todayLocalDateString } from '../lib/utils';
 import { toast } from 'sonner';
 import ConfirmationModal from '../components/ConfirmationModal';
@@ -706,8 +707,8 @@ export default function Clients() {
     setFormData({
       name: client.name,
       cpf: client.cpf,
-      ownerEmail: client.ownerEmail,
-      phone: client.phone,
+      ownerEmail: client.ownerEmail || '',
+      phone: client.phone || '',
       address: {
         cep: client.address?.cep || '',
         street: client.address?.street || '',
@@ -718,7 +719,7 @@ export default function Clients() {
         city: client.address?.city || '',
         state: client.address?.state || ''
       },
-      properties: [...client.properties],
+      properties: [...(client.properties || [])],
       clientType: client.clientType
     });
     setRegType(client.registrationType || (client.cpf ? 'complete' : 'simplified'));
@@ -755,7 +756,7 @@ export default function Clients() {
   // Property Timeline State
   interface TimelineEvent {
     id: string;
-    type: 'visit' | 'contract' | 'pest' | 'xray' | 'financial' | 'analysis' | 'message';
+    type: 'visit' | 'contract' | 'pest' | 'xray' | 'financial' | 'analysis' | 'message' | 'appointment';
     title: string;
     subtitle: string;
     date: string;
@@ -806,6 +807,7 @@ export default function Clients() {
 
     // Local lists to safely merge
     let dbVisits: any[] = [];
+    let dbAppts: any[] = [];
     let dbConts: any[] = [];
     let dbFins: any[] = [];
     let dbMsgs: any[] = [];
@@ -874,6 +876,22 @@ export default function Clients() {
         });
       });
 
+      // Agendamentos do cliente (Agenda) — com a visita que foi registrada a partir dele
+      const statusAg: Record<string, string> = { scheduled: 'Agendado', confirmed: 'Confirmado', completed: 'Concluído', cancelled: 'Cancelado' };
+      dbAppts.forEach(ap => {
+        const temVisita = dbVisits.some((v: any) => v.linkedAppointmentId === ap.id);
+        compiled.push({
+          id: 'ap-' + ap.id,
+          type: 'appointment',
+          title: `Agendamento: ${ap.serviceType || 'Visita'}`,
+          subtitle: ap.notes || `Com ${ap.technicianName || 'técnico'}`,
+          date: ap.date ? `${ap.date}T${ap.time || '08:00'}:00` : (ap.createdAt || new Date().toISOString()),
+          status: statusAg[ap.status] || ap.status || 'Agendado',
+          metadata: `${formatDate(ap.date)} às ${ap.time || '--:--'} • Técnico: ${ap.technicianName || 'Não definido'}${temVisita ? ' • Visita registrada' : ''}`,
+          color: 'bg-slate-500 text-slate-600 border-slate-200'
+        });
+      });
+
       dbAnalyses.forEach(a => {
         const typeLabels: Record<string, string> = {
           soil: 'Análise de Solo',
@@ -907,6 +925,12 @@ export default function Clients() {
       setDetailClientContracts(dbConts);
       setTimelineLoading(false);
     };
+
+    // 0. Agendamentos deste cliente (Agenda)
+    unsubscribes.push(onSnapshot(query(collection(db, 'appointments'), where('clientId', '==', selectedClientDetail.id)), (snap) => {
+      dbAppts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      publishMergedEvents();
+    }, (error) => console.error(error)));
 
     // 1. Visitas
     const unsubVisits = onSnapshot(query(collection(db, 'field_visits')), (snap) => {
@@ -1688,21 +1712,24 @@ export default function Clients() {
                             evt.type === 'contract' ? FileText :
                             evt.type === 'pest' ? Bug :
                             evt.type === 'xray' ? Leaf :
-                            evt.type === 'message' ? Mail : DollarSign;
+                            evt.type === 'message' ? Mail :
+                            evt.type === 'appointment' ? CalendarClock : DollarSign;
 
                           const themeColorClass = 
                             evt.type === 'visit' ? 'bg-emerald-500 text-white shadow-emerald-50' :
                             evt.type === 'contract' ? 'bg-emerald-500 text-white shadow-emerald-50' :
                             evt.type === 'pest' ? 'bg-rose-500 text-white shadow-rose-50' :
                             evt.type === 'xray' ? 'bg-emerald-550 text-white bg-emerald-600 shadow-emerald-50' :
-                            evt.type === 'message' ? 'bg-emerald-500 text-white shadow-emerald-50' : 'bg-amber-500 text-white shadow-amber-50';
+                            evt.type === 'message' ? 'bg-emerald-500 text-white shadow-emerald-50' :
+                            evt.type === 'appointment' ? 'bg-slate-700 text-white shadow-slate-100' : 'bg-amber-500 text-white shadow-amber-50';
 
                           const pillColor = 
                             evt.type === 'visit' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
                             evt.type === 'contract' ? 'bg-slate-50 text-slate-700 border border-slate-100' :
                             evt.type === 'pest' ? 'bg-rose-55 text-rose-700 border border-rose-100 bg-rose-50' :
                             evt.type === 'xray' ? 'bg-slate-55 text-slate-700 border border-slate-100 bg-slate-50' :
-                            evt.type === 'message' ? 'bg-slate-50 text-slate-700 border border-slate-100' : 'bg-amber-50 text-amber-700 border border-amber-100';
+                            evt.type === 'message' ? 'bg-slate-50 text-slate-700 border border-slate-100' :
+                            evt.type === 'appointment' ? 'bg-slate-100 text-slate-700 border border-slate-200' : 'bg-amber-50 text-amber-700 border border-amber-100';
 
                           return (
                             <div key={evt.id} className="relative text-left">
