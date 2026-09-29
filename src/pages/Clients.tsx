@@ -841,7 +841,7 @@ export default function Clients() {
           status: c.status === 'active' ? 'Ativo' : c.status === 'completed' ? 'Finalizado' : 'Suspenso',
           metadata: isConsultant
             ? `Vigência: de ${formatDate(c.startDate)} a ${c.endDate ? formatDate(c.endDate) : 'Indeterminado'}`
-            : `Valor: R$ ${(c.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} • Vigência: de ${formatDate(c.startDate)} a ${c.endDate ? formatDate(c.endDate) : 'Indeterminado'}`,
+            : `Valor: R$ ${(c.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} • Vigência: de ${formatDate(c.startDate)} a ${c.endDate ? formatDate(c.endDate) : 'Indeterminado'}`,
           color: 'bg-emerald-500 text-slate-600 border-slate-200'
         });
       });
@@ -857,7 +857,7 @@ export default function Clients() {
             subtitle: f.description || 'Gestão AgroGestão',
             date: f.dueDate || f.createdAt,
             status: statLabels[f.status] || f.status,
-            metadata: `Valor: R$ ${(f.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} • Vencimento: ${formatDate(f.dueDate)}`,
+            metadata: `Valor: R$ ${(f.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} • Vencimento: ${formatDate(f.dueDate)}`,
             color: 'bg-amber-500 text-amber-600 border-amber-200'
           });
         });
@@ -912,7 +912,7 @@ export default function Clients() {
           status: a.status || 'Pendente',
           metadata: isConsultant
             ? `Responsável: ${a.responsibleTechnician || 'Não Atribuído'}`
-            : `Responsável: ${a.responsibleTechnician || 'Não Atribuído'} ${a.value ? `• Valor: R$ ${(a.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''}`,
+            : `Responsável: ${a.responsibleTechnician || 'Não Atribuído'} ${a.value ? `• Valor: R$ ${(a.value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}`,
           color: 'bg-amber-500 text-amber-600 border-amber-200'
         });
       });
@@ -1021,7 +1021,7 @@ export default function Clients() {
       const msg = `Olá, *${selectedClientDetail.name}*!\n\nEncaminhamos o resumo/detalhes do seu contrato ativo conosco:\n\n` +
         `📄 *Contrato:* ${contract.contractNumber || 'Consultoria Técnica Regular'}\n` +
         `💼 *Objeto:* ${contract.category || contract.object || 'Assistência Técnica de Campo'}\n` +
-        `💰 *Valor Total:* R$ ${(contract.totalValue || contract.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
+        `💰 *Valor Total:* R$ ${(contract.totalValue || contract.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n` +
         `📅 *Vigência:* de ${startStr} a ${endStr}\n\n` +
         `Caso queira receber a via digital completa ou possua alguma dúvida, fale com o seu gestor de contas. Obrigado pela parceria!`;
       setWhatsappMessage(msg);
@@ -1947,7 +1947,7 @@ export default function Clients() {
                                 </div>
                                 {a.value ? (
                                   <div className="text-emerald-600 font-bold font-mono">
-                                    R$ {a.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    R$ {a.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                   </div>
                                 ) : (
                                   <div className="text-slate-400 italic">R$ 0,00</div>

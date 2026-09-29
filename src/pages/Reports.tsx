@@ -174,7 +174,7 @@ export default function Reports() {
       f.category,
       (f.paymentMethod || '').toUpperCase(),
       f.status === 'paid' ? 'PAGO' : 'PENDENTE',
-      `R$ ${f.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+      `R$ ${f.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
     ]);
 
     const totalRevenue = financials.reduce((sum, f) => sum + f.value, 0);
@@ -191,7 +191,7 @@ export default function Reports() {
     doc.setFontSize(10);
     doc.setFont("Helvetica", "bold");
     doc.setTextColor(30, 41, 59);
-    doc.text(`Valor Consolidado Acumulado: R$ ${totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 15, finalY + 10);
+    doc.text(`Valor Consolidado Acumulado: R$ ${totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 15, finalY + 10);
 
     doc.save("Financeiro_Consolidado_AgroGestao.pdf");
     toast.success("PDF de finanças consolidadas exportado!");
@@ -513,10 +513,10 @@ export default function Reports() {
     doc.setFont("Helvetica", "normal");
     doc.setTextColor(71, 85, 105);
     
-    doc.text(`• Valor Total Registrado: R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (dos quais ${financials.length} lançamentos)`, 15, 55);
-    doc.text(`• Saldo Recebido (Liquidado): R$ ${paidValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${paidCount} lançamentos)`, 15, 61);
-    doc.text(`• Saldo a Receber (Pendente): R$ ${pendingValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${pendingCount} lançamentos)`, 15, 67);
-    doc.text(`• Saldo Inadimplente (Atrasado): R$ ${overdueValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${overdueCount} lançamentos)`, 15, 73);
+    doc.text(`• Valor Total Registrado: R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (dos quais ${financials.length} lançamentos)`, 15, 55);
+    doc.text(`• Saldo Recebido (Liquidado): R$ ${paidValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${paidCount} lançamentos)`, 15, 61);
+    doc.text(`• Saldo a Receber (Pendente): R$ ${pendingValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${pendingCount} lançamentos)`, 15, 67);
+    doc.text(`• Saldo Inadimplente (Atrasado): R$ ${overdueValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${overdueCount} lançamentos)`, 15, 73);
 
     // Let's create a beautiful breakdown table for Category Breakdown
     const catRows = Object.entries(categoryStats).map(([catName, stats]) => {
@@ -533,7 +533,7 @@ export default function Reports() {
       return [
         translateCategory[catName] || catName,
         `${stats.count} lançamentos`,
-        `R$ ${stats.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+        `R$ ${stats.total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
         `${((stats.total / totalValue) * 100).toFixed(1)}%`
       ];
     });
@@ -565,7 +565,7 @@ export default function Reports() {
       return [
         translateMethod[methName] || methName.toUpperCase(),
         `${stats.count} lançamentos`,
-        `R$ ${stats.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+        `R$ ${stats.total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
         `${((stats.total / totalValue) * 100).toFixed(1)}%`
       ];
     });
@@ -841,7 +841,7 @@ export default function Reports() {
       const lastFinanceY = (doc as any).lastAutoTable.finalY;
       doc.setFontSize(9.5);
       doc.setFont("Helvetica", "bold");
-      doc.text(`Consolidado Faturamento Anual: R$ ${totalInvoiced.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 15, lastFinanceY + 7);
+      doc.text(`Consolidado Faturamento Anual: R$ ${totalInvoiced.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 15, lastFinanceY + 7);
 
       // Contracts Section
       const lastY2 = lastFinanceY + 15;

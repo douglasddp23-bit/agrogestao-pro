@@ -1007,7 +1007,7 @@ export default function Dashboard() {
               </div>
               {financialOverdue.total > 0 && (
                 <div className="text-[10px] text-rose-500 mt-0.5">
-                  R$ {financialOverdue.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  R$ {financialOverdue.total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
               )}
             </div>
@@ -1248,7 +1248,7 @@ export default function Dashboard() {
                   </div>
                   {faturamentoPendente > 0 && (
                     <div className="text-[9px] text-amber-600 font-semibold text-right">
-                      R$ {faturamentoPendente.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} pendentes neste mês
+                      R$ {faturamentoPendente.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} pendentes neste mês
                     </div>
                   )}
                 </div>

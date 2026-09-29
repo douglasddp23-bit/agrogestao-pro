@@ -305,7 +305,7 @@ export default function RemoteSignature({ contractId }: RemoteSignatureProps) {
     docPdf.setFont('helvetica', 'normal');
     docPdf.text(`Data de Início: ${formatDate(contract.startDate)}`, 15, 109);
     docPdf.text(`Data de Término: ${contract.endDate ? formatDate(contract.endDate) : 'Não definida'}`, 15, 115);
-    docPdf.text(`Valor Total Pactual: R$ ${contract.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 15, 121);
+    docPdf.text(`Valor Total Pactual: R$ ${contract.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 15, 121);
     docPdf.text(`Número de Parcelas: ${contract.installmentsCount} parcelas mensais`, 15, 127);
     
     // Cláusula / Texto do Contrato
@@ -499,7 +499,7 @@ export default function RemoteSignature({ contractId }: RemoteSignatureProps) {
                   <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 flex flex-col gap-0.5">
                     <span className="text-[9px] font-bold text-slate-400 uppercase">Valor Global</span>
                     <span className="font-bold text-emerald-600 flex items-center gap-0.5">
-                      <DollarSign className="w-3.5 h-3.5 text-emerald-500" /> R$ {contract.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      <DollarSign className="w-3.5 h-3.5 text-emerald-500" /> R$ {contract.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
                   <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 flex flex-col gap-0.5">

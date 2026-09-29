@@ -348,7 +348,7 @@ export default function Vehicles() {
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Veículos Totais</span>
-            <span className="text-2xl font-display font-bold text-slate-850 mt-1 block">{totalFleetCount} carros</span>
+            <span className="text-2xl font-display font-bold text-slate-850 mt-1 block">{totalFleetCount} {totalFleetCount === 1 ? 'veículo' : 'veículos'}</span>
           </div>
           <div className="w-10 h-10 bg-slate-50 border rounded-xl flex items-center justify-center text-slate-500">
             <Car className="w-5 h-5" />
@@ -358,7 +358,7 @@ export default function Vehicles() {
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Em Manutenção</span>
-            <span className="text-2xl font-display font-bold text-amber-600 mt-1 block">{inMaintenanceCount} veículos</span>
+            <span className="text-2xl font-display font-bold text-amber-600 mt-1 block">{inMaintenanceCount} {inMaintenanceCount === 1 ? 'veículo' : 'veículos'}</span>
           </div>
           <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center text-amber-500">
             <Wrench className="w-5 h-5" />
@@ -378,7 +378,7 @@ export default function Vehicles() {
         <div className="bg-emerald-50 border-emerald-100 p-5 rounded-2xl border shadow-sm flex items-center justify-between">
           <div>
             <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">Viagens Gravadas</span>
-            <span className="text-2xl font-display font-bold text-emerald-700 mt-1 block">{activeDisplacements} registros</span>
+            <span className="text-2xl font-display font-bold text-emerald-700 mt-1 block">{activeDisplacements} {activeDisplacements === 1 ? 'registro' : 'registros'}</span>
           </div>
           <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600">
             <Navigation className="w-5 h-5" />

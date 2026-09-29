@@ -339,7 +339,7 @@ DADOS DO CONTRATO:
 - Empresa Contratada: ${req.body.companyName || 'a empresa contratada'}
 - Nome do Cliente (Contratante): ${clientName || 'Cliente Indefinido'}
 - Categoria / Objeto do Serviço: ${category || 'Prestação de Serviços Agrícolas em Geral'}
-- Valor Total do Contrato: R$ ${(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+- Valor Total do Contrato: R$ ${(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
 - Período de Vigência: ${startDate || 'não especificado'} até ${endDate || 'não especificado'}
 
 CLÁUSULAS PADRÃO COMO BASE:

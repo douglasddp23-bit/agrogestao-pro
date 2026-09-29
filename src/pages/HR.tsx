@@ -1461,10 +1461,10 @@ export default function HR() {
                       <tr key={p.id} className="hover:bg-white/20 transition-colors">
                         <td className="p-4 font-bold text-slate-800">{p.employeeName}</td>
                         <td className="p-4 font-semibold text-slate-500">{p.month}</td>
-                        <td className="p-4">R$ {p.baseSalary?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                        <td className="p-4 text-emerald-600">+R$ {p.extraHoursVal?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                        <td className="p-4 text-rose-600">-R$ {p.deductions?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                        <td className="p-4 font-black text-slate-700">R$ {p.netSalary?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                        <td className="p-4">R$ {p.baseSalary?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="p-4 text-emerald-600">+R$ {p.extraHoursVal?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="p-4 text-rose-600">-R$ {p.deductions?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="p-4 font-black text-slate-700">R$ {p.netSalary?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                         <td className="p-4">
                           <span className={cn(
                             "px-2 py-0.5 rounded-full text-[9px] font-bold uppercase",
@@ -2101,7 +2101,7 @@ export default function HR() {
                 <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex justify-between items-center text-xs">
                   <span className="font-bold text-slate-500 uppercase text-[9px]">Salário Líquido Estimado</span>
                   <span className="font-black text-slate-700 text-sm">
-                    R$ {((parseDecimalBR(payrollForm.baseSalary) || 0) + (parseDecimalBR(payrollForm.extraHoursVal) || 0) - (parseDecimalBR(payrollForm.deductions) || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    R$ {((parseDecimalBR(payrollForm.baseSalary) || 0) + (parseDecimalBR(payrollForm.extraHoursVal) || 0) - (parseDecimalBR(payrollForm.deductions) || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
 

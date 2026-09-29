@@ -357,7 +357,7 @@ export default function Documents() {
         doc.text('CLÁUSULA 3 — VALOR CONTRATUAL E FATURAMENTO', 15, 132);
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(9.5);
-        const valText = `O valor global estabelecido para a plena execução do serviço contratado é de R$ ${Number(contract.totalValue || contract.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}, dividido em ${contract.installmentsCount || 1} parcela(s) com datas fixadas de acordo com as especificações físicas.`;
+        const valText = `O valor global estabelecido para a plena execução do serviço contratado é de R$ ${Number(contract.totalValue || contract.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}, dividido em ${contract.installmentsCount || 1} parcela(s) com datas fixadas de acordo com as especificações físicas.`;
         const splitVal = doc.splitTextToSize(valText, pageWidth - 30);
         doc.text(splitVal, 15, 138);
 
@@ -365,7 +365,7 @@ export default function Documents() {
         const paymentsBody = (contract.installments || []).map((inst: any) => [
           `Parcela ${inst.installmentNumber || 1}`,
           formatDate(inst.dueDate),
-          `R$ ${Number(inst.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+          `R$ ${Number(inst.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
           inst.status === 'paid' ? 'Pago' : 'Pendente'
         ]);
 
@@ -483,7 +483,7 @@ export default function Documents() {
 
         doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
-        doc.text(`Honorários Propostos: R$ ${Number(exp.honorariosPropostos || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} | Aprovados: R$ ${Number(exp.honorariosAprovados || exp.honorariosPropostos || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 15, curY + 11);
+        doc.text(`Honorários Propostos: R$ ${Number(exp.honorariosPropostos || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} | Aprovados: R$ ${Number(exp.honorariosAprovados || exp.honorariosPropostos || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 15, curY + 11);
         doc.text(`Status do Laudo: ${(exp.laudoStatus || 'concluido').toUpperCase()} | Alvará Judicial: ${exp.alvaraNumber || 'Em Processamento'}`, 15, curY + 17);
 
         // Signature block
@@ -569,19 +569,19 @@ export default function Documents() {
         doc.setFont('helvetica', 'bold');
         doc.text('VALOR DA TERRA NUA (VTN/ha):', 15, nextY + 11);
         doc.setFont('helvetica', 'normal');
-        doc.text(`R$ ${Number(val.landValuePerHa || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} / hectare`, 75, nextY + 11);
+        doc.text(`R$ ${Number(val.landValuePerHa || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / hectare`, 75, nextY + 11);
 
         doc.setFont('helvetica', 'bold');
         doc.text('BENFEITORIAS E REPRODUÇÃO:', 15, nextY + 18);
         doc.setFont('helvetica', 'normal');
-        doc.text(`R$ ${Number(val.improvementsValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 75, nextY + 18);
+        doc.text(`R$ ${Number(val.improvementsValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 75, nextY + 18);
 
         doc.setFont('helvetica', 'bold');
         doc.text('VALOR TOTAL AVALIADO:', 15, nextY + 26);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(6, 78, 59);
         doc.setFontSize(12);
-        doc.text(`R$ ${Number(val.totalValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 75, nextY + 26);
+        doc.text(`R$ ${Number(val.totalValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 75, nextY + 26);
 
         // Signatures
         doc.setTextColor(30, 41, 59);
@@ -790,13 +790,13 @@ export default function Documents() {
           doc.setFont('helvetica', 'bold');
           doc.text('VALOR NOMINAL DO SERVIÇO:', 20, nextY + 11);
           doc.setFont('helvetica', 'normal');
-          doc.text(`R$ ${Number(folder.data.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 75, nextY + 11);
+          doc.text(`R$ ${Number(folder.data.value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 75, nextY + 11);
           
           if (folder.data?.cost) {
             doc.setFont('helvetica', 'bold');
             doc.text('CUSTO ADMINISTRATIVO / OPERACIONAL:', 20, nextY + 18);
             doc.setFont('helvetica', 'normal');
-            doc.text(`R$ ${Number(folder.data.cost).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 75, nextY + 18);
+            doc.text(`R$ ${Number(folder.data.cost).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 75, nextY + 18);
           }
           nextY += 28;
         }
@@ -954,7 +954,7 @@ export default function Documents() {
       ...contracts.map(item => ({
         id: item.id,
         name: `Contrato: N° ${item.contractNumber || 'S/N'} - ${item.category || 'Prestação'}`,
-        description: `Objeto: ${item.title || item.description || 'Consultoria Agrícola'} • R$ ${Number(item.totalValue || item.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+        description: `Objeto: ${item.title || item.description || 'Consultoria Agrícola'} • R$ ${Number(item.totalValue || item.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
         type: 'contract',
         status: item.status === 'active' || item.status === 'ativo' ? 'Ativo' :
                 item.status === 'completed' || item.status === 'concluido' ? 'Concluído' :
@@ -978,7 +978,7 @@ export default function Documents() {
       ...ruralValuations.map(item => ({
         id: item.id,
         name: `Avaliação NBR 14.653: ${item.propertyName || 'Imóvel Rural'} (${item.totalArea || 0} ha)`,
-        description: `Finalidade: ${item.purpose || 'Mercadológica'} • Avaliação: R$ ${Number(item.totalValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+        description: `Finalidade: ${item.purpose || 'Mercadológica'} • Avaliação: R$ ${Number(item.totalValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
         type: 'rural_valuation',
         status: item.status === 'entregue' || item.status === 'concluido' ? 'Concluído' : 'Em Elaboração',
         date: item.reportDate || item.createdAt || '',

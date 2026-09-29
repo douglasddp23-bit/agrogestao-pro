@@ -436,7 +436,7 @@ function FinancialContent() {
         collection: 'expense_reports',
         recordId: expenseId,
         recordName: `Despesa - ${payload.description}`,
-        details: `Solicitação de reembolso de despesa criada por ${payload.createdByName} (${(payload.category || '').toUpperCase()}) no valor de R$ ${payload.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`,
+        details: `Solicitação de reembolso de despesa criada por ${payload.createdByName} (${(payload.category || '').toUpperCase()}) no valor de R$ ${payload.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`,
         newValues: payload
       });
 
@@ -593,7 +593,7 @@ function FinancialContent() {
         recordId: isDeleteModalOpen,
         recordName: targetRecord ? targetRecord.description : `Faturamento ${isDeleteModalOpen}`,
         details: targetRecord 
-          ? `Lançamento financeiro "${targetRecord.description}" para o cliente "${targetRecord.clientName}" no valor de R$ ${targetRecord.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} foi excluído permanentemente.`
+          ? `Lançamento financeiro "${targetRecord.description}" para o cliente "${targetRecord.clientName}" no valor de R$ ${targetRecord.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} foi excluído permanentemente.`
           : `Lançamento financeiro ID ${isDeleteModalOpen} foi excluído permanentemente.`,
         previousValues: targetRecord || undefined
       });
@@ -679,11 +679,11 @@ function FinancialContent() {
 
     // DRE detailed values
     const tableData = [
-      ['(1) RECEITA BRUTA DE SERVIÇOS', `R$ ${dreStats.bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`],
-      ['(-) Impostos estimados (6% — confirme com seu contador)', `- R$ ${dreStats.deducoes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`],
-      ['(=) RECEITA LÍQUIDA OPERACIONAL', `R$ ${dreStats.liquida.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`],
-      ['(-) Despesas reais lançadas no período', `- R$ ${dreStats.custos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`],
-      ['(=) RESULTADO OPERACIONAL LÍQUIDO', `R$ ${dreStats.resultado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`]
+      ['(1) RECEITA BRUTA DE SERVIÇOS', `R$ ${dreStats.bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
+      ['(-) Impostos estimados (6% — confirme com seu contador)', `- R$ ${dreStats.deducoes.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
+      ['(=) RECEITA LÍQUIDA OPERACIONAL', `R$ ${dreStats.liquida.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
+      ['(-) Despesas reais lançadas no período', `- R$ ${dreStats.custos.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
+      ['(=) RESULTADO OPERACIONAL LÍQUIDO', `R$ ${dreStats.resultado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`]
     ];
 
     autoTable(doc, {
@@ -712,7 +712,7 @@ function FinancialContent() {
         r.clientName,
         r.description,
         r.nfse ? `NF-Se #${r.nfse}` : 'Sem Nota',
-        `R$ ${r.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+        `R$ ${r.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
       ]);
 
       autoTable(doc, {
@@ -804,7 +804,7 @@ function FinancialContent() {
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Receita Mensal ({currentMonthStr}/{currentYearStr})</span>
           <div className="flex justify-between items-baseline mt-2">
-            <span className="text-xl font-display font-bold text-emerald-700">R$ {monthlyRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+            <span className="text-xl font-display font-bold text-emerald-700">R$ {monthlyRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold uppercase py-0.5 px-1.5 rounded-md">Mês</span>
           </div>
         </div>
@@ -813,7 +813,7 @@ function FinancialContent() {
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Faturamento do Ano ({currentYearStr})</span>
           <div className="flex justify-between items-baseline mt-2">
-            <span className="text-xl font-display font-bold text-emerald-800">R$ {yearlyRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+            <span className="text-xl font-display font-bold text-emerald-800">R$ {yearlyRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold uppercase py-0.5 px-1.5 rounded-md">Ano</span>
           </div>
         </div>
@@ -822,7 +822,7 @@ function FinancialContent() {
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total em Aberto (Cobrar)</span>
           <div className="flex justify-between items-baseline mt-2">
-            <span className="text-xl font-display font-bold text-amber-700">R$ {totalOpen.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+            <span className="text-xl font-display font-bold text-amber-700">R$ {totalOpen.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             <span className="text-[10px] bg-amber-100 text-amber-800 font-bold uppercase py-0.5 px-1.5 rounded-md">Aberto</span>
           </div>
         </div>
@@ -831,7 +831,7 @@ function FinancialContent() {
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Ticket Médio por Serviço</span>
           <div className="flex justify-between items-baseline mt-2">
-            <span className="text-xl font-display font-bold text-slate-700">R$ {averageTicket.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+            <span className="text-xl font-display font-bold text-slate-700">R$ {averageTicket.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             <span className="text-[10px] bg-slate-100 text-slate-800 font-bold uppercase py-0.5 px-1.5 rounded-md">Média</span>
           </div>
         </div>
@@ -1055,7 +1055,7 @@ function FinancialContent() {
                       </td>
                       <td className="px-6 py-4 text-right whitespace-nowrap">
                         <span className="font-display font-bold text-emerald-700">
-                          R$ {item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          R$ {item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </td>
 
@@ -1138,7 +1138,7 @@ function FinancialContent() {
                 <DollarSign className="w-24 h-24" />
               </div>
               <span className="text-[10px] uppercase font-bold tracking-wider opacity-85">Faturamento Bruto</span>
-              <span className="text-3xl font-black">R$ {dreStats.bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+              <span className="text-3xl font-black">R$ {dreStats.bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               <span className="text-[10px] bg-white/20 px-2.5 py-1 rounded-full w-max text-xs font-bold">Consolidado em {dreMonth}</span>
             </div>
 
@@ -1147,16 +1147,16 @@ function FinancialContent() {
               <div className="flex flex-col gap-1">
                 <div className="flex justify-between text-xs text-slate-500">
                   <span>Impostos estimados (6%):</span>
-                  <span className="font-bold">R$ {dreStats.deducoes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  <span className="font-bold">R$ {dreStats.deducoes.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between text-xs text-slate-500">
                   <span>Despesas reais do período:</span>
-                  <span className="font-bold">R$ {dreStats.custos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  <span className="font-bold">R$ {dreStats.custos.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
               </div>
               <div className="border-t border-slate-100 pt-2 flex justify-between text-sm font-bold text-slate-700">
                 <span>Total Retido:</span>
-                <span>R$ {(dreStats.deducoes + dreStats.custos).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                <span>R$ {(dreStats.deducoes + dreStats.custos).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
             </div>
 
@@ -1165,7 +1165,7 @@ function FinancialContent() {
                 <TrendingUp className="w-24 h-24" />
               </div>
               <span className="text-[10px] uppercase font-bold tracking-wider opacity-85">Resultado Líquido</span>
-              <span className="text-3xl font-black">R$ {dreStats.resultado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+              <span className="text-3xl font-black">R$ {dreStats.resultado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               <span className="text-[10px] bg-white/20 px-2.5 py-1 rounded-full w-max text-xs font-bold">Margem Operacional: 59.0%</span>
             </div>
           </div>
@@ -1177,27 +1177,27 @@ function FinancialContent() {
             <div className="space-y-4">
               <div className="flex justify-between items-center text-sm font-bold text-slate-800 py-2 border-b border-slate-100">
                 <span>(1) RECEITA BRUTA DE SERVIÇOS</span>
-                <span className="font-mono font-bold">R$ {dreStats.bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                <span className="font-mono font-bold">R$ {dreStats.bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
 
               <div className="flex justify-between items-center text-xs text-slate-500 pl-4 py-1.5">
                 <span>(-) Impostos estimados (6% — alíquota padrão; confirme com seu contador)</span>
-                <span className="font-mono text-rose-500 font-bold">- R$ {dreStats.deducoes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                <span className="font-mono text-rose-500 font-bold">- R$ {dreStats.deducoes.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
 
               <div className="flex justify-between items-center text-sm font-bold text-slate-700 py-2 border-b border-slate-100 bg-slate-50/50 px-3 rounded-lg">
                 <span>(=) RECEITA LÍQUIDA OPERACIONAL</span>
-                <span className="font-mono font-bold">R$ {dreStats.liquida.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                <span className="font-mono font-bold">R$ {dreStats.liquida.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
 
               <div className="flex justify-between items-center text-xs text-slate-500 pl-4 py-1.5">
                 <span>(-) Despesas reais lançadas (reembolsos aprovados e saídas pagas)</span>
-                <span className="font-mono text-rose-500 font-bold">- R$ {dreStats.custos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                <span className="font-mono text-rose-500 font-bold">- R$ {dreStats.custos.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
 
               <div className="flex justify-between items-center text-base font-black text-emerald-700 py-3 border-t border-b border-emerald-100 bg-emerald-50/40 px-3 rounded-lg">
                 <span>(=) RESULTADO OPERACIONAL LÍQUIDO</span>
-                <span className="font-mono font-bold">R$ {dreStats.resultado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                <span className="font-mono font-bold">R$ {dreStats.resultado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
             </div>
 
@@ -1216,7 +1216,7 @@ function FinancialContent() {
                           {item.nfse && <span className="bg-slate-100 text-slate-600 px-1 rounded font-mono">NF-Se #{item.nfse}</span>}
                         </div>
                       </div>
-                      <span className="font-mono font-bold text-slate-800">R$ {item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      <span className="font-mono font-bold text-slate-800">R$ {item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                   ))}
                 </div>
@@ -1237,7 +1237,7 @@ function FinancialContent() {
               <div>
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Despesas Pendentes</span>
                 <span className="text-xl font-display font-bold text-amber-600 mt-1 block">
-                  R$ {expenseReports.filter(r => r.status === 'pending_approval').reduce((s, r) => s + r.value, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  R$ {expenseReports.filter(r => r.status === 'pending_approval').reduce((s, r) => s + r.value, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
               <div className="w-10 h-10 bg-amber-50 text-amber-500 rounded-xl flex items-center justify-center font-mono text-sm font-bold">
@@ -1249,7 +1249,7 @@ function FinancialContent() {
               <div>
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Homologadas (Contabilizadas)</span>
                 <span className="text-xl font-display font-bold text-emerald-600 mt-1 block">
-                  R$ {expenseReports.filter(r => r.status === 'approved').reduce((s, r) => s + r.value, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  R$ {expenseReports.filter(r => r.status === 'approved').reduce((s, r) => s + r.value, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
               <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center font-mono text-sm font-bold">
@@ -1261,7 +1261,7 @@ function FinancialContent() {
               <div>
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Solicitações Recusadas</span>
                 <span className="text-xl font-display font-bold text-rose-500 mt-1 block">
-                  R$ {expenseReports.filter(r => r.status === 'rejected').reduce((s, r) => s + r.value, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  R$ {expenseReports.filter(r => r.status === 'rejected').reduce((s, r) => s + r.value, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
               <div className="w-10 h-10 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center font-mono text-sm font-bold">
@@ -1359,7 +1359,7 @@ function FinancialContent() {
                             </span>
                           </td>
                           <td className="px-6 py-4 text-right whitespace-nowrap font-display font-bold text-slate-700">
-                            R$ {report.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            R$ {report.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
                           <td className="px-6 py-4 text-center whitespace-nowrap">
                             {report.status === 'pending_approval' ? (
@@ -1817,7 +1817,7 @@ function FinancialContent() {
                   <div>
                     <span className="text-slate-400 uppercase font-bold tracking-wider block">Valor Requerido</span>
                     <span className="font-display font-bold text-emerald-700 block text-base mt-0.5">
-                      R$ {selectedExpenseReport.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      R$ {selectedExpenseReport.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
                 </div>

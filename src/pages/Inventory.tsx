@@ -480,7 +480,7 @@ export default function Inventory() {
           <div>
             <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block">Itens Catalogados</span>
             <span className="text-2xl font-display font-bold text-slate-800 block mt-1">
-              {totalItemsCount} Insumos
+              {totalItemsCount} {totalItemsCount === 1 ? 'Insumo' : 'Insumos'}
             </span>
           </div>
           <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center text-slate-600 shrink-0">
@@ -492,7 +492,7 @@ export default function Inventory() {
           <div>
             <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block">Estoque Crítico</span>
             <span className={`text-2xl font-display font-bold block mt-1 ${lowStockCount > 0 ? 'text-amber-600 animate-pulse' : 'text-slate-700'}`}>
-              {lowStockCount} Alertas Ativos
+              {lowStockCount} {lowStockCount === 1 ? 'Alerta Ativo' : 'Alertas Ativos'}
             </span>
           </div>
           <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${lowStockCount > 0 ? 'bg-amber-500/10 text-amber-600' : 'bg-slate-100 text-slate-400'}`}>
@@ -504,7 +504,7 @@ export default function Inventory() {
           <div>
             <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block">Movimentações Ativas</span>
             <span className="text-2xl font-display font-bold text-emerald-600 block mt-1">
-              {movements.length} Registros
+              {movements.length} {movements.length === 1 ? 'Registro' : 'Registros'}
             </span>
           </div>
           <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-600 shrink-0">

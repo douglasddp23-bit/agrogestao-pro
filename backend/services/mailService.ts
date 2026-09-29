@@ -407,7 +407,7 @@ export async function sendExpiringContractsDigestEmail(adminEmail: string, contr
       <td style="padding: 12px 8px; font-size: 14px; color: #475569;">${c.title || 'Serviços Agrícolas'}</td>
       <td style="padding: 12px 8px; font-size: 14px; color: #475569;">${new Date(c.endDate).toLocaleDateString('pt-BR')}</td>
       <td style="padding: 12px 8px; font-size: 14px; font-weight: bold; color: ${c.daysRemaining <= 7 ? '#dc2626' : '#d97706'}">${c.daysRemaining} dias</td>
-      <td style="padding: 12px 8px; font-size: 14px; color: #475569; text-align: right;">R$ ${(c.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+      <td style="padding: 12px 8px; font-size: 14px; color: #475569; text-align: right;">R$ ${(c.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
     </tr>
   `).join('');
 

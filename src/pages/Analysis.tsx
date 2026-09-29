@@ -653,7 +653,7 @@ export default function Analysis({ typeFilter }: AnalysisProps) {
         };
         await addDoc(collection(db, 'financials'), financialRecord);
         toast.success(`Análise de ${selectedAnalysis.type === 'soil' ? 'Solo' : 'Água'} concluída com sucesso!`, {
-          description: `Lançamento financeiro de R$ ${Number(editDetails.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} gerado para ${selectedAnalysis.clientName || 'Cliente'}.`,
+          description: `Lançamento financeiro de R$ ${Number(editDetails.value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} gerado para ${selectedAnalysis.clientName || 'Cliente'}.`,
           duration: 5000,
         });
       } else {
@@ -848,48 +848,6 @@ export default function Analysis({ typeFilter }: AnalysisProps) {
     'Técnico': a.responsibleTechnician || '', 'Coleta': (a.collectionDate ? String(a.collectionDate).split('T')[0].split('-').reverse().join('/') : ''), 'Agendada': (a.scheduledDate ? String(a.scheduledDate).split('T')[0].split('-').reverse().join('/') : ''),
     'Valor (R$)': (typeof a.value === 'number' ? a.value : Number(a.value) || 0), 'Descrição': a.description || '',
   }))} />
-          <div className="relative flex-1 md:w-48">
-            <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Buscar..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full h-9 glass-input pl-10 text-xs"
-            />
-          </div>
-          {!typeFilter && (
-            <select 
-              value={selectedTypeFilter}
-              onChange={(e) => setSelectedTypeFilter(e.target.value)}
-              className="h-9 glass-input text-[10px] font-bold uppercase tracking-widest px-3 bg-white/50 border-white/60 min-w-[150px] cursor-pointer text-slate-800"
-            >
-              <option value="all">Serviço: Todos os Tipos</option>
-              <option value="soil">Solo (Análise Solo)</option>
-              <option value="water">Água (Análise Água)</option>
-              <option value="foliar">Foliar (Foliar/Folha)</option>
-            </select>
-          )}
-          <select 
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="h-9 glass-input text-[10px] font-bold uppercase tracking-widest px-3 bg-white/50 border-white/60 min-w-[130px] cursor-pointer text-slate-800"
-          >
-            <option value="all">Status: Todos</option>
-            <option value="Pendente">Status: Pendente</option>
-            <option value="Em Andamento">Status: Em Processo</option>
-            <option value="Concluído">Status: Concluído</option>
-          </select>
-          <select 
-            value={technicianFilter}
-            onChange={(e) => setTechnicianFilter(e.target.value)}
-            className="h-9 glass-input text-[10px] font-bold uppercase tracking-widest px-3 bg-white/50 border-white/60 min-w-[140px] cursor-pointer text-slate-800"
-          >
-            <option value="all">Filtro: Técnicos</option>
-            {technicians.map(tech => (
-              <option key={tech} value={tech}>{tech}</option>
-            ))}
-          </select>
           <button 
             onClick={() => setShowEfficiencyReport(prev => !prev)}
             className={`px-3 py-2 h-9 rounded-xl text-[10px] font-bold flex items-center gap-1.5 transition-all shadow-sm uppercase tracking-wider cursor-pointer ${
@@ -920,6 +878,54 @@ export default function Analysis({ typeFilter }: AnalysisProps) {
         { label: 'Concluídas no Mês', value: kpi.doneMonth, hint: `${kpi.doneYear} no ano`, icon: CheckCircle2, tone: 'slate' },
         { label: 'Prazo Médio do Laudo', value: kpi.avgDays === null ? '—' : `${kpi.avgDays} ${kpi.avgDays === 1 ? 'dia' : 'dias'}`, hint: kpi.avgBase ? `Da coleta à conclusão (${kpi.avgBase} nos últimos 90 dias)` : 'Sem conclusões nos últimos 90 dias', icon: Clock, tone: 'amber' },
       ]} />
+      {/* Busca e filtros (antes ficavam espremidos no cabeçalho) */}
+      {!showEfficiencyReport && (
+        <div className="glass-card p-4 rounded-3xl border border-white/40 flex flex-col md:flex-row gap-3 items-center">
+            <div className="relative w-full md:flex-1">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input 
+                type="text" 
+                placeholder="Buscar por cliente, técnico ou descrição..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full glass-input pl-10 text-xs"
+              />
+            </div>
+            {!typeFilter && (
+              <select 
+                value={selectedTypeFilter}
+                onChange={(e) => setSelectedTypeFilter(e.target.value)}
+                className="glass-input text-xs font-bold bg-white/60 w-full md:w-48 cursor-pointer text-slate-700"
+              >
+                <option value="all">Todos os tipos</option>
+                <option value="soil">Solo (Análise Solo)</option>
+                <option value="water">Água (Análise Água)</option>
+                <option value="foliar">Foliar (Foliar/Folha)</option>
+              </select>
+            )}
+            <select 
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="glass-input text-xs font-bold bg-white/60 w-full md:w-48 cursor-pointer text-slate-700"
+            >
+              <option value="all">Todas as situações</option>
+              <option value="Pendente">Pendente</option>
+              <option value="Em Andamento">Em andamento</option>
+              <option value="Concluído">Concluído</option>
+            </select>
+            <select 
+              value={technicianFilter}
+              onChange={(e) => setTechnicianFilter(e.target.value)}
+              className="glass-input text-xs font-bold bg-white/60 w-full md:w-48 cursor-pointer text-slate-700"
+            >
+              <option value="all">Todos os técnicos</option>
+              {technicians.map(tech => (
+                <option key={tech} value={tech}>{tech}</option>
+              ))}
+            </select>
+        </div>
+      )}
+
       {showEfficiencyReport ? (
         <EfficiencyReport analyses={analyses} clients={clients} />
       ) : (

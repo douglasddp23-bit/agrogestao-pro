@@ -22,8 +22,7 @@ import {
   ArrowLeft,
   Mic,
   MicOff,
-  BookmarkPlus
-} from 'lucide-react';
+  BookmarkPlus, Camera } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { collection, onSnapshot, doc, deleteDoc, updateDoc, setDoc, query, orderBy } from 'firebase/firestore';
 import { saveFile } from '../lib/fileStore';
@@ -771,7 +770,7 @@ const { url: downloadUrl } = await saveFile(item.file, filename);
       )}
 
       {/* Filters Bar */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 items-end">
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4">
         <div className="flex-1 space-y-1.5 w-full">
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Buscar por Produtor / Local</label>
           <div className="relative">
@@ -786,7 +785,7 @@ const { url: downloadUrl } = await saveFile(item.file, filename);
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 w-full md:w-auto md:min-w-[500px]">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 w-full">
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Técnico</label>
             <select
@@ -858,7 +857,9 @@ const { url: downloadUrl } = await saveFile(item.file, filename);
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredVisits.map((visit) => {
             const status = syncBadge[visit.syncStatus] || syncBadge.draft;
-            const bannerPhoto = visit.photos?.[0]?.url || 'https://images.unsplash.com/photo-1595974482597-4b8da8879bc5?auto=format&fit=crop&q=80&w=600';
+            // Só a foto real da visita (antes, sem foto, aparecia uma imagem de banco de imagens da internet)
+            const firstUrl = visit.photos?.[0]?.url || '';
+            const bannerPhoto = /^(https:|data:image\/)/.test(firstUrl) ? firstUrl : '';
 
             return (
               <motion.div
@@ -870,12 +871,19 @@ const { url: downloadUrl } = await saveFile(item.file, filename);
               >
                 {/* Banner Capa */}
                 <div className="h-44 w-full relative overflow-hidden bg-slate-100">
-                  <img 
-                    src={bannerPhoto} 
-                    alt="Visita Técnica" 
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    referrerPolicy="no-referrer"
-                  />
+                  {bannerPhoto ? (
+                    <img
+                      src={bannerPhoto}
+                      alt="Foto da visita"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-emerald-50 to-slate-100 text-emerald-700/60">
+                      <Camera className="w-8 h-8" />
+                      <span className="text-[10px] font-bold uppercase tracking-widest">{visit.photos?.length ? `${visit.photos.length} foto(s) — abra os detalhes` : 'Sem fotos'}</span>
+                    </div>
+                  )}
                   
                   {/* Sync status badge */}
                   <span className={`absolute top-3 left-3 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-lg border shadow-sm ${status.color}`}>

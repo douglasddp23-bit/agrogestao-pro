@@ -943,9 +943,9 @@ export default function Scheduling() {
           
           {/* SEARCH & FILTERS CONTROLS */}
           <div className="glass-card p-6 flex flex-col gap-4">
-            <div className="flex flex-col md:flex-row gap-3">
+            <div className="flex flex-wrap gap-3">
               {/* Search Field */}
-              <div className="flex-1 relative">
+              <div className="flex-1 min-w-[260px] relative">
                 <Search className="absolute left-4 top-3.5 w-4 h-4 text-slate-400" />
                 <input 
                   type="text" 

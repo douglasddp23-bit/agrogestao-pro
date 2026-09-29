@@ -762,7 +762,7 @@ export default function Contracts() {
         collection: 'contracts',
         recordId: docRef.id,
         recordName: `Contrato ${formContractNumber}`,
-        details: `Contrato criado para o cliente ${contractPayload.clientName} no valor de R$ ${contractPayload.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`,
+        details: `Contrato criado para o cliente ${contractPayload.clientName} no valor de R$ ${contractPayload.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`,
         newValues: contractPayload
       });
 
@@ -850,7 +850,7 @@ export default function Contracts() {
         recordId: id,
         recordName: targetContract ? `Contrato ${targetContract.contractNumber}` : `Contrato ${id}`,
         details: targetContract 
-          ? `Contrato número ${targetContract.contractNumber} do cliente ${targetContract.clientName} no valor de R$ ${targetContract.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} foi excluído permanentemente.`
+          ? `Contrato número ${targetContract.contractNumber} do cliente ${targetContract.clientName} no valor de R$ ${targetContract.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} foi excluído permanentemente.`
           : `Contrato ID ${id} foi excluído permanentemente.`,
         previousValues: targetContract || undefined
       });
@@ -917,7 +917,7 @@ export default function Contracts() {
         collection: 'contracts',
         recordId: contract.id,
         recordName: `Contrato ${contract.contractNumber}`,
-        details: `Baixa de pagamento registrada para a Parcela ${targetInstallment.installmentNumber}/${contract.installmentsCount} do Contrato ${contract.contractNumber} no valor de R$ ${targetInstallment.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`,
+        details: `Baixa de pagamento registrada para a Parcela ${targetInstallment.installmentNumber}/${contract.installmentsCount} do Contrato ${contract.contractNumber} no valor de R$ ${targetInstallment.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`,
         newValues: { installmentId, status: 'paid' }
       });
 
@@ -963,7 +963,7 @@ export default function Contracts() {
         collection: 'contracts',
         recordId: contract.id,
         recordName: `Contrato ${contract.contractNumber}`,
-        details: `Aditivo registrado: "${newAdendum.title}" (${newAdendum.description}). Reajuste de valor: R$ ${newAdendum.valueAdjustment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`,
+        details: `Aditivo registrado: "${newAdendum.title}" (${newAdendum.description}). Reajuste de valor: R$ ${newAdendum.valueAdjustment.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`,
         newValues: { adendums: updatedAdendums, totalValue: updatedTotalValue }
       });
 
@@ -1084,7 +1084,7 @@ export default function Contracts() {
   const handleSendInstallmentReminder = (contract: Contract, inst: ContractPayment) => {
     const client = clients.find(c => c.id === contract.clientId);
     const phone = client?.phone?.replace(/\D/g, '') || '';
-    const message = `Olá, ${contract.clientName}!\n\nLembramos que a parcela nº ${inst.installmentNumber} do Contrato *${contract.contractNumber}* (${categoryLabel(contract.category)}) no valor de *R$ ${inst.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}* possui vencimento em *${formatDate(inst.dueDate)}*.\n\nQualquer dúvida ou envio de comprovante, estamos à disposição!\n*${contract.contractorCompany || getPdfBranding().companyName}*`;
+    const message = `Olá, ${contract.clientName}!\n\nLembramos que a parcela nº ${inst.installmentNumber} do Contrato *${contract.contractNumber}* (${categoryLabel(contract.category)}) no valor de *R$ ${inst.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}* possui vencimento em *${formatDate(inst.dueDate)}*.\n\nQualquer dúvida ou envio de comprovante, estamos à disposição!\n*${contract.contractorCompany || getPdfBranding().companyName}*`;
     
     if (phone) {
       window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(message)}`, '_blank');
@@ -1238,7 +1238,7 @@ export default function Contracts() {
     doc.text('CLÁUSULA 3 — VALOR CONTRATUAL E FATURAMENTO', 15, 130);
     doc.setFont('Helvetica', 'normal');
     doc.setFontSize(9.5);
-    const valText = `O valor global estabelecido para a plena execução do serviço contratado é de R$ ${contract.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}, dividido em ${contract.installmentsCount} parcela(s) com datas fixadas de acordo com as especificações físicas.`;
+    const valText = `O valor global estabelecido para a plena execução do serviço contratado é de R$ ${contract.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}, dividido em ${contract.installmentsCount} parcela(s) com datas fixadas de acordo com as especificações físicas.`;
     const splitVal = doc.splitTextToSize(valText, 180);
     doc.text(splitVal, 15, 136);
 
@@ -1335,7 +1335,7 @@ export default function Contracts() {
         c.clientName,
         c.category,
         `${formatDate(c.startDate)} a ${formatDate(c.endDate)}`,
-        `R$ ${c.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+        `R$ ${c.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
         currentNorm
       ];
     });
@@ -1833,7 +1833,7 @@ export default function Contracts() {
                         </span>
                       </td>
                       <td className="px-3 py-3 text-right font-display font-bold text-slate-800 whitespace-nowrap">
-                        R$ {item.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        R$ {item.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                       <td className="px-3 py-3 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-center items-center gap-1">
@@ -2212,7 +2212,7 @@ export default function Contracts() {
                       </div>
                       <div>
                         <span className="text-[9px] font-bold text-slate-400 uppercase">Investimento Global</span>
-                        <span className="text-xs font-bold text-slate-800 block mt-0.5">R$ {selectedContract.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        <span className="text-xs font-bold text-slate-800 block mt-0.5">R$ {selectedContract.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       </div>
                     </div>
 
@@ -2259,7 +2259,7 @@ export default function Contracts() {
                           </div>
 
                           <div className="flex items-center gap-2">
-                            <span className="font-bold text-slate-800 text-xs mr-1">R$ {inst.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            <span className="font-bold text-slate-800 text-xs mr-1">R$ {inst.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             
                             {inst.status === 'paid' ? (
                               <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-100 text-[9px] font-bold uppercase rounded-lg">Pago ✓</span>
