@@ -52,6 +52,15 @@ export interface Property {
   noNeighborhood?: boolean;
   city?: string;
   state?: string;
+  // Dados pedidos pela Proposta de Crédito (planilhas do BNB). Opcionais: quando o
+  // Gerente/Administrador salva uma proposta, o que foi preenchido volta para cá.
+  car?: string;
+  nirf?: string;
+  cei?: string;
+  sncr?: string;
+  ownerType?: 'PF' | 'PJ';
+  ownerName?: string;
+  ownerDoc?: string;
 }
 
 export interface Client {

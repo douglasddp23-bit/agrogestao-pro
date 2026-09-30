@@ -39,7 +39,7 @@ import { buildServiceReportPDF } from '../lib/pdfBranding';
 import ServiceKpiCards, { formatBRL, isThisMonth } from '../components/service/ServiceKpiCards';
 
 import ConfirmationModal from '../components/ConfirmationModal';
-import PronafWizard from '../components/PronafWizard';
+import CreditProposalWizard from '../components/credit/CreditProposalWizard';
 import { toast } from 'sonner';
 import { isManagementRole } from '../lib/permissions';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
@@ -243,7 +243,10 @@ export default function RuralCredit() {
       const client = clients.find(c => c.id === project.clientId);
       const brl = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
       const proposta = p.pronafData?.proposta;
-      const itens: any[] = proposta?.programaInvestimentos?.itens || [];
+      const cp = p.creditProposal; // proposta no formato novo (lib/credit)
+      const itens: any[] = cp
+        ? cp.investments.map((i: any) => ({ discriminacao: i.description, quantidade: i.quantity, unidade: i.unit, valorUnitario: i.unitValue }))
+        : proposta?.programaInvestimentos?.itens || [];
       const sections: { title: string; rows?: [string, string][]; text?: string }[] = [
         {
           title: 'Dados do Projeto de Crédito',
@@ -251,8 +254,9 @@ export default function RuralCredit() {
             ['Linha / tipo de crédito', project.financingType || '—'],
             ['Banco financiador', project.bank || '—'],
             ['Atividade', project.category || '—'],
-            ...(proposta?.dados?.finalidadeCredito ? [['Finalidade', proposta.dados.finalidadeCredito] as [string, string]] : []),
-            ...(proposta?.dados?.agencia ? [['Agência', proposta.dados.agencia] as [string, string]] : []),
+            ...(cp?.proposalId ? [['Proposta', `${cp.proposalId} · ${cp.status}`] as [string, string]] : []),
+            ...((cp?.purpose || proposta?.dados?.finalidadeCredito) ? [['Finalidade', cp?.purpose || proposta.dados.finalidadeCredito] as [string, string]] : []),
+            ...((cp?.branch || proposta?.dados?.agencia) ? [['Agência', cp?.branch || proposta.dados.agencia] as [string, string]] : []),
             ['Data prevista', project.scheduledDate ? formatDate(project.scheduledDate) : '—'],
             ['Situação', project.status || '—'],
           ],
@@ -278,7 +282,7 @@ export default function RuralCredit() {
       sections.push({
         title: 'Descrição e Conclusões',
         text: (project.description || 'Sem descrição.') +
-          (p.pronafData ? '\n\nO resumo da proposta em 2 vias (cliente e empresa) é gerado na etapa "Resumo e PDF" da proposta de crédito.' : ''),
+          ((p.pronafData || cp) ? '\n\nO resumo da proposta em 2 vias (cliente e empresa) é gerado na etapa "Resumo e PDF" da proposta de crédito.' : ''),
       });
       const pdf = await buildServiceReportPDF({
         documentTitle: 'Relatório de Projeto de Crédito Rural',
@@ -477,6 +481,7 @@ export default function RuralCredit() {
               className="glass p-6 rounded-[2rem] border border-white/40 shadow-sm hover:shadow-xl hover:shadow-emerald-900/5 transition-all group flex flex-col"
             >
               <div className="flex justify-between items-start mb-4">
+                <div className="flex items-center gap-1.5 flex-wrap">
                 <div className={cn(
                   "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
                   project.status === 'Concluído' ? "bg-emerald-100 text-emerald-600" :
@@ -486,11 +491,17 @@ export default function RuralCredit() {
                 )}>
                   {project.status}
                 </div>
+                {(project as any).creditProposal && (
+                  <div className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-white border border-emerald-200 text-emerald-700" title={`Proposta ${(project as any).creditProposal.proposalId}`}>
+                    Proposta: {(project as any).creditProposal.status}
+                  </div>
+                )}
+                </div>
                 <div className="flex items-center gap-1">
                   {canEditProject(project) && <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      if ((project as any).pronafData) {
+                      if ((project as any).pronafData || (project as any).creditProposal) {
                         setPronafResumeProject(project);
                         setIsPronafOpen(true);
                       } else {
@@ -542,7 +553,7 @@ export default function RuralCredit() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setOpenMenuId(null);
-                                if ((project as any).pronafData) {
+                                if ((project as any).pronafData || (project as any).creditProposal) {
                                   setPronafResumeProject(project);
                                   setIsPronafOpen(true);
                                 } else {
@@ -1043,7 +1054,7 @@ export default function RuralCredit() {
         description="Esta ação não pode ser desfeita. O projeto de crédito rural será removido permanentemente do sistema."
         confirmLabel="Excluir Agora"
       />
-      <PronafWizard
+      <CreditProposalWizard
         isOpen={isPronafOpen}
         onClose={() => { setIsPronafOpen(false); setPronafResumeProject(null); }}
         clients={clients}
