@@ -142,6 +142,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [user]);
 
+  // Duração máxima da sessão: 12 horas desde o login com senha (o mesmo limite
+  // é conferido pelo servidor e pelas regras do banco). Sem isso o Firebase
+  // renovaria o acesso para sempre enquanto o app ficasse aberto.
+  useEffect(() => {
+    if (!user) return;
+    const MAX_MS = 12 * 60 * 60 * 1000;
+    const check = async () => {
+      try {
+        const current = auth.currentUser;
+        if (!current) return;
+        const { authTime } = await current.getIdTokenResult();
+        const started = new Date(authTime).getTime();
+        if (!started || Date.now() - started > MAX_MS) {
+          logout('Sua sessão chegou ao limite de 12 horas. Entre novamente com sua senha.');
+        }
+      } catch { /* sem conexão: confere na próxima rodada */ }
+    };
+    check();
+    const id = setInterval(check, 60_000);
+    return () => clearInterval(id);
+  }, [user?.uid]);
+
   // As regras do Firestore só enxergam o cargo gravado no token de login
   // (custom claim "role"), não o do documento users/{uid}. Sem isso, a tela
   // libera os botões mas o Firestore nega a gravação ("missing or
@@ -233,23 +255,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch { /* sem sessionStorage */ }
 
-    // 1. Check for Virtual User session on mount
-    const storedVirtualSession = localStorage.getItem('virtual_user_session');
-    let hasVirtual = false;
-    if (storedVirtualSession) {
-      try {
-        const virtualUserObj = JSON.parse(storedVirtualSession);
-        resolveUserWithDelegation(virtualUserObj).then(resolved => {
-          setUser(resolved);
-        }).catch(() => {
-          setUser(virtualUserObj);
-        });
-        setLoading(false);
-        hasVirtual = true;
-      } catch (err) {
-        console.warn('Erro ao decodificar sessão virtual local:', err);
-      }
-    }
+    // SEGURANÇA: a antiga "sessão virtual" (perfil guardado no navegador, sem
+    // login no Firebase) foi removida — bastava editar esse texto para a tela
+    // mostrar outro cargo. Resto de versões antigas é apagado aqui.
+    try { localStorage.removeItem('virtual_user_session'); } catch { /* sem localStorage */ }
 
 
     if (!hasValidConfig) {
@@ -277,17 +286,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             try {
               userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
             } catch (getDocErr: any) {
-              console.warn('[AuthContext] Falha ao obter documento do usuário via rede/offline. Tentando carregar perfil local de fallback.', getDocErr);
-              const primaryAdminEmails = [
-                ((import.meta as any).env.VITE_ADMIN_EMAIL || '').toLowerCase().trim()
-              ].filter(Boolean);
-              const isUserPrimaryAdmin = firebaseUser.email && primaryAdminEmails.includes(firebaseUser.email.toLowerCase().trim());
+              console.warn('[AuthContext] Falha ao obter documento do usuário via rede/offline. Usando o cargo gravado no token.', getDocErr);
+              // Cargo SÓ do token assinado pelo servidor (nunca adivinhado pela tela)
+              const claimRole = tokenResult.claims.role as UserRole | undefined;
+              if (!claimRole) {
+                await signOut(auth);
+                setUser(null);
+                setAuthError('Não foi possível confirmar seu cadastro. Verifique a internet e entre novamente.');
+                setLoading(false);
+                return;
+              }
               const fallbackProfile: UserProfile = {
                 uid: firebaseUser.uid,
-                displayName: firebaseUser.displayName || 'Consultor Corporativo',
+                displayName: firebaseUser.displayName || 'Colaborador',
                 email: firebaseUser.email || '',
-                role: isUserPrimaryAdmin ? 'admin' : 'consultant',
-                registrationNumber: isUserPrimaryAdmin ? 'ADM-OFFLINE' : 'CON-OFFLINE',
+                role: claimRole,
+                registrationNumber: 'OFFLINE',
                 photoURL: firebaseUser.photoURL || undefined,
                 status: 'online',
               };
@@ -369,10 +383,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(null);
           }
         } else {
-          // If there's no native Firebase Auth user, only clear the user state if we do NOT have an active virtual user session
-          if (!localStorage.getItem('virtual_user_session')) {
-            setUser(null);
-          }
+          setUser(null);
         }
         setLoading(false);
       });
@@ -483,28 +494,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Entrada no Firebase depois que o servidor conferiu a senha (e o 2FA, se ligado).
   const finishServerLogin = async (data: any) => {
     passwordChangeTokenRef.current = data.passwordChangeToken || null;
-    if (data.isVirtual) {
-      // Usuário virtual: sem Firebase Auth, usar sessão local
-      safeLocalStorageSetItem('virtual_user_session', JSON.stringify(data.user));
-      const resolved = await resolveUserWithDelegation(data.user);
-      setUser(resolved);
-      triggerLoginLog(data.user.email, 'success');
-      return;
+    // SEGURANÇA: sem sessão real no Firebase não há login (antes caía numa
+    // "sessão virtual" guardada no navegador).
+    if (data.isVirtual || !data.firebaseToken) {
+      throw new Error('Não foi possível abrir sua sessão agora. Verifique a internet e tente novamente.');
     }
     try {
-      if (!data.firebaseToken) throw new Error('sem token');
       // Token emitido pelo servidor depois de validar a senha: entra
-      // no Firebase mesmo que a senha de lá esteja dessincronizada,
-      // evitando a sessão virtual (que não consegue gravar nada).
+      // no Firebase mesmo que a senha de lá esteja dessincronizada.
       await signInWithCustomToken(auth, data.firebaseToken);
-      localStorage.removeItem('virtual_user_session');
       triggerLoginLog(data.user.email, 'success');
     } catch {
-      // Sem acesso ao Firebase Auth: sessão virtual (o servidor já validou).
-      safeLocalStorageSetItem('virtual_user_session', JSON.stringify(data.user));
-      const resolved = await resolveUserWithDelegation(data.user);
-      setUser(resolved);
-      triggerLoginLog(data.user.email, 'success');
+      throw new Error('Não foi possível conectar ao serviço de login. Verifique a internet e tente novamente.');
     }
   };
 

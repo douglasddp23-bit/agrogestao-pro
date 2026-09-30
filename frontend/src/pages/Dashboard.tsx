@@ -94,6 +94,7 @@ export default function Dashboard() {
       const idToken = await getAuthToken();
       
       const response = await fetch('/api/notifications/check', {
+        method: 'POST',
         headers: {
           'Authorization': `Bearer ${idToken}`
         }

@@ -99,10 +99,6 @@
       {
         "from": "package.json",
         "to": "app/package.json"
-      },
-      {
-        "from": ".env.local",
-        "to": "app/.env.local"
       }
     ],
     "win": {

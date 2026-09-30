@@ -27,6 +27,11 @@ const APP_ROOT = app.isPackaged
   ? path.join(process.resourcesPath, 'app')
   : path.join(__dirname, '..');
 
+// Pasta das CHAVES (.env.local e service-account.json) neste computador, fora da
+// pasta do programa: %APPDATA%\AgroGestaoPro. Assim o instalador não carrega
+// nenhum segredo (veja INSTALAR-CHAVES.md e 8-instalar-chaves-neste-pc.bat).
+const CONFIG_DIR = path.join(app.getPath('appData'), 'AgroGestaoPro');
+
 let mainWindow = null;
 let serverProcess = null;
 
@@ -63,6 +68,7 @@ function startServer() {
     env: {
       ...process.env,
       NODE_ENV: 'production',
+      AGROGESTAO_CONFIG_DIR: CONFIG_DIR,
       AGROGESTAO_PORT: String(PORT),
       // Faz o Electron usar seu próprio Node embutido para rodar o script,
       // sem precisar que o usuário tenha Node instalado no PC.
@@ -114,6 +120,8 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: true,
       webSecurity: true,
+      // Ferramentas de desenvolvedor só no modo de teste (no app instalado ficam desligadas)
+      devTools: !app.isPackaged,
     },
   });
 

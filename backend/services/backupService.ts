@@ -63,7 +63,7 @@ export function backupAvailable(): boolean {
   if (process.env.FIRESTORE_EMULATOR_HOST) return true;
   try {
     const cred: any = admin.app().options.credential;
-    return !!cred && typeof cred.getAccessToken === 'function' && fs.existsSync(path.join(process.cwd(), 'service-account.json'));
+    return !!cred && typeof cred.getAccessToken === 'function' && [process.env.AGROGESTAO_CONFIG_DIR, process.cwd()].some(d => !!d && fs.existsSync(path.join(d, 'service-account.json')));
   } catch {
     return false;
   }
@@ -243,6 +243,7 @@ export async function runBackupNow(req: Request, res: Response) {
     const result = await runBackup('manual');
     return res.json({ success: true, ...result });
   } catch (err: any) {
-    return res.status(500).json({ error: 'O backup falhou: ' + String(err?.message || err).slice(0, 200) });
+    console.error('[Backup] Falha no backup manual:', err?.message || err);
+    return res.status(500).json({ error: 'O backup falhou. Confira a pasta de backup e a internet e tente novamente.' });
   }
 }

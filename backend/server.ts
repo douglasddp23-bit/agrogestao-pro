@@ -6,8 +6,15 @@ import dotenv from 'dotenv';
 // Usamos process.cwd() (não __dirname) porque, depois de empacotado pelo
 // esbuild/electron, este arquivo pode rodar de dentro de dist/, mas o
 // processo é sempre iniciado com cwd apontando para a raiz do app.
-dotenv.config({ path: path.join(process.cwd(), '.env.local') });
-dotenv.config({ path: path.join(process.cwd(), '.env') });
+// No app instalado, as chaves ficam FORA da pasta do programa, na pasta de
+// dados do usuário do Windows (AGROGESTAO_CONFIG_DIR, definida pelo Electron) —
+// assim o instalador não carrega segredos. A primeira que existir vale
+// (o dotenv não sobrescreve uma variável já definida).
+const CONFIG_DIRS = [process.env.AGROGESTAO_CONFIG_DIR, process.cwd()].filter(Boolean) as string[];
+for (const dir of CONFIG_DIRS) {
+  dotenv.config({ path: path.join(dir, '.env.local') });
+  dotenv.config({ path: path.join(dir, '.env') });
+}
 
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
@@ -16,7 +23,8 @@ import fs from 'fs';
 import authRoutes from './routes/authRoutes';
 import { refreshUserClaim } from './controllers/authController';
 import { GoogleGenAI } from '@google/genai';
-import { requireAuth } from './middlewares/authMiddleware';
+import { requireAuth, requireManager } from './middlewares/authMiddleware';
+import { buildAllowedOrigins, hostGuard, originGuard, userLimiter, clip, blockPrivateBuildFiles, genericErrorHandler } from './middlewares/security';
 import { sendNewAppointmentEmail, sendExpiringContractsDigestEmail, sendAlertEmail } from './services/mailService';
 import helmet from 'helmet';
 import cors from 'cors';
@@ -118,15 +126,15 @@ if (admin.apps.length === 0) {
   // silenciosamente fora de um ambiente Google (como o computador do
   // usuário), e o app cai num REST de fallback que as regras de segurança
   // corretamente bloqueiam por não vir autenticado.
-  const serviceAccountPath = path.join(process.cwd(), 'service-account.json');
+  const serviceAccountPath = CONFIG_DIRS.map(d => path.join(d, 'service-account.json')).find(p => fs.existsSync(p)) || '';
   let credential: admin.credential.Credential | undefined;
-  if (fs.existsSync(serviceAccountPath)) {
+  if (serviceAccountPath) {
     try {
       const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf-8'));
       credential = admin.credential.cert(serviceAccount);
       projectId = projectId || serviceAccount.project_id;
     } catch (err) {
-      console.warn('[Firebase Admin] Não foi possível ler service-account.json, seguindo sem credenciais completas:', err);
+      console.warn('[Firebase Admin] Não foi possível ler service-account.json, seguindo sem credenciais completas:', (err as any)?.message || err);
     }
   }
 
@@ -159,8 +167,12 @@ async function startServer() {
   // O app de computador (Electron) já define AGROGESTAO_PORT; padrão 3000.
   const PORT = Number(process.env.AGROGESTAO_PORT) || 3000;
 
-  // Set trust proxy to true (or 1) to accurately identify client IP behind reverse proxy
-  app.set('trust proxy', 1);
+  // SEGURANÇA: antes "trust proxy = 1" fazia o servidor acreditar no cabeçalho
+  // X-Forwarded-For — qualquer um podia inventar um IP novo a cada tentativa e
+  // escapar do limite de tentativas de login. Só ligue (TRUST_PROXY=1) se o
+  // sistema for publicado atrás de um proxy reverso de verdade.
+  app.set('trust proxy', process.env.TRUST_PROXY ? Number(process.env.TRUST_PROXY) || 1 : false);
+  app.disable('x-powered-by');
 
   // Corporate security middlewares layout
   // CSP (Content Security Policy): segunda linha de defesa contra XSS — mesmo que
@@ -202,11 +214,9 @@ async function startServer() {
   // navegador. Agora só a origem do próprio app (e APP_URL, se o sistema for
   // publicado na internet). Autenticação é por token no cabeçalho (sem cookies),
   // então não há CSRF — mas mesmo assim não há razão para liberar outros sites.
-  const allowedOrigins = [
-    `http://localhost:${PORT}`,
-    `http://127.0.0.1:${PORT}`,
-    ...(process.env.APP_URL && /^https?:\/\//.test(process.env.APP_URL) ? [process.env.APP_URL.replace(/\/+$/, '')] : []),
-  ];
+  // (Para o segundo computador acessar pela rede, liste o endereço em ALLOWED_ORIGINS.)
+  const allowedOrigins = buildAllowedOrigins(PORT);
+  app.use(hostGuard(allowedOrigins));
   app.use(cors({
     origin: (origin, callback) => {
       // Sem "Origin" = chamada do próprio app (mesma origem) ou do Electron
@@ -215,26 +225,20 @@ async function startServer() {
     },
     credentials: false
   }));
+  app.use('/api', originGuard(allowedOrigins));
   app.use(express.json({ limit: '200kb' }));
 
   // Limites por usuário (ou IP) contra abuso de rotas que custam dinheiro (IA)
   // ou que falam com o mundo externo (e-mail/WhatsApp em nome da empresa).
-  const perUserKey = (req: any) => {
-    const auth = String(req.headers.authorization || '');
-    return auth ? auth.slice(-24) : String(req.ip);
-  };
-  const aiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, max: 40, standardHeaders: true, legacyHeaders: false, validate: false,
-    keyGenerator: perUserKey,
-    message: { error: 'Muitas consultas à IA em pouco tempo. Aguarde alguns minutos.' },
-  });
-  const outboundLimiter = rateLimit({
-    windowMs: 60 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false, validate: false,
-    keyGenerator: perUserKey,
-    message: { error: 'Limite de envios por hora atingido. Tente novamente mais tarde.' },
-  });
-  app.use('/api/ai', aiLimiter);
-  app.use('/api/alerts', outboundLimiter);
+  // Contados por usuário logado (aplicados logo depois do requireAuth de cada rota)
+  const aiLimiter = userLimiter({ windowMs: 15 * 60 * 1000, max: 40, message: 'Muitas consultas à IA em pouco tempo. Aguarde alguns minutos.' });
+  const outboundLimiter = userLimiter({ windowMs: 60 * 60 * 1000, max: 30, message: 'Limite de envios por hora atingido. Tente novamente mais tarde.' });
+  const checksLimiter = userLimiter({ windowMs: 15 * 60 * 1000, max: 10, message: 'Verificação de alertas feita muitas vezes seguidas. Aguarde alguns minutos.' });
+  // Teto geral por IP para toda a API (proteção extra contra robôs)
+  app.use('/api', rateLimit({
+    windowMs: 15 * 60 * 1000, max: 1500, standardHeaders: true, legacyHeaders: false, validate: false,
+    message: { error: 'Muitas requisições em pouco tempo. Aguarde alguns minutos.' },
+  }));
 
   // In-memory storage as requested
   let dados: any[] = [];
@@ -257,9 +261,9 @@ async function startServer() {
   app.use('/api', authRoutes);
 
   // Secure Server-Side Gemini endpoint
-  app.post('/api/ai/news', requireAuth, async (req, res) => {
+  app.post('/api/ai/news', requireAuth, aiLimiter, async (req, res) => {
     try {
-      const prompt = req.body.query || "Gere 4 manchetes curtas e impactantes sobre o mercado agrícola brasileiro hoje (soja, milho, gado, clima). Retorne apenas um JSON array de objetos com keys 'title' e 'source'. Ex: [{'title': 'Preço da soja sobe em Chicago', 'source': 'Reuters'}]. Seja profissional e focado em inteligência de mercado.";
+      const prompt = clip(req.body.query, 2000) || "Gere 4 manchetes curtas e impactantes sobre o mercado agrícola brasileiro hoje (soja, milho, gado, clima). Retorne apenas um JSON array de objetos com keys 'title' e 'source'. Ex: [{'title': 'Preço da soja sobe em Chicago', 'source': 'Reuters'}]. Seja profissional e focado em inteligência de mercado.";
 
       const aiInstance = getGeminiClient();
       if (!aiInstance) {
@@ -300,8 +304,17 @@ async function startServer() {
   });
 
   // Secure Server-Side Gemini endpoint to generate custom contract draft (minuta)
-  app.post('/api/ai/generate-minuta', requireAuth, async (req, res) => {
-    const { clientName, value, startDate, endDate, category, standardClauses, customGuidelines } = req.body;
+  app.post('/api/ai/generate-minuta', requireAuth, aiLimiter, async (req, res) => {
+    // Tamanhos máximos: o texto vai para dentro do pedido à IA
+    const clientName = clip(req.body.clientName, 200);
+    const value = Number(req.body.value) || 0;
+    const startDate = clip(req.body.startDate, 30);
+    const endDate = clip(req.body.endDate, 30);
+    const category = clip(req.body.category, 200);
+    const standardClauses = clip(req.body.standardClauses, 10000);
+    const customGuidelines = clip(req.body.customGuidelines, 3000);
+    req.body.companyName = clip(req.body.companyName, 200);
+    req.body.clientCpf = clip(req.body.clientCpf, 20);
     
     const buildOfflineMinuta = () => {
     // Sem IA configurada: minuta-padrão em texto limpo (vai para o contrato do cliente,
@@ -366,9 +379,10 @@ Por favor, seja direto e use TEXTO SIMPLES (sem Markdown, sem asteriscos ou #), 
   });
 
   // Secure Server-Side Gemini endpoint for Reports Consulting Chatbot
-  app.post('/api/ai/reports-chat', requireAuth, async (req, res) => {
+  app.post('/api/ai/reports-chat', requireAuth, aiLimiter, async (req, res) => {
     try {
-      const { query: userQuery, contextString } = req.body;
+      const userQuery = clip(req.body.query, 2000);
+      const contextString = clip(req.body.contextString, 40000);
       if (!userQuery) {
         return res.status(400).json({ error: 'A pergunta (query) é obrigatória.' });
       }
@@ -557,10 +571,11 @@ Baseando-se nos índices de fertilidade e acidez declarados na amostra enviada:
     return { text: recommendation };
   }
 
-  app.post('/api/ai/analyze-soil', requireAuth, async (req, res) => {
+  app.post('/api/ai/analyze-soil', requireAuth, aiLimiter, async (req, res) => {
     try {
-      const { results, type } = req.body;
-      if (!results || Object.keys(results).length === 0) {
+      const { results } = req.body;
+      const type = clip(req.body.type, 30);
+      if (!results || typeof results !== 'object' || Array.isArray(results) || Object.keys(results).length === 0 || Object.keys(results).length > 80) {
         return res.status(400).json({ error: 'Os resultados da análise são obrigatórios.' });
       }
 
@@ -576,7 +591,7 @@ Baseando-se nos índices de fertilidade e acidez declarados na amostra enviada:
                             SERVER_FOLIAR_ELEMENTS.find(e => e.id === key);
           const label = matchedEl ? matchedEl.label : key;
           const unit = matchedEl ? matchedEl.unit : '';
-          return `- ${label}: ${value} ${unit}`;
+          return `- ${String(label).slice(0, 60)}: ${String(value).slice(0, 30)} ${unit}`;
         })
         .join('\n');
 
@@ -620,7 +635,7 @@ Por favor, seja direto e use formatação Markdown limpa e amigável. Não adici
   // (Removidas: /api/delete-user duplicada — a oficial fica em backend/routes com checagem de cargo —
   //  e /api/buscar-car + /api/db-status, que não eram usadas e respondiam sem login.)
   // API: Envio de Alertas Técnicos de Campo via WhatsApp (Evolution API real ou Fallback dry-run)
-  app.post('/api/alerts/send-whatsapp', requireAuth, async (req, res) => {
+  app.post('/api/alerts/send-whatsapp', requireAuth, outboundLimiter, async (req, res) => {
     const { phone, message } = req.body;
 
     const cleanPhone = String(phone || '').replace(/\D/g, '');
@@ -673,24 +688,19 @@ Por favor, seja direto e use formatação Markdown limpa e amigável. Não adici
         throw new Error(`Status ${response.status} - ${errText}`);
       }
 
-      const resData = await response.json();
       console.log(`[WhatsApp] Mensagem enviada para ***${cleanPhone.slice(-4)} via Evolution API.`);
       return res.json({ 
         success: true, 
-        message: 'Alerta de WhatsApp enviado com sucesso via Evolution API.', 
-        data: resData 
+        message: 'Alerta de WhatsApp enviado com sucesso via Evolution API.'
       });
     } catch (error: any) {
       console.error('❌ Falha ao processar envio do WhatsApp via Evolution API:', error.message || error);
-      return res.status(500).json({ 
-        error: 'Falha ao enviar mensagem de WhatsApp pelo provedor Evolution API.',
-        details: error.message 
-      });
+      return res.status(500).json({ error: 'Falha ao enviar mensagem de WhatsApp pelo provedor Evolution API.' });
     }
   });
 
   // API: Disparo de Emails Agronômicos Automatizados (SMTP real ou Fallback dry-run)
-  app.post('/api/alerts/send-email', requireAuth, async (req, res) => {
+  app.post('/api/alerts/send-email', requireAuth, outboundLimiter, async (req, res) => {
     const { to, subject, body } = req.body;
     
     if (!to || !subject || !body) {
@@ -720,14 +730,17 @@ Por favor, seja direto e use formatação Markdown limpa e amigável. Não adici
       }
     } catch (error: any) {
       console.error('❌ Falha no endpoint de disparo de e-mail de alerta:', error);
-      return res.status(500).json({ error: error.message || 'Erro interno no servidor SMTP.' });
+      return res.status(500).json({ error: 'Não foi possível enviar o e-mail. Tente novamente mais tarde.' });
     }
   });
 
   // API: Trigger Notification (Email and Firestore)
-  app.all('/api/notifications/trigger', requireAuth, async (req, res) => {
+  app.post('/api/notifications/trigger', requireAuth, outboundLimiter, async (req, res) => {
     try {
-      const { type, visit, contract } = req.body || req.query || {};
+      const { type, visit, contract } = req.body || {};
+      if ((visit && typeof visit !== 'object') || (contract && typeof contract !== 'object')) {
+        return res.status(400).json({ error: 'Dados inválidos.' });
+      }
       const envAdminEmail = (process.env.ADMIN_EMAIL || '').replace(/['"]/g, '').toLowerCase().trim();
       const targetAdminEmail = envAdminEmail || 'admin@agrogestao.com.br';
 
@@ -751,7 +764,7 @@ Por favor, seja direto e use formatação Markdown limpa e amigável. Não adici
       return res.status(400).json({ error: 'Tipo de notificação inválido ou parâmetros ausentes.' });
     } catch (error: any) {
       console.error('Erro ao processar trigger de notificação:', error);
-      res.status(500).json({ error: error.message || 'Erro interno.' });
+      res.status(500).json({ error: 'Não foi possível enviar a notificação.' });
     }
   });
 
@@ -1239,17 +1252,18 @@ Por favor, seja direto e use formatação Markdown limpa e amigável. Não adici
   setTimeout(() => { runDailyChecksOnce('inicialização'); }, 5000);
 
   // API: Check for Expiring Contracts & Licenses in Firestore (Dynamic operational check)
-  app.all('/api/notifications/check', requireAuth, async (req, res) => {
+  // Só Gerente/Administrador: a resposta traz contratos com valores (antes qualquer
+  // consultor recebia a lista, e por GET).
+  app.post('/api/notifications/check', requireManager, checksLimiter, async (req, res) => {
     try {
-      const summary = await runDailyExpiringChecks();
+      const { error: _internalError, ...summary } = await runDailyExpiringChecks();
       res.json({
-        success: true,
         ...summary,
         message: 'Varredura de contratos, licenças, veículos, clientes e regularizações ambientais concluída com sucesso.'
       });
     } catch (error: any) {
       console.error('Erro ao processar checagem manual de prazos:', error);
-      res.status(500).json({ error: error.message || 'Erro interno do servidor.' });
+      res.status(500).json({ error: 'Não foi possível concluir a verificação de prazos.' });
     }
   });
 
@@ -1276,11 +1290,17 @@ Por favor, seja direto e use formatação Markdown limpa e amigável. Não adici
   } else {
     // Production serving
     const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
+    app.use(blockPrivateBuildFiles);
+    app.use(express.static(distPath, { dotfiles: 'deny' }));
     app.get('*', (req, res) => {
+      // Endereço com extensão (ex.: /service-account.json) que não existe em dist/ = 404
+      // (não devolve a tela do app, para não parecer que o arquivo existe)
+      if (/\.[a-z0-9]{1,8}$/i.test(req.path)) return res.status(404).send('Não encontrado.');
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
+
+  app.use(genericErrorHandler);
 
   // No app de computador (Electron define AGROGESTAO_PORT) o servidor só atende
   // o próprio PC; em hospedagem na nuvem continua aceitando conexões externas.

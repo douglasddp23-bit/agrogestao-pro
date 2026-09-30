@@ -48,6 +48,19 @@ async function resolveRole(decoded: admin.auth.DecodedIdToken): Promise<string |
   return claimRole || profileRole;
 }
 
+/**
+ * Duração máxima de uma sessão (desde o login com senha), em horas. O Firebase
+ * renova o token sozinho a cada hora e, sem este limite, uma sessão aberta
+ * duraria para sempre. Passado o prazo, é preciso digitar a senha de novo.
+ * As regras do Firestore (firestore.rules → isSignedIn) usam o mesmo prazo.
+ */
+export const SESSION_MAX_HOURS = Math.min(Math.max(Number(process.env.SESSION_MAX_HOURS) || 12, 1), 12);
+
+export function isSessionTooOld(decoded: admin.auth.DecodedIdToken): boolean {
+  const authTime = Number(decoded.auth_time) || 0;
+  return !authTime || Date.now() - authTime * 1000 > SESSION_MAX_HOURS * 60 * 60 * 1000;
+}
+
 async function authenticate(req: AuthenticatedRequest, res: Response): Promise<{ decoded: admin.auth.DecodedIdToken; role: string } | null> {
   const token = bearerToken(req);
   if (!token) {
@@ -59,7 +72,11 @@ async function authenticate(req: AuthenticatedRequest, res: Response): Promise<{
     // checkRevoked: contas bloqueadas (tokens revogados) são recusadas na hora
     decoded = await admin.auth().verifyIdToken(token, true);
   } catch {
-    res.status(401).json({ error: 'Sessão expirada ou inválida. Por favor, faça login novamente.' });
+    res.status(401).json({ error: 'Sessão expirada ou inválida. Por favor, faça login novamente.', code: 'session_expired' });
+    return null;
+  }
+  if (isSessionTooOld(decoded)) {
+    res.status(401).json({ error: `Sua sessão passou de ${SESSION_MAX_HOURS} horas. Entre novamente com sua senha.`, code: 'session_expired' });
     return null;
   }
   const role = await resolveRole(decoded);
@@ -78,6 +95,17 @@ export async function requireAdmin(req: AuthenticatedRequest, res: Response, nex
   if (!['admin', 'hr', 'manager'].includes(auth.role)) {
     console.warn(`[requireAdmin] Acesso negado para uid ${auth.decoded.uid} (cargo ${auth.role})`);
     return res.status(403).json({ error: 'Acesso negado: Requer privilégios de Administrador ou Gestor' });
+  }
+  req.user = { ...auth.decoded, role: auth.role };
+  next();
+}
+
+/** Gerente ou Administrador (quem enxerga contratos e valores). */
+export async function requireManager(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  const auth = await authenticate(req, res);
+  if (!auth) return;
+  if (!['admin', 'manager'].includes(auth.role)) {
+    return res.status(403).json({ error: 'Acesso negado: requer cargo de Gerente ou Administrador.' });
   }
   req.user = { ...auth.decoded, role: auth.role };
   next();

@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { sendAdminCredentialsEmail } from '../services/mailService';
+import { isSessionTooOld } from '../middlewares/authMiddleware';
 import QRCode from 'qrcode';
 import {
   generateTotpSecret,
@@ -34,7 +35,9 @@ function issuePasswordChangeToken(uid: string): string {
 
 function consumePasswordChangeToken(uid: string, token: string): boolean {
   const rec = passwordChangeTokens.get(uid);
-  if (!rec || rec.token !== token || rec.expires < Date.now()) {
+  const same = !!rec && typeof token === 'string' && token.length === rec.token.length &&
+    crypto.timingSafeEqual(Buffer.from(token), Buffer.from(rec.token));
+  if (!rec || !same || rec.expires < Date.now()) {
     return false;
   }
   passwordChangeTokens.delete(uid);
@@ -159,7 +162,7 @@ async function saveFirestoreUserREST(uid: string, userProfile: any) {
   const databaseId = config.firestoreDatabaseId || '(default)';
   const apiKey = config.apiKey;
 
-  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/users/${uid}?key=${apiKey}`;
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/users/${encodeURIComponent(uid)}?key=${apiKey}`;
 
   const fields: any = {};
   for (const [key, val] of Object.entries(userProfile)) {
@@ -223,7 +226,7 @@ async function getUserCredentialHash(uid: string): Promise<string | null> {
   const config = getFirebaseConfig();
   if (!config) return null;
   try {
-    const url = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/${config.firestoreDatabaseId || '(default)'}/documents/user_credentials/${uid}?key=${config.apiKey}`;
+    const url = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/${config.firestoreDatabaseId || '(default)'}/documents/user_credentials/${encodeURIComponent(uid)}?key=${config.apiKey}`;
     const response = await fetch(url);
     if (!response.ok) return null;
     const doc = await response.json();
@@ -246,7 +249,7 @@ async function setUserCredential(uid: string, passwordHash: string): Promise<boo
   const config = getFirebaseConfig();
   if (!config) return false;
   try {
-    const url = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/${config.firestoreDatabaseId || '(default)'}/documents/user_credentials/${uid}?updateMask.fieldPaths=passwordHash&key=${config.apiKey}`;
+    const url = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/${config.firestoreDatabaseId || '(default)'}/documents/user_credentials/${encodeURIComponent(uid)}?updateMask.fieldPaths=passwordHash&key=${config.apiKey}`;
     const response = await fetch(url, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -466,9 +469,12 @@ export async function syncRoleClaim(req: Request, res: Response) {
 
   let decoded: admin.auth.DecodedIdToken;
   try {
-    decoded = await admin.auth().verifyIdToken(idToken);
+    decoded = await admin.auth().verifyIdToken(idToken, true);
   } catch {
-    return res.status(401).json({ error: 'Sessão expirada ou inválida.' });
+    return res.status(401).json({ error: 'Sessão expirada ou inválida.', code: 'session_expired' });
+  }
+  if (isSessionTooOld(decoded)) {
+    return res.status(401).json({ error: 'Sessão expirada. Entre novamente.', code: 'session_expired' });
   }
 
   try {
@@ -479,7 +485,7 @@ export async function syncRoleClaim(req: Request, res: Response) {
     await setRoleClaim(decoded.uid, role);
     return res.json({ updated: true, role });
   } catch (error: any) {
-    console.error('Erro ao sincronizar cargo no token:', error);
+    console.error('Erro ao sincronizar cargo no token:', error?.code || error?.message || error);
     return res.status(500).json({ error: 'Falha ao sincronizar o cargo do usuário.' });
   }
 }
@@ -657,10 +663,14 @@ export async function createUser(req: Request, res: Response) {
       } catch {
         // ignore claims failure
       }
-    } catch {
-      // Seamless virtualization fallback when Identity Toolkit is disabled or without credentials
-      isVirtual = true;
-      uid = `VIRT-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+    } catch (authErr: any) {
+      // SEGURANÇA: antes, se o Firebase Auth falhasse, criava um "usuário virtual"
+      // (só na memória deste PC, sem conta de login real). Agora a criação falha.
+      console.error('[createUser] Firebase Auth recusou a criação:', authErr?.code || authErr?.message || authErr);
+      if (authErr?.code === 'auth/email-already-exists') {
+        return res.status(409).json({ error: 'Já existe uma conta com esse nome/e-mail. Use um nome diferente (ex.: com o sobrenome do meio).' });
+      }
+      return res.status(503).json({ error: 'Não foi possível criar a conta de login agora. Verifique a internet e tente novamente.' });
     }
 
     // 2. Write User Profile Document
@@ -773,8 +783,8 @@ export async function deleteUser(req: Request, res: Response) {
 
     return res.json({ success: true, message: 'Colaborador excluído com sucesso.' });
   } catch (err: any) {
-    console.error('Erro ao excluir colaborador:', err);
-    return res.status(500).json({ error: err.message || 'Erro ao excluir colaborador' });
+    console.error('Erro ao excluir colaborador:', err?.code || err?.message || err);
+    return res.status(500).json({ error: 'Não foi possível excluir o colaborador.' });
   }
 }
 
@@ -879,8 +889,8 @@ export async function resetPassword(req: Request, res: Response) {
       tempPassword,
     });
   } catch (error: any) {
-    console.error('Erro ao redefinir senha do colaborador:', error);
-    return res.status(500).json({ error: error.message || 'Erro durante a redefinição segura de senha' });
+    console.error('Erro ao redefinir senha do colaborador:', error?.code || error?.message || error);
+    return res.status(500).json({ error: 'Não foi possível redefinir a senha.' });
   }
 }
 
@@ -929,8 +939,8 @@ export async function blockUser(req: Request, res: Response) {
 
     return res.json({ success: true, message: 'Usuário bloqueado e desautorizado no sistema.' });
   } catch (error: any) {
-    console.error('Erro ao bloquear usuário:', error);
-    return res.status(500).json({ error: error.message || 'Falha ao suspender conta de usuário' });
+    console.error('Erro ao bloquear usuário:', error?.code || error?.message || error);
+    return res.status(500).json({ error: 'Falha ao suspender conta de usuário.' });
   }
 }
 
@@ -974,8 +984,8 @@ export async function unblockUser(req: Request, res: Response) {
 
     return res.json({ success: true, message: 'Usuário restabelecido com sucesso.' });
   } catch (error: any) {
-    console.error('Erro ao reativar usuário:', error);
-    return res.status(500).json({ error: error.message || 'Falha ao reativar conta de usuário' });
+    console.error('Erro ao reativar usuário:', error?.code || error?.message || error);
+    return res.status(500).json({ error: 'Falha ao reativar conta de usuário.' });
   }
 }
 
@@ -1335,7 +1345,7 @@ export async function loginUser(req: Request, res: Response) {
     return res.status(400).json({ error: 'Credenciais ou senha inválidas.' });
   }
 
-  if (typeof id !== 'string' || typeof password !== 'string') {
+  if (typeof id !== 'string' || typeof password !== 'string' || id.length > 200 || password.length > 128) {
     return res.status(400).json({ error: 'Os dados fornecidos contêm formatos inválidos.' });
   }
 
@@ -1439,7 +1449,7 @@ export async function loginUser(req: Request, res: Response) {
     });
 
   } catch (error: any) {
-    console.error('Erro na autenticação de colaborador:', error);
+    console.error('Erro na autenticação de colaborador:', error?.code || error?.message || error);
     return res.status(500).json({ error: 'Falha durante o processamento do login.' });
   }
 }
@@ -1469,7 +1479,7 @@ export async function updateUserPassword(req: Request, res: Response) {
     if (idToken) {
       try {
         const decoded = await admin.auth().verifyIdToken(idToken, true);
-        authorized = decoded.uid === uid;
+        authorized = decoded.uid === uid && !isSessionTooOld(decoded);
         sessionEmail = decoded.email || '';
       } catch {
         authorized = false;
@@ -1548,7 +1558,7 @@ export async function updateUserPassword(req: Request, res: Response) {
       firebaseToken: virtualUser?.isVirtual ? null : await freshSessionToken(uid),
     });
   } catch (error: any) {
-    console.error('Erro na alteração de senha:', error);
-    return res.status(500).json({ error: error.message || 'Falha ao processar redefinição de senha' });
+    console.error('Erro na alteração de senha:', error?.code || error?.message || error);
+    return res.status(500).json({ error: 'Falha ao processar a troca de senha.' });
   }
 }
