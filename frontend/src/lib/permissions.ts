@@ -109,6 +109,8 @@ export const NAV_ACCESS: Record<string, UserRole[]> = {
   rural_credit:          ['consultant', 'manager', 'admin'],
   contracts:             ['manager', 'admin'],
   financial:             ['manager', 'admin'],
+  billing:               ['manager', 'admin'],
+  fiscal_settings:       ['admin'],
   inventory:             ['manager', 'admin'],
   reports:               ['manager', 'admin'],
   documents:             ['manager', 'admin'],
@@ -178,4 +180,32 @@ export const PERMISSIONS = {
 export const isManagementRole = (role?: string) => role === 'admin' || role === 'manager' || role === 'hr';
 export function canEditOwnRecord(role: string | undefined, uid: string | undefined, record: Record<string, any> | null | undefined, ownerField = 'createdBy'): boolean {
   return isManagementRole(role) || (!!uid && !!record && record[ownerField] === uid);
+}
+// ─── Faturamento e documentos fiscais (30/09/2026) ────────────────────────────
+// Mesmo público do Financeiro (Gerente e Administrador). Configuração fiscal da
+// empresa: só Administrador. Espelhado em firestore.rules (billings, payments,
+// fiscal_*) e no servidor (/api/fiscal/*, requireManager).
+export type FeaturePermission =
+  | 'faturamento.visualizar' | 'faturamento.criar' | 'faturamento.editar' | 'faturamento.cancelar' | 'faturamento.receber'
+  | 'fiscal.visualizar' | 'fiscal.emitir' | 'fiscal.cancelar' | 'fiscal.configurar'
+  | 'relatorios.financeiros' | 'relatorios.fiscais';
+
+const MANAGERS: UserRole[] = ['manager', 'admin'];
+export const FEATURE_PERMISSIONS: Record<FeaturePermission, UserRole[]> = {
+  'faturamento.visualizar': MANAGERS,
+  'faturamento.criar': MANAGERS,
+  'faturamento.editar': MANAGERS,
+  'faturamento.cancelar': MANAGERS,
+  'faturamento.receber': MANAGERS,
+  'fiscal.visualizar': MANAGERS,
+  'fiscal.emitir': MANAGERS,
+  'fiscal.cancelar': MANAGERS,
+  'fiscal.configurar': ['admin'],
+  'relatorios.financeiros': MANAGERS,
+  'relatorios.fiscais': MANAGERS,
+};
+
+/** O cargo tem esta permissão? (use sempre o cargo efetivo: user.effectiveRole ?? user.role) */
+export function can(role: string | undefined, permission: FeaturePermission): boolean {
+  return !!role && (FEATURE_PERMISSIONS[permission] || []).includes(role as UserRole);
 }

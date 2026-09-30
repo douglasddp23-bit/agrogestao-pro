@@ -450,8 +450,10 @@ service cloud.firestore {
           && incoming().linkedServiceId is string
         )
       );
-      allow update: if isManager() && isValidId(id) && okNum(incoming(), 'value') && okText(incoming(), 'description', 1000);
-      allow delete: if isAdmin() && isValidId(id);
+      allow update: if isManager() && isValidId(id) && okNum(incoming(), 'value') && okText(incoming(), 'description', 1000)
+        && keepsField('billingId');
+      // Conta a receber de um faturamento nunca é apagada (cancela-se o faturamento).
+      allow delete: if isAdmin() && isValidId(id) && !('billingId' in existing());
     }
 
     // --- Contratos (só Gerente e Administrador; consultor/RH não vêem valores) ---
@@ -463,6 +465,69 @@ service cloud.firestore {
       allow update: if isValidId(id) && isManager();
       // Antes qualquer consultor (e depois o RH/Gerente) podia excluir contratos.
       allow delete: if isAdmin() && isValidId(id);
+    }
+
+
+    // =====================================================================
+    // FATURAMENTO E DOCUMENTOS FISCAIS (30/09/2026)
+    // Mesmo público do Financeiro: Gerente e Administrador.
+    // Nada aqui é apagado: faturamento se cancela; pagamento e nota ficam no histórico.
+    // =====================================================================
+    function isValidBilling(data) {
+      return data.keys().hasAll(['number', 'status', 'clientId', 'clientName', 'items', 'total', 'installments', 'createdBy'])
+             && data.number is string && data.number.matches('^FAT-[0-9]{4}-[0-9]{4,6}$')
+             && data.status in ['draft', 'billed', 'partial', 'paid', 'overdue', 'cancelled']
+             && data.clientId is string && data.clientId.size() > 0 && data.clientId.size() <= 128
+             && strMax(data.clientName, 200)
+             && data.items is list && data.items.size() <= 100
+             && data.installments is list && data.installments.size() >= 1 && data.installments.size() <= 120
+             && data.total is number && data.total >= 0
+             && okNum(data, 'subtotal') && okNum(data, 'discountTotal') && okNum(data, 'paidTotal')
+             && okDate(data, 'issueDate') && okDate(data, 'dueDate')
+             && okText(data, 'description', 2000) && okText(data, 'notes', 5000)
+             && data.get('operationType', 'service') in ['service', 'product', 'mixed'];
+    }
+    match /billings/{billingId} {
+      allow read: if isManager();
+      allow create: if isManager() && billingId.matches('^FAT-[0-9]{4}-[0-9]{4,6}$')
+        && isValidBilling(incoming()) && incoming().number == billingId
+        && incoming().createdBy == request.auth.uid && !('fiscal' in incoming());
+      // O resumo fiscal (campo "fiscal") só o servidor altera — ninguém "emite" nota pela tela.
+      allow update: if isManager() && isValidBilling(incoming())
+        && keepsField('number') && keepsField('createdBy') && keepsField('clientId')
+        && !incoming().diff(existing()).affectedKeys().hasAny(['fiscal'])
+        && existing().status != 'cancelled';
+      allow delete: if false;
+    }
+
+    // Pagamentos: registro permanente (não se edita nem apaga)
+    match /payments/{paymentId} {
+      allow read: if isManager();
+      allow create: if isManager() && isValidId(paymentId)
+        && incoming().userId == request.auth.uid
+        && incoming().billingId is string && incoming().billingId.size() > 0
+        && incoming().amount is number && incoming().amount > 0
+        && incoming().method in ['pix', 'dinheiro', 'cartao_credito', 'cartao_debito', 'transferencia', 'boleto', 'outros']
+        && okDate(incoming(), 'paidAt') && okText(incoming(), 'notes', 1000);
+      allow update, delete: if false;
+    }
+
+    // Documentos e eventos fiscais: gravados SÓ pelo servidor (que fala com o provedor).
+    match /fiscal_documents/{docId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+    match /fiscal_events/{eventId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    // Configuração fiscal da empresa: gestão lê; só o Administrador altera. Sem senhas aqui.
+    match /fiscal_settings/{settingId} {
+      allow read: if isManager();
+      allow write: if isAdmin() && isValidId(settingId)
+        && okText(incoming(), 'cnpj', 20) && okText(incoming(), 'razaoSocial', 200)
+        && okText(incoming(), 'provedorObservacoes', 5000);
     }
 
     // --- Pragas e doenças ---
