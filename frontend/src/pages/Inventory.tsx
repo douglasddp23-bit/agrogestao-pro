@@ -60,6 +60,13 @@ interface NewItemForm {
   barcode?: string;
   lotNumber?: string;
   expiryDate?: string;
+  // Dados para VENDA (Faturamento / NF-e) — todos opcionais no cadastro inicial
+  code?: string;
+  salePrice?: string;
+  ncm?: string;
+  cest?: string;
+  cfop?: string;
+  origem?: string;
 }
 
 interface NewMovementForm {
@@ -158,6 +165,11 @@ export default function Inventory() {
     const min = parseDecimalBR(itemForm.minQuantity);
     const cost = parseDecimalBR(itemForm.unitCost);
 
+    const ncmDigits = (itemForm.ncm || '').replace(/\D/g, '');
+    if (ncmDigits && ncmDigits.length !== 8) { toast.error('NCM deve ter 8 dígitos.'); return; }
+    const cfopDigits = (itemForm.cfop || '').replace(/\D/g, '');
+    if (cfopDigits && cfopDigits.length !== 4) { toast.error('CFOP deve ter 4 dígitos.'); return; }
+    if (itemForm.salePrice && !(parseDecimalBR(itemForm.salePrice) >= 0)) { toast.error('Preço de venda inválido.'); return; }
     if (isNaN(qty) || qty < 0 || isNaN(min) || min < 0 || isNaN(cost) || cost < 0) {
       toast.error("Confira quantidade atual, quantidade mínima e custo unitário: use só números (ex.: 15,50).");
       return;
@@ -175,6 +187,13 @@ export default function Inventory() {
         barcode: itemForm.barcode || null,
         lotNumber: itemForm.lotNumber || null,
         expiryDate: itemForm.expiryDate || null,
+        // Campos de venda/fiscais (opcionais; a NF-e exige NCM e CFOP na hora de emitir)
+        code: (itemForm.code || '').trim() || null,
+        salePrice: itemForm.salePrice ? (parseDecimalBR(itemForm.salePrice) || 0) : null,
+        ncm: (itemForm.ncm || '').replace(/\D/g, '') || null,
+        cest: (itemForm.cest || '').replace(/\D/g, '') || null,
+        cfop: (itemForm.cfop || '').replace(/\D/g, '') || null,
+        origem: itemForm.origem || null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -890,6 +909,35 @@ export default function Inventory() {
                   />
                 </div>
               </div>
+              <details className="rounded-xl border border-slate-100 bg-slate-50/60 p-3" data-inventory-fiscal>
+                <summary className="text-xs font-bold text-slate-600 cursor-pointer">Dados para venda e nota fiscal (opcional)</summary>
+                <div className="grid grid-cols-2 gap-3 mt-3">
+                  {([
+                    ['code', 'Código do produto', 'Ex.: P-001'],
+                    ['salePrice', 'Preço de venda (R$)', '0,00'],
+                    ['ncm', 'NCM', '8 dígitos'],
+                    ['cest', 'CEST (quando aplicável)', ''],
+                    ['cfop', 'CFOP', '4 dígitos'],
+                  ] as [keyof NewItemForm, string, string][]).map(([k, l, ph]) => (
+                    <div key={k}>
+                      <label className="text-xs font-bold text-slate-500 uppercase block mb-1">{l}</label>
+                      <input type="text" value={(itemForm[k] as string) || ''} onChange={(e) => setItemForm({ ...itemForm, [k]: e.target.value })} placeholder={ph} maxLength={20} className="w-full glass-input text-sm" />
+                    </div>
+                  ))}
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Origem da mercadoria</label>
+                    <select value={itemForm.origem || ''} onChange={(e) => setItemForm({ ...itemForm, origem: e.target.value })} className="w-full glass-input text-sm">
+                      <option value="">— não informado —</option>
+                      <option value="0">0 — Nacional</option>
+                      <option value="1">1 — Estrangeira (importação direta)</option>
+                      <option value="2">2 — Estrangeira (mercado interno)</option>
+                      <option value="outra">Outra (informar ao contador)</option>
+                    </select>
+                  </div>
+                </div>
+                <p className="text-[10px] text-slate-500 mt-2">Confirme NCM, CFOP e origem com o contador. Só são exigidos na hora de emitir NF-e.</p>
+              </details>
+
 
               <div className="pt-4 border-t border-slate-100 flex justify-end gap-2">
                 <button 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { runExclusive } from '../lib/submitGuard';
+import BillingReports from '../components/billing/BillingReports';
 import { 
   Download, 
   FileText, 
@@ -31,7 +32,7 @@ import { getPdfBranding } from '../lib/pdfBranding';
 
 export default function Reports() {
   const { user } = useAuth();
-  const [activeReportTab, setActiveReportTab] = useState<'downloads' | 'efficiency'>('downloads');
+  const [activeReportTab, setActiveReportTab] = useState<'downloads' | 'efficiency' | 'billing'>('downloads');
   const [clients, setClients] = useState<Client[]>([]);
   const [visits, setVisits] = useState<FieldVisit[]>([]);
   const [financials, setFinancials] = useState<FinancialRecord[]>([]);
@@ -1014,10 +1015,23 @@ ${analyses.slice(0, 3).map(a => `- Tipo: ${a.type}, Fazenda: ${a.propertyName ||
           >
             <TrendingUp className="w-4 h-4 text-emerald-400" /> Relatório de Eficiência
           </button>
+          <button
+            onClick={() => setActiveReportTab('billing')}
+            data-reports-tab="billing"
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeReportTab === 'billing'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <FileText className="w-4 h-4" /> Faturamento e Fiscal
+          </button>
         </div>
       </div>
 
-      {activeReportTab === 'efficiency' ? (
+      {activeReportTab === 'billing' ? (
+        <BillingReports />
+      ) : activeReportTab === 'efficiency' ? (
         <EfficiencyReport analyses={analyses} clients={clients} />
       ) : (
       /* Main Grid: Left column (Reports center) / Right column (Chatbot Gemini) */
