@@ -1,4 +1,4 @@
-import nodemailer from 'nodemailer';
+import nodemailer, { type Transporter } from 'nodemailer';
 
 // SEGURANÇA: todo dado digitado por usuários (nome de cliente, objetivo da visita,
 // texto do alerta...) é escapado antes de entrar no HTML do e-mail — impede que
@@ -18,9 +18,9 @@ export function cleanSubject(value: unknown): string {
   return String(value ?? '').replace(/[\r\n]+/g, ' ').slice(0, 200);
 }
 
-let transporterInstance: nodemailer.Transporter | null = null;
+let transporterInstance: Transporter | null = null;
 
-function getTransporter(): nodemailer.Transporter | null {
+function getTransporter(): Transporter | null {
   if (transporterInstance) {
     return transporterInstance;
   }
