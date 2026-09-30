@@ -5,6 +5,7 @@ import {
   ChevronDown, ChevronUp, Tractor, Plus, Trash2, Users, ShieldCheck, FileDown, Info, Save, ClipboardList,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { syncServiceAppointments } from '../../lib/serviceAppointments';
 import { useAuth } from '../../contexts/AuthContext';
 import { runExclusive } from '../../lib/submitGuard';
 import { Client, ServiceAnalysis } from '../../types';
@@ -229,6 +230,7 @@ export default function CreditProposalWizard({ isOpen, onClose, clients, existin
       else { const r = await createProposal(proposal, ctx); setProjectId(r.id); saved = r.proposal; }
       setProposal(saved);
       setSavedStatus(saved.status);
+      syncServiceAppointments(user?.displayName || '').catch(() => {}); // agendamento automático (aba Agendamentos)
       toast.success(`Proposta ${saved.proposalId} salva.`, { description: `Status: ${saved.status}` });
       if (client && isManagementRole(role)) {
         try { if (await syncPropertiesToClient(client, saved)) toast.info('Cadastro do cliente atualizado com os dados dos imóveis.'); }

@@ -44,6 +44,7 @@ import EfficiencyReport from '../components/EfficiencyReport';
 import ServiceKpiCards from '../components/service/ServiceKpiCards';
 import AuditTrail from '../components/AuditTrail';
 import { toast } from 'sonner';
+import { syncServiceAppointments } from '../lib/serviceAppointments';
 import { getPdfBranding } from '../lib/pdfBranding';
 import { useInitialSearch } from '../hooks/useInitialSearch';
 import ExportExcelButton from '../components/service/ExportExcelButton';
@@ -450,6 +451,7 @@ export default function Analysis({ typeFilter }: AnalysisProps) {
         collectionDate: todayLocalDateString(), scheduledDate: todayLocalDateString(),
         responsibleTechnician: user?.displayName || '', status: 'Pendente', value: 0, cost: 0
       });
+      syncServiceAppointments(user?.displayName || '').catch(() => {}); // agendamento automático (aba Agendamentos)
       toast.success(`Análise de ${newAnalysis.type === 'soil' ? 'Solo' : 'Água'} agendada com sucesso!`, {
         description: `Cliente: ${newAnalysis.clientName} | Data: ${newAnalysis.scheduledDate.split('-').reverse().join('/')}`,
         duration: 4000,
@@ -653,11 +655,13 @@ export default function Analysis({ typeFilter }: AnalysisProps) {
           createdAt: new Date().toISOString()
         };
         await addDoc(collection(db, 'financials'), financialRecord);
+        syncServiceAppointments(user?.displayName || '').catch(() => {}); // agendamento automático (aba Agendamentos)
         toast.success(`Análise de ${selectedAnalysis.type === 'soil' ? 'Solo' : 'Água'} concluída com sucesso!`, {
           description: `Lançamento financeiro de R$ ${Number(editDetails.value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} gerado para ${selectedAnalysis.clientName || 'Cliente'}.`,
           duration: 5000,
         });
       } else {
+        syncServiceAppointments(user?.displayName || '').catch(() => {}); // agendamento automático (aba Agendamentos)
         toast.success(`Análise de ${selectedAnalysis.type === 'soil' ? 'Solo' : 'Água'} atualizada!`, {
           description: `Alterações salvas com sucesso para ${selectedAnalysis.clientName || 'Cliente'}.`,
           duration: 4000,

@@ -25,6 +25,7 @@ import { cn, formatDate, formatDateTime, handleFirestoreError, OperationType, to
 import { Client } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
+import { syncServiceAppointments } from '../lib/serviceAppointments';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { drawBrandBanner, drawBrandFooter } from '../lib/pdfBranding';
@@ -219,6 +220,7 @@ export default function Regularization() {
         console.warn('Falha ao criar notificação de agenda (protocolo já foi salvo normalmente):', notifError);
       }
 
+      syncServiceAppointments(user?.displayName || '').catch(() => {}); // agendamento automático (aba Agendamentos)
       toast.success(`Protocolo ${internalProtocol} criado com sucesso!`);
       setIsModalOpen(false);
       resetForm();
@@ -280,6 +282,7 @@ export default function Regularization() {
         status: newStatus,
         updatedAt: serverTimestamp()
       });
+      syncServiceAppointments(user?.displayName || '').catch(() => {}); // agendamento automático (aba Agendamentos)
       toast.success(`Status atualizado para: ${newStatus}`);
       const s0 = services.find(s => s.id === id);
       audit('status_changed', id, `${s0?.internalProtocol || ''} — ${s0?.clientName || ''}`, `Status alterado para ${newStatus}.`, { previousValues: { status: s0?.status }, newValues: { status: newStatus } });

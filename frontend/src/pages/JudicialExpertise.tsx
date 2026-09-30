@@ -21,6 +21,7 @@ import {
   FolderSync, RefreshCw, ExternalLink, ShieldCheck, Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { syncServiceAppointments } from '../lib/serviceAppointments';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { drawBrandBanner } from '../lib/pdfBranding';
@@ -624,6 +625,7 @@ export default function JudicialExpertisePage() {
       }
 
       const baseMsg = editingId ? 'Perícia judicial atualizada' : 'Perícia judicial cadastrada';
+      syncServiceAppointments(user?.displayName || '').catch(() => {}); // agendamento automático (aba Agendamentos)
       if (!targetClientId) toast.success(`${baseMsg}! (sem cliente vinculado — o laudo não foi anexado a nenhum dossiê)`);
       else if (!dossierOk) toast.warning(`${baseMsg}, mas não foi possível atualizar o dossiê do cliente agora.`);
       else toast.success(`${baseMsg} e sincronizada com o dossiê!`);

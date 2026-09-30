@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+import { syncServiceAppointments } from '../lib/serviceAppointments';
 import { cn, formatDate, handleFirestoreError, OperationType, todayLocalDateString } from '../lib/utils';
 import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -377,6 +378,7 @@ export default function Irrigation() {
         await updateDoc(doc(db, 'irrigation_projects', editingId), { ...payload, updatedAt: serverTimestamp() });
         const old = projects.find(p => p.id === editingId) || {};
         saved = { ...old, ...payload, id: editingId };
+        syncServiceAppointments(user?.displayName || '').catch(() => {}); // agendamento automático (aba Agendamentos)
         toast.success('Projeto de irrigação atualizado!');
         audit('updated', editingId, `${payload.clientName} — ${payload.propertyName}`, `Projeto de irrigação editado (valor ${priceCalc.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}).`, { newValues: { value: payload.value, type: payload.type, area: payload.inputs.demand.area } });
       } else {
@@ -388,6 +390,7 @@ export default function Irrigation() {
           createdBy: user?.uid,
         });
         saved = { ...payload, id: ref.id, status: 'Em Andamento', paymentStatus: 'pendente' };
+        syncServiceAppointments(user?.displayName || '').catch(() => {}); // agendamento automático (aba Agendamentos)
         toast.success('Projeto de irrigação criado!');
         audit('created', ref.id, `${payload.clientName} — ${payload.propertyName}`, `Projeto de irrigação criado (${systemLabel(payload.type)}, ${payload.inputs.demand.area} ha).`, { newValues: { value: payload.value } });
         // Aviso na agenda — isolado: se falhar, o projeto já está salvo.
@@ -422,6 +425,7 @@ export default function Irrigation() {
     try {
       await updateDoc(doc(db, 'irrigation_projects', p.id), { ...patch, updatedAt: serverTimestamp() });
       setViewing((v: any) => (v && v.id === p.id ? { ...v, ...patch } : v));
+      syncServiceAppointments(user?.displayName || '').catch(() => {}); // agendamento automático (aba Agendamentos)
       toast.success(msg);
       audit('status_changed', p.id, `${p.clientName} — ${p.propertyName || ''}`, msg, { previousValues: { status: statusOf(p), paymentStatus: p.paymentStatus || 'pendente' }, newValues: patch });
     } catch (error) {

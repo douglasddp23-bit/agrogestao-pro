@@ -41,6 +41,7 @@ import ServiceKpiCards, { formatBRL, isThisMonth } from '../components/service/S
 import ConfirmationModal from '../components/ConfirmationModal';
 import CreditProposalWizard from '../components/credit/CreditProposalWizard';
 import { toast } from 'sonner';
+import { syncServiceAppointments } from '../lib/serviceAppointments';
 import { isManagementRole } from '../lib/permissions';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { Wallet as PageIcon } from 'lucide-react';
@@ -186,6 +187,7 @@ export default function RuralCredit() {
 
         if (user) {
           audit('updated', editingId, formData.clientName, `Projeto de crédito editado (${formData.financingType || 'crédito'}, ${formatCurrency(Number(formData.value))}).`, { newValues: { value: Number(formData.value), bank: formData.bank } });
+          syncServiceAppointments(user?.displayName || '').catch(() => {}); // agendamento automático (aba Agendamentos)
           await createNotification(user.uid, 'Projeto Atualizado', `O projeto de ${formData.clientName} foi editado com sucesso.`, 'update', 'analysis_credit');
         }
       } else {
@@ -210,6 +212,7 @@ export default function RuralCredit() {
         });
 
         if (user) {
+          syncServiceAppointments(user?.displayName || '').catch(() => {}); // agendamento automático (aba Agendamentos)
           await createNotification(user.uid, 'Novo Projeto de Crédito', `Um novo projeto foi criado para ${selectedClient?.name}.`, 'success', 'analysis_credit');
         }
       }
@@ -351,6 +354,7 @@ export default function RuralCredit() {
         status: newStatus,
         updatedAt: new Date().toISOString()
       });
+      syncServiceAppointments(user?.displayName || '').catch(() => {}); // agendamento automático (aba Agendamentos)
       toast.success(`Status atualizado para: ${newStatus}`);
       audit('status_changed', projectId, project?.clientName || '', `Status alterado para ${newStatus}.`, { previousValues: { status: previousStatus }, newValues: { status: newStatus } });
 

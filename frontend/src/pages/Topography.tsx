@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { cn, safeUrl } from '../lib/utils';
 import { toast } from 'sonner';
+import { syncServiceAppointments } from '../lib/serviceAppointments';
 import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Client } from '../types';
@@ -526,6 +527,7 @@ export default function Topography() {
       if (editingId) {
         await updateDoc(doc(db, 'topography_services', editingId), { ...payload, updatedAt: serverTimestamp() });
         saved = { ...(services.find((s: any) => s.id === editingId) || {}), ...payload, id: editingId };
+        syncServiceAppointments(user?.displayName || '').catch(() => {}); // agendamento automático (aba Agendamentos)
         toast.success('Serviço de topografia atualizado!');
         audit('updated', editingId, `${payload.clientName} — ${payload.propertyName}`, `Serviço de ${serviceLabel} editado.`, { newValues: { value: payload.value, status: payload.status } });
       } else {
@@ -537,6 +539,7 @@ export default function Topography() {
         });
         saved = { ...payload, id: docRef.id, paymentStatus: 'pendente' };
         audit('created', docRef.id, `${payload.clientName} — ${payload.propertyName}`, `Serviço de ${serviceLabel} registrado (${areaSize} ha).`, { newValues: { value: payload.value } });
+        syncServiceAppointments(user?.displayName || '').catch(() => {}); // agendamento automático (aba Agendamentos)
         toast.success('Serviço de Topografia Registrado!', {
           description: `${serviceLabel} (${areaSize} ha) na propriedade ${propertyName} para o cliente ${client?.name || 'Cliente'}.`,
           duration: 5000,
@@ -584,6 +587,7 @@ export default function Topography() {
   const updateServiceStatus = async (id: string, status: string) => {
     try {
       await updateDoc(doc(db, 'topography_services', id), { status, updatedAt: serverTimestamp() });
+      syncServiceAppointments(user?.displayName || '').catch(() => {}); // agendamento automático (aba Agendamentos)
       toast.success(`Status atualizado para: ${status}`);
       const s0 = services.find((s: any) => s.id === id);
       audit('status_changed', id, `${s0?.clientName || ''} — ${s0?.propertyName || ''}`, `Situação alterada para ${status}.`, { previousValues: { status: s0?.status || 'Planejado' }, newValues: { status } });
