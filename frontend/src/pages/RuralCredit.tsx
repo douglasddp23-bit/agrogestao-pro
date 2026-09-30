@@ -15,6 +15,7 @@ import {
   FileText,
   BadgePercent,
   Trash2,
+  Edit3,
   X,
   CreditCard,
   Landmark,
@@ -40,6 +41,11 @@ import ServiceKpiCards, { formatBRL, isThisMonth } from '../components/service/S
 
 import ConfirmationModal from '../components/ConfirmationModal';
 import CreditProposalWizard from '../components/credit/CreditProposalWizard';
+import { executionCost } from '../lib/credit/calculations';
+
+// Custo de execução (honorário da empresa) = 2% do valor do projeto — sempre
+// calculado a partir do valor (projetos antigos gravados com 0 também aparecem certos).
+const costOf = (p: any) => executionCost(p?.value);
 import { toast } from 'sonner';
 import BillServiceButton from '../components/billing/BillServiceButton';
 import { syncServiceAppointments } from '../lib/serviceAppointments';
@@ -170,7 +176,7 @@ export default function RuralCredit() {
     if (!formData.clientId) return;
 
     const selectedClient = clients.find(c => c.id === formData.clientId);
-    const executionCost = formData.value * 0.02;
+    const projectCost = executionCost(formData.value);
 
     try {
       if (isEditMode && editingId) {
@@ -178,7 +184,7 @@ export default function RuralCredit() {
           propertyName: formData.propertyName,
           description: formData.description,
           value: Number(formData.value),
-          cost: executionCost,
+          cost: projectCost,
           bank: formData.bank,
           financingType: formData.financingType,
           category: formData.category,
@@ -200,7 +206,7 @@ export default function RuralCredit() {
           status: 'Pendente',
           description: formData.description,
           value: Number(formData.value),
-          cost: executionCost,
+          cost: projectCost,
           bank: formData.bank,
           financingType: formData.financingType,
           category: formData.category,
@@ -269,7 +275,7 @@ export default function RuralCredit() {
           title: 'Resultado',
           rows: [
             ['Valor do projeto', brl(project.value || 0)],
-            ['Custo de elaboração / execução', brl(project.cost || 0)],
+            ['Custo de execução (2% do valor do projeto)', brl(costOf(project))],
           ],
         },
       ];
@@ -412,7 +418,7 @@ export default function RuralCredit() {
   const stats = {
     activeCount: activeProjects.length,
     activeValue: activeProjects.reduce((acc, p) => acc + (p.value || 0), 0),
-    activeCost: activeProjects.reduce((acc, p) => acc + (p.cost || 0), 0),
+    activeCost: activeProjects.reduce((acc, p) => acc + costOf(p), 0),
     pendingCount: projects.filter(p => p.status === 'Pendente').length,
     analysisCount: projects.filter(p => p.status === 'Em Análise').length,
     completedCount: projects.filter(p => p.status === 'Concluído').length,
@@ -428,7 +434,7 @@ export default function RuralCredit() {
           <div className="flex items-center gap-3">
           <ExportExcelButton fileName="Credito_Rural" getRows={() => filteredProjects.map((p: any) => ({
     'Cliente': p.clientName || '', 'Propriedade': p.propertyName || '', 'Linha': p.financingType || '', 'Banco': p.bank || '',
-    'Atividade': p.category || '', 'Status': p.status || '', 'Valor (R$)': (typeof p.value === 'number' ? p.value : Number(p.value) || 0), 'Custo de Execução (R$)': (typeof p.cost === 'number' ? p.cost : Number(p.cost) || 0),
+    'Atividade': p.category || '', 'Status': p.status || '', 'Valor (R$)': (typeof p.value === 'number' ? p.value : Number(p.value) || 0), 'Custo de Execução 2% (R$)': costOf(p),
     'Previsão': (p.scheduledDate ? String(p.scheduledDate).split('T')[0].split('-').reverse().join('/') : ''), 'Responsável': p.responsibleTechnician || '',
   }))} />
           <button
@@ -513,9 +519,11 @@ export default function RuralCredit() {
                         openEditModal(project);
                       }
                     }}
-                    className="p-2 hover:bg-slate-50 text-slate-300 hover:text-slate-500 rounded-xl transition-all"
+                    className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition-all"
+                    title="Editar projeto"
+                    data-credit-edit={project.id}
                   >
-                    <FileText className="w-4 h-4" />
+                    <Edit3 className="w-3.5 h-3.5" /> Editar
                   </button>}
                   {(user?.effectiveRole ?? user?.role) === 'admin' && (
                     <button 
@@ -523,9 +531,11 @@ export default function RuralCredit() {
                         e.stopPropagation();
                         setIsDeleteConfirmOpen(project.id);
                       }}
-                      className="p-2 hover:bg-rose-50 text-slate-300 hover:text-rose-500 rounded-xl transition-all"
+                      className="px-2.5 py-1.5 rounded-xl border border-rose-200 bg-white text-rose-500 hover:bg-rose-50 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition-all"
+                      title="Excluir projeto"
+                      data-credit-delete={project.id}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-3.5 h-3.5" /> Excluir
                     </button>
                   )}
                   <div className="relative">
@@ -665,7 +675,7 @@ export default function RuralCredit() {
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-emerald-600 font-bold">Custo de Execução (2%)</span>
                   <span className="font-bold text-emerald-600">
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(project.cost || 0)}
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(costOf(project))}
                   </span>
                 </div>
               </div>
@@ -865,7 +875,7 @@ export default function RuralCredit() {
                         <div className="space-y-1.5">
                           <label className="text-[10px] font-extrabold text-emerald-600 uppercase ml-1 tracking-widest text-right">Taxa (2%)</label>
                           <div className="w-full glass-input bg-emerald-50/50 border-emerald-100 flex items-center justify-end font-bold text-emerald-700">
-                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(formData.value * 0.02)}
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(executionCost(formData.value))}
                           </div>
                         </div>
                       </div>
@@ -994,9 +1004,9 @@ export default function RuralCredit() {
                     </div>
                  </div>
                  <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
-                    <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Custo de Execução</div>
+                    <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Custo de Execução (2%)</div>
                     <div className="text-lg font-bold text-emerald-700">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedProject.cost || 0)}
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(costOf(selectedProject))}
                     </div>
                  </div>
               </div>
@@ -1033,6 +1043,30 @@ export default function RuralCredit() {
                       </button>
                     ))}
                  </div>
+              </div>
+
+              <div className="flex gap-2" data-credit-detail-actions>
+                {canEditProject(selectedProject) && (
+                  <button
+                    onClick={() => {
+                      const p = selectedProject;
+                      setSelectedProject(null);
+                      if ((p as any).pronafData || (p as any).creditProposal) { setPronafResumeProject(p); setIsPronafOpen(true); }
+                      else openEditModal(p);
+                    }}
+                    className="flex-1 py-3 border border-slate-200 bg-white rounded-2xl font-bold text-slate-700 hover:bg-slate-50 transition-all text-xs uppercase tracking-widest flex items-center justify-center gap-2"
+                  >
+                    <Edit3 className="w-4 h-4" /> Editar projeto
+                  </button>
+                )}
+                {(user?.effectiveRole ?? user?.role) === 'admin' && (
+                  <button
+                    onClick={() => { const id = selectedProject.id; setSelectedProject(null); setIsDeleteConfirmOpen(id); }}
+                    className="flex-1 py-3 border border-rose-200 bg-white rounded-2xl font-bold text-rose-600 hover:bg-rose-50 transition-all text-xs uppercase tracking-widest flex items-center justify-center gap-2"
+                  >
+                    <Trash2 className="w-4 h-4" /> Excluir projeto
+                  </button>
+                )}
               </div>
 
               <AuditTrail recordId={selectedProject.id} collectionName="analyses" />

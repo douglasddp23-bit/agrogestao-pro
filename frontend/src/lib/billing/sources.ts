@@ -2,6 +2,7 @@
 // faturamento SEM pedir de novo o que já está cadastrado (cliente, CPF/CNPJ,
 // serviço e valor).
 import type { SourceKind } from './types';
+import { executionCost } from '../credit/calculations';
 
 export interface SourceDef {
   collection: string;
@@ -43,7 +44,11 @@ export const BILLING_SOURCES: Record<string, SourceDef> = {
   },
   analyses: {
     collection: 'analyses', kind: 'service', category: 'analysis', label: 'Análises / Crédito Rural', route: '/analysis',
-    describe: (d) => `${ANALYSIS_LABELS[d.type] || 'Serviço técnico'}${where(d)}`, value: (d) => num(d.value), isDone: done,
+    describe: (d) => d.type === 'credit'
+      ? `Elaboração de projeto de crédito rural (2% de ${num(d.value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})${where(d)}`
+      : `${ANALYSIS_LABELS[d.type] || 'Serviço técnico'}${where(d)}`,
+    // Crédito Rural: a empresa cobra o custo de execução = 2% do valor do projeto
+    value: (d) => (d.type === 'credit' ? executionCost(d.value) : num(d.value)), isDone: done,
   },
   judicial_expertises: {
     collection: 'judicial_expertises', kind: 'service', category: 'judicial_expertise', label: 'Perícia Judicial', route: '/judicial-expertise',

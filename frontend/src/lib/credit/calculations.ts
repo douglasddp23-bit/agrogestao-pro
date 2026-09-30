@@ -142,3 +142,14 @@ export function expectedContractDate(proposalDate: string): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
+
+/**
+ * Honorário da empresa no Crédito Rural = CUSTO DE EXECUÇÃO: 2% do valor do
+ * projeto (decisão do dono, 30/09/2026). É o que a empresa cobra — sempre
+ * recalculado a partir do valor do projeto, nunca digitado à parte.
+ */
+export const EXECUTION_FEE_RATE = 0.02;
+export function executionCost(projectValue: unknown): number {
+  const v = typeof projectValue === 'number' ? projectValue : Number(projectValue) || 0;
+  return Math.round(v * EXECUTION_FEE_RATE * 100) / 100;
+}

@@ -11,6 +11,7 @@ import { Client } from '../../types';
 import { CreditProposal, ProposalTotals } from './types';
 import { CreditProgramConfig } from './programs';
 import { loadBank } from './banks';
+import { executionCost } from './calculations';
 
 export interface SaveContext {
   user: { uid: string; displayName?: string | null; email?: string | null };
@@ -44,6 +45,8 @@ function projectFields(proposal: CreditProposal, ctx: SaveContext) {
     creditProgramId: ctx.program.id,
     proposalStatus: proposal.status,
     value: ctx.totals.total,
+    // Custo de execução = honorário da empresa: 2% do valor do projeto
+    cost: executionCost(ctx.totals.total),
     financedValue: ctx.totals.financed,
     updatedAt: new Date().toISOString(),
   };
@@ -58,7 +61,6 @@ export async function createProposal(proposal: CreditProposal, ctx: SaveContext)
     type: 'credit',
     status: 'Pendente',
     description: `Proposta ${saved.proposalId} — ${ctx.program.name}`,
-    cost: 0,
     category: 'Agricultura',
     scheduledDate: saved.proposalDate,
     responsibleTechnician: saved.preparer.name || ctx.user.displayName || '',
