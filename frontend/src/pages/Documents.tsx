@@ -23,6 +23,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import PageHeader from '../components/layout/PageHeader';
 import { FileText as PageIcon } from 'lucide-react';
 import { toast } from 'sonner';
+import { sanitizeFileName } from '../lib/uploadGuard';
 import { collection, onSnapshot, query, orderBy, where, addDoc, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
 import { saveFile, deleteStoredFile, handleFileLinkClick, uploadErrorMessage, FileTooLargeError, isTooLargeToSave } from '../lib/fileStore';
 import { jsPDF } from 'jspdf';
@@ -262,7 +263,7 @@ export default function Documents() {
 
       const docPayload: any = {
         clientId: selectedClient.id,
-        name: file.name,
+        name: sanitizeFileName(file.name),
         type: file.type,
         category: currentFolder && currentFolder.id !== 'general' 
           ? (currentFolder.type === 'contract' ? 'Contrato' : 'Serviço') 

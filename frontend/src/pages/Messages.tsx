@@ -21,6 +21,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { checkUpload, DOCUMENT_KINDS, sanitizeFileName } from '../lib/uploadGuard';
 import { collection, addDoc, onSnapshot, query, where, updateDoc, doc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
@@ -281,9 +282,20 @@ export default function Messages() {
     });
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
-    const filesList = Array.from(e.target.files);
+    const picked = Array.from(e.target.files) as File[];
+    e.target.value = '';
+    // Segurança: confere o formato real do arquivo (não só a extensão) e o tamanho
+    const filesList: File[] = [];
+    for (const file of picked) {
+      try {
+        await checkUpload(file, file.name, { allow: DOCUMENT_KINDS, maxBytes: 700 * 1024 });
+        filesList.push(file);
+      } catch (err: any) {
+        toast.error(err?.message || 'Arquivo não aceito.');
+      }
+    }
     
     filesList.forEach((file: File) => {
       const reader = new FileReader();
@@ -297,14 +309,14 @@ export default function Messages() {
         setAttachedFiles((prev) => [
           ...prev,
           {
-            name: file.name,
+            name: sanitizeFileName(file.name),
             type: file.type,
             size: sizeStr,
             url: base64String,
             isImage: isImg
           }
         ]);
-        toast.success(`Arquivo anexado: ${file.name}`);
+        toast.success(`Arquivo anexado: ${sanitizeFileName(file.name)}`);
       };
       reader.readAsDataURL(file);
     });

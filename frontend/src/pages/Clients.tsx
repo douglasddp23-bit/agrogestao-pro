@@ -46,6 +46,7 @@ import { Users as PageIcon } from 'lucide-react';
 import { CalendarClock } from 'lucide-react';
 import { handleFirestoreError, OperationType, cn, validateCPF, validateEmail, formatPhone, formatCPF, formatDate, todayLocalDateString } from '../lib/utils';
 import { toast } from 'sonner';
+import { checkUpload, DOCUMENT_KINDS, sanitizeFileName } from '../lib/uploadGuard';
 import ConfirmationModal from '../components/ConfirmationModal';
 import AuditTrail from '../components/AuditTrail';
 import { useInitialSearch } from '../hooks/useInitialSearch';
@@ -549,7 +550,7 @@ export default function Clients() {
 
               const docPayload: any = {
                 clientId: savedClientId,
-                name: file.name,
+                name: sanitizeFileName(file.name),
                 type: file.type,
                 category: labelMap[key] || 'Geral',
                 url: downloadUrl,
@@ -2837,8 +2838,13 @@ export default function Clients() {
                                   <input
                                     type="file"
                                     className="hidden"
-                                    onChange={(e) => {
+                                    onChange={async (e) => {
                                       const file = e.target.files?.[0];
+                                      // Segurança: formato real conferido (PDF, imagem, Word/Excel...) antes de aceitar
+                                      if (file) {
+                                        try { await checkUpload(file, file.name, { allow: DOCUMENT_KINDS, maxBytes: 25 * 1024 * 1024 }); }
+                                        catch (err: any) { toast.error(err?.message || 'Arquivo não aceito.'); e.target.value = ''; return; }
+                                      }
                                       if (file && isTooLargeToSave(file)) {
                                         toast.error(uploadErrorMessage(new FileTooLargeError(file.name, file.size)));
                                         e.target.value = '';

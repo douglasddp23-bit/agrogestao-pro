@@ -30,6 +30,7 @@ import StoredImage from '../components/StoredImage';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
+import { checkImageUpload } from '../lib/uploadGuard';
 import { exportToExcel } from '../lib/exportExcel';
 import { triggerNewAppointmentNotification } from '../lib/notifications';
 import { jsPDF } from 'jspdf';
@@ -321,9 +322,16 @@ export default function FieldVisits() {
   };
 
   // Photo uploads
-  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const filesArray = Array.from(e.target.files);
+      const picked = Array.from(e.target.files) as File[];
+      e.target.value = '';
+      // Segurança: só imagens de verdade (conferidas pelo conteúdo), até 25 MB (reduzidas ao salvar)
+      const filesArray: File[] = [];
+      for (const file of picked) {
+        try { await checkImageUpload(file, 25 * 1024 * 1024); filesArray.push(file); }
+        catch (err: any) { toast.error(err?.message || 'Imagem não aceita.'); }
+      }
       const newPhotos = filesArray.map((file: any) => ({
         file: file as File,
         caption: '',

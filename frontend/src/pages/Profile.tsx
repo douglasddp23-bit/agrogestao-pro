@@ -23,6 +23,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { cn, formatDate, formatCurrency } from '../lib/utils';
 import { toast } from 'sonner';
+import { checkImageUpload } from '../lib/uploadGuard';
 import { doc, getDoc, updateDoc, collection, query, where, onSnapshot, addDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
@@ -158,6 +159,13 @@ export default function Profile() {
   const handleUpdatePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user?.uid) return;
+    e.target.value = '';
+    try {
+      await checkImageUpload(file, 8 * 1024 * 1024);
+    } catch (err: any) {
+      toast.error(err?.message || 'Imagem não aceita.');
+      return;
+    }
     setIsUpdatingPhoto(true);
     const toastId = toast.loading('Enviando foto...');
     try {

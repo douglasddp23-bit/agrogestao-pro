@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+import { checkImageUpload } from '../../lib/uploadGuard';
 import { cn, shrinkImage, getAuthToken } from '../../lib/utils';
 import { db } from '../../lib/firebase';
 import { updatePdfBranding } from '../../lib/pdfBranding';
@@ -291,14 +292,12 @@ export default function MainApp() {
     }
   };
 
-  const processFile = (file: File) => {
-    if (!file.type.startsWith('image/')) {
-      toast.error('Por favor, selecione um arquivo de imagem válido (.png, .jpg, .svg, .webp)');
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('A imagem deve ter no máximo 5MB.');
+  const processFile = async (file: File) => {
+    // Segurança: formato real conferido pelos primeiros bytes (PNG, JPG, GIF ou WebP), até 5 MB
+    try {
+      await checkImageUpload(file, 5 * 1024 * 1024);
+    } catch (err: any) {
+      toast.error(err?.message || 'Selecione uma imagem PNG, JPG ou WebP.');
       return;
     }
 

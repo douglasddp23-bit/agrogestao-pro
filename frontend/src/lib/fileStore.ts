@@ -10,6 +10,7 @@ import { collection, doc, getDoc, getDocs, writeBatch, deleteDoc } from 'firebas
 import { ref, deleteObject } from 'firebase/storage';
 import { toast } from 'sonner';
 import { db, storage, auth } from './firebase';
+import { checkUpload, DOCUMENT_KINDS, SAFE_INLINE_MIMES, UploadRejectedError } from './uploadGuard';
 
 export const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const CHUNK_CHARS = 700_000;
@@ -31,7 +32,7 @@ export const isStoredFile =(url?: string) => !!url && url.startsWith(URL_PREFIX)
 
 /** Mensagem amigável para qualquer erro de envio de arquivo. */
 export function uploadErrorMessage(err: unknown): string {
-  if (err instanceof FileTooLargeError) return err.message;
+  if (err instanceof FileTooLargeError || err instanceof UploadRejectedError) return err.message;
   const code = (err as any)?.code || '';
   if (code === 'permission-denied') return 'Você não tem permissão para enviar arquivos.';
   if (code === 'unavailable') return 'Sem conexão com o servidor. Verifique a internet e tente novamente.';
@@ -68,11 +69,17 @@ async function shrinkPhotoIfNeeded(data: Blob): Promise<Blob> {
 }
 
 /** Salva o arquivo e devolve { url, storagePath } para gravar no registro que o usa. */
-export async function saveFile(original: Blob, name: string, extra: { clientId?: string } = {}) {
+export async function saveFile(original: Blob, rawName: string, extra: { clientId?: string } = {}) {
+  // Confere o formato REAL (pelos primeiros bytes), a extensão e limpa o nome.
+  // Fotos grandes passam aqui e são reduzidas logo abaixo.
+  const checked = await checkUpload(original, rawName, { allow: DOCUMENT_KINDS, maxBytes: 25 * 1024 * 1024 });
+  const name = checked.name;
   const data = await shrinkPhotoIfNeeded(original);
   if (data.size > MAX_FILE_BYTES) throw new FileTooLargeError(name, data.size);
+  // Tipo gravado = o detectado (se a foto foi reduzida, virou JPEG)
+  const storedType = data === original ? checked.mime : (data.type || checked.mime);
 
-  const dataUrl = await readAsDataUrl(data);
+  const dataUrl = await readAsDataUrl(new Blob([data], { type: storedType }));
   const parts: string[] = [];
   for (let i = 0; i < dataUrl.length; i += CHUNK_CHARS) parts.push(dataUrl.slice(i, i + CHUNK_CHARS));
 
@@ -80,7 +87,7 @@ export async function saveFile(original: Blob, name: string, extra: { clientId?:
   const batch = writeBatch(db);
   batch.set(metaRef, {
     name,
-    type: data.type || 'application/octet-stream',
+    type: storedType,
     size: data.size,
     chunks: parts.length,
     clientId: extra.clientId || '',
@@ -110,7 +117,12 @@ export async function resolveFileUrl(url: string): Promise<string> {
     .sort((a, b) => a.index - b.index)
     .map(c => c.data)
     .join('');
-  const blob = await (await fetch(dataUrl)).blob();
+  const raw = await (await fetch(dataUrl)).blob();
+  // SEGURANÇA: só tipos inofensivos são abertos como tal; qualquer outro (ex.: HTML
+  // gravado por versões antigas) vira "download" e nunca roda dentro do app.
+  const declared = String(meta.data()?.type || raw.type || '').toLowerCase();
+  const safeType = SAFE_INLINE_MIMES.includes(declared) ? declared : 'application/octet-stream';
+  const blob = new Blob([raw], { type: safeType });
   const objectUrl = URL.createObjectURL(blob);
   blobUrlCache.set(url, objectUrl);
   return objectUrl;
