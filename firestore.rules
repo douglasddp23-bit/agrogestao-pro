@@ -23,8 +23,36 @@ service cloud.firestore {
     }
 
     // --- Helpers ---
+    // Sessão vale no máximo 12 horas desde o login com senha (auth_time). Mesmo
+    // prazo do servidor (SESSION_MAX_HOURS) e da tela. Sem isso, o Firebase
+    // renovaria o acesso para sempre enquanto o app ficasse aberto.
     function isSignedIn() {
-      return request.auth != null && request.auth.uid != null;
+      return request.auth != null && request.auth.uid != null
+        && request.time < timestamp.value(request.auth.token.get('auth_time', 0) * 1000) + duration.value(12, 'h');
+    }
+
+    // --- Conferência de formato (auditoria 30/09/2026): a tela já valida, mas o
+    // banco não pode confiar só nela. Campo ausente ou vazio é aceito.
+    function okText(data, field, max) {
+      return !(field in data) || data[field] == null || (data[field] is string && data[field].size() <= max);
+    }
+    function okNum(data, field) {
+      return !(field in data) || data[field] == null || data[field] is number;
+    }
+    function okDate(data, field) {
+      return !(field in data) || data[field] == null || data[field] == ''
+        || (data[field] is string && data[field].matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}.*'));
+    }
+    function okEmail(data, field) {
+      return !(field in data) || data[field] == null || data[field] == ''
+        || (data[field] is string && data[field].size() <= 200 && data[field].matches('^[^@ ]+@[^@ ]+[.][^@ ]+$'));
+    }
+    // Campos comuns aos serviços (análises, projetos, protocolos, perícias...)
+    function okService(data) {
+      return okText(data, 'clientName', 200) && okText(data, 'propertyName', 300)
+        && okText(data, 'description', 20000) && okText(data, 'notes', 20000) && okText(data, 'observations', 20000)
+        && okNum(data, 'value') && okNum(data, 'cost') && okNum(data, 'areaSize')
+        && okDate(data, 'scheduledDate') && okDate(data, 'deadline');
     }
 
     function incoming() { return request.resource.data; }
@@ -129,9 +157,9 @@ service cloud.firestore {
     function isValidClient(data) {
       return data.keys().hasAll(['name', 'cpf', 'clientType'])
              && data.name is string && data.name.size() > 0 && data.name.size() < 200
-             && data.cpf is string && data.cpf.size() <= 20
-             && strMax(data.get('phone', ''), 30)
-             && strMax(data.get('ownerEmail', ''), 200)
+             && data.cpf is string && data.cpf.size() <= 20 && data.cpf.matches('^[0-9./ -]*$')
+             && strMax(data.get('phone', ''), 30) && data.get('phone', '').matches('^[0-9()+. -]*$')
+             && okEmail(data, 'ownerEmail') && okEmail(data, 'email')
              && strMax(data.get('notes', ''), 5000);
     }
 
@@ -159,7 +187,8 @@ service cloud.firestore {
     function isValidAnalysis(data) {
       return data.keys().hasAll(['clientId', 'type', 'status'])
              && data.type in ['soil', 'water', 'fertility', 'foliar', 'topography', 'irrigation', 'documentation', 'credit', 'environmental_xray']
-             && data.status is string && data.status.size() <= 40;
+             && data.status is string && data.status.size() <= 40
+             && okService(data);
     }
 
     // --- E-mail interno ---
@@ -216,7 +245,15 @@ service cloud.firestore {
       allow create: if isStaff() && isValidId(fileId)
         && incoming().createdBy == request.auth.uid
         && incoming().size is int && incoming().size <= 2097152
-        && incoming().chunks is int && incoming().chunks >= 1 && incoming().chunks <= 4;
+        && incoming().chunks is int && incoming().chunks >= 1 && incoming().chunks <= 4
+        && strMax(incoming().get('name', ''), 300)
+        && incoming().get('type', '') in ['application/pdf', 'image/png', 'image/jpeg', 'image/gif', 'image/webp',
+             'application/zip', 'application/octet-stream', 'text/plain', 'text/csv',
+             'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+             'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+             'application/vnd.google-earth.kmz', 'application/vnd.google-earth.kml+xml',
+             'application/msword', 'application/vnd.ms-excel'];
       // Antes qualquer funcionário apagava qualquer arquivo.
       allow delete: if isValidId(fileId) && (isAdmin() || isOwnerOf('createdBy'));
 
@@ -258,24 +295,24 @@ service cloud.firestore {
     match /irrigation_projects/{projectId} {
       allow list: if isStaff();
       allow get: if isStaff() && isValidId(projectId);
-      allow create: if isStaff() && isValidId(projectId) && incoming().createdBy == request.auth.uid;
-      allow update: if isStaff() && isValidId(projectId) && (isManagement() || isOwnerOf('createdBy')) && keepsField('createdBy');
+      allow create: if isStaff() && isValidId(projectId) && incoming().createdBy == request.auth.uid && okService(incoming());
+      allow update: if isStaff() && isValidId(projectId) && (isManagement() || isOwnerOf('createdBy')) && keepsField('createdBy') && okService(incoming());
       allow delete: if isAdmin() && isValidId(projectId);
     }
 
     match /topography_services/{serviceId} {
       allow list: if isStaff();
       allow get: if isStaff() && isValidId(serviceId);
-      allow create: if isStaff() && isValidId(serviceId) && incoming().createdBy == request.auth.uid;
-      allow update: if isStaff() && isValidId(serviceId) && (isManagement() || isOwnerOf('createdBy')) && keepsField('createdBy');
+      allow create: if isStaff() && isValidId(serviceId) && incoming().createdBy == request.auth.uid && okService(incoming());
+      allow update: if isStaff() && isValidId(serviceId) && (isManagement() || isOwnerOf('createdBy')) && keepsField('createdBy') && okService(incoming());
       allow delete: if isAdmin() && isValidId(serviceId);
     }
 
     match /regularization_services/{serviceId} {
       allow list: if isStaff();
       allow get: if isStaff() && isValidId(serviceId);
-      allow create: if isStaff() && isValidId(serviceId) && incoming().createdBy == request.auth.uid;
-      allow update: if isStaff() && isValidId(serviceId) && (isManagement() || isOwnerOf('createdBy')) && keepsField('createdBy');
+      allow create: if isStaff() && isValidId(serviceId) && incoming().createdBy == request.auth.uid && okService(incoming());
+      allow update: if isStaff() && isValidId(serviceId) && (isManagement() || isOwnerOf('createdBy')) && keepsField('createdBy') && okService(incoming());
       allow delete: if isAdmin() && isValidId(serviceId);
     }
 
@@ -332,7 +369,8 @@ service cloud.firestore {
       allow list: if isStaff();
       allow get: if isStaff() && isValidId(expenseId);
       allow create: if isStaff() && isValidId(expenseId) && incoming().createdBy == request.auth.uid
-        && incoming().status == 'pending_approval' && incoming().value is number && incoming().value > 0;
+        && incoming().status == 'pending_approval' && incoming().value is number && incoming().value > 0
+        && okText(incoming(), 'description', 2000);
       // Antes o próprio solicitante podia marcar a SUA despesa como "aprovada".
       allow update: if isStaff() && isValidId(expenseId) && (
         isManagement() ||
@@ -354,8 +392,8 @@ service cloud.firestore {
     match /rural_valuations/{valuationId} {
       allow list: if isStaff();
       allow get: if isStaff() && isValidId(valuationId);
-      allow create: if isStaff() && isValidId(valuationId) && incoming().createdBy == request.auth.uid;
-      allow update: if isStaff() && isValidId(valuationId) && (isManagement() || isOwnerOf('createdBy')) && keepsField('createdBy');
+      allow create: if isStaff() && isValidId(valuationId) && incoming().createdBy == request.auth.uid && okService(incoming());
+      allow update: if isStaff() && isValidId(valuationId) && (isManagement() || isOwnerOf('createdBy')) && keepsField('createdBy') && okService(incoming());
       allow delete: if isAdmin() && isValidId(valuationId);
     }
 
@@ -363,8 +401,8 @@ service cloud.firestore {
     match /judicial_expertises/{expertiseId} {
       allow list: if isStaff();
       allow get: if isStaff() && isValidId(expertiseId);
-      allow create: if isStaff() && isValidId(expertiseId) && incoming().createdBy == request.auth.uid;
-      allow update: if isStaff() && isValidId(expertiseId) && (isManagement() || isOwnerOf('createdBy')) && keepsField('createdBy');
+      allow create: if isStaff() && isValidId(expertiseId) && incoming().createdBy == request.auth.uid && okService(incoming()) && okDate(incoming(), 'laudoDeadline') && okDate(incoming(), 'visitaDate') && okNum(incoming(), 'honorariosPropostos');
+      allow update: if isStaff() && isValidId(expertiseId) && (isManagement() || isOwnerOf('createdBy')) && keepsField('createdBy') && okService(incoming()) && okDate(incoming(), 'laudoDeadline') && okDate(incoming(), 'visitaDate') && okNum(incoming(), 'honorariosPropostos');
       allow delete: if isAdmin() && isValidId(expertiseId);
     }
 
@@ -405,14 +443,14 @@ service cloud.firestore {
       allow get: if isManager() && isValidId(id);
       // Qualquer colaborador pode CRIAR a cobrança pendente gerada automaticamente
       // ao concluir um serviço (ex.: análise técnica) — mas não consegue lê-la.
-      allow create: if isValidId(id) && incoming().value is number && incoming().value >= 0 && (
+      allow create: if isValidId(id) && incoming().value is number && incoming().value >= 0 && okText(incoming(), 'description', 1000) && (
         isManager() || (
           isStaff() && incoming().createdBy == request.auth.uid
           && incoming().status == 'pending'
           && incoming().linkedServiceId is string
         )
       );
-      allow update: if isManager() && isValidId(id);
+      allow update: if isManager() && isValidId(id) && okNum(incoming(), 'value') && okText(incoming(), 'description', 1000);
       allow delete: if isAdmin() && isValidId(id);
     }
 
@@ -468,8 +506,7 @@ service cloud.firestore {
     match /environmental_xray/{id} {
       allow list: if isStaff();
       allow get: if isStaff() && isValidId(id);
-      allow create: if isStaff() && isValidId(id);
-      allow update: if isStaff() && isValidId(id);
+      allow create, update: if isManagement() && isValidId(id);
       allow delete: if isAdmin() && isValidId(id);
     }
 
@@ -527,8 +564,9 @@ service cloud.firestore {
              && data.technicianId is string && data.technicianId.size() > 0
              && data.technicianName is string && data.technicianName.size() > 0
              && data.serviceType is string && data.serviceType.size() > 0
-             && data.date is string && data.date.size() > 0
-             && data.time is string && data.time.size() > 0
+             && data.date is string && data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}.*')
+             && data.time is string && data.time.matches('^[0-9]{2}:[0-9]{2}.*')
+             && okText(data, 'notes', 5000)
              && data.status in ['scheduled', 'confirmed', 'completed', 'cancelled']
              && data.createdBy is string && data.createdBy.size() > 0
              && data.createdAt is string && data.createdAt.size() > 0
