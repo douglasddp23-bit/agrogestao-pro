@@ -21,6 +21,7 @@ import {
   FolderSync, RefreshCw, ExternalLink, ShieldCheck, Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
+import BillServiceButton from '../components/billing/BillServiceButton';
 import { syncServiceAppointments } from '../lib/serviceAppointments';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -1082,6 +1083,7 @@ export default function JudicialExpertisePage() {
                       <Download className="w-3 h-3" />
                       Minuta PDF
                     </button>
+                    <BillServiceButton collection="judicial_expertises" id={exp.id} />
                     {canEditRecord(exp) && (
                     <button
                       onClick={(e) => {

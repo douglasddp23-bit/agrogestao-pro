@@ -44,6 +44,7 @@ import EfficiencyReport from '../components/EfficiencyReport';
 import ServiceKpiCards from '../components/service/ServiceKpiCards';
 import AuditTrail from '../components/AuditTrail';
 import { toast } from 'sonner';
+import BillServiceButton from '../components/billing/BillServiceButton';
 import { syncServiceAppointments } from '../lib/serviceAppointments';
 import { getPdfBranding } from '../lib/pdfBranding';
 import { useInitialSearch } from '../hooks/useInitialSearch';
@@ -967,6 +968,7 @@ export default function Analysis({ typeFilter }: AnalysisProps) {
                       <Printer className="w-4 h-4" />
                     </button>
                   )}
+                  <BillServiceButton collection="analyses" id={analysis.id} />
                   {canEditAnalysis(analysis) && (
                     <button 
                       onClick={(e) => {

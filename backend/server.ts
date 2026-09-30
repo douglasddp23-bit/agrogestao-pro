@@ -21,6 +21,7 @@ import { createServer as createViteServer } from 'vite';
 import admin from 'firebase-admin';
 import fs from 'fs';
 import authRoutes from './routes/authRoutes';
+import fiscalRoutes from './routes/fiscalRoutes';
 import { refreshUserClaim } from './controllers/authController';
 import { GoogleGenAI } from '@google/genai';
 import { requireAuth, requireManager } from './middlewares/authMiddleware';
@@ -242,6 +243,8 @@ async function startServer() {
 
   // Modular Enterprise Security & Admin Routes
   app.use('/api', authRoutes);
+  // Documentos fiscais (NFS-e / NF-e) — camada plugável em services/fiscalService.ts
+  app.use('/api/fiscal', fiscalRoutes);
 
   // Secure Server-Side Gemini endpoint
   app.post('/api/ai/news', requireAuth, aiLimiter, async (req, res) => {

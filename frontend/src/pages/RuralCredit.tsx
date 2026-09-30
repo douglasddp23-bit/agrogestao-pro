@@ -41,6 +41,7 @@ import ServiceKpiCards, { formatBRL, isThisMonth } from '../components/service/S
 import ConfirmationModal from '../components/ConfirmationModal';
 import CreditProposalWizard from '../components/credit/CreditProposalWizard';
 import { toast } from 'sonner';
+import BillServiceButton from '../components/billing/BillServiceButton';
 import { syncServiceAppointments } from '../lib/serviceAppointments';
 import { isManagementRole } from '../lib/permissions';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
@@ -676,6 +677,7 @@ export default function RuralCredit() {
                   </div>
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{project.responsibleTechnician}</span>
                 </div>
+                <BillServiceButton collection="analyses" id={project.id} />
                 <button 
                   onClick={() => setSelectedProject(project)}
                   className="text-emerald-600 hover:text-emerald-700 font-bold text-[10px] uppercase tracking-widest flex items-center gap-1"

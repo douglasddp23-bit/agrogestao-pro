@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { cn, safeUrl } from '../lib/utils';
 import { toast } from 'sonner';
+import BillServiceButton from '../components/billing/BillServiceButton';
 import { syncServiceAppointments } from '../lib/serviceAppointments';
 import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -1140,6 +1141,7 @@ export default function Topography() {
                           {formatBRL(service.value)} · {service.paymentStatus === 'pago' ? 'Pago' : 'A receber'}
                         </button>
                       )}
+                      <BillServiceButton collection="topography_services" id={service.id} />
                       {canEditService(service) && (
                         <button
                           onClick={() => openEdit(service)}

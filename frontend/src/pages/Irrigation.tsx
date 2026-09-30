@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+import BillServiceButton from '../components/billing/BillServiceButton';
 import { syncServiceAppointments } from '../lib/serviceAppointments';
 import { cn, formatDate, handleFirestoreError, OperationType, todayLocalDateString } from '../lib/utils';
 import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, deleteDoc, doc, updateDoc } from 'firebase/firestore';
@@ -742,6 +743,7 @@ export default function Irrigation() {
                     <User className="w-3 h-3 shrink-0" /> {p.responsibleTech?.name || p.responsible || '—'}
                   </span>
                   <div className="flex items-center gap-1 shrink-0">
+                    <BillServiceButton collection="irrigation_projects" id={p.id} />
                     <button onClick={() => downloadPDF(p)} title="Relatório em PDF" className="p-2 rounded-xl text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 transition-all"><Download className="w-4 h-4" /></button>
                     {canEditProject(p) && (
                       <button onClick={() => openEdit(p)} title="Editar projeto" className="p-2 rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-all"><Edit3 className="w-4 h-4" /></button>

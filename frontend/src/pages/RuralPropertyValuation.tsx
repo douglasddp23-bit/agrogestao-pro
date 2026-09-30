@@ -22,6 +22,7 @@ import {
   AlertTriangle, Check
 } from 'lucide-react';
 import { toast } from 'sonner';
+import BillServiceButton from '../components/billing/BillServiceButton';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { drawBrandBanner } from '../lib/pdfBranding';
@@ -1073,6 +1074,7 @@ export default function RuralPropertyValuationPage() {
                       <Download className="w-3 h-3" />
                       Laudo PDF
                     </button>
+                    <BillServiceButton collection="rural_valuations" id={val.id} />
                     {canEditRecord(val) && (
                     <button
                       onClick={(e) => {

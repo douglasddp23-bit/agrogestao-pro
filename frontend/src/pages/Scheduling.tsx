@@ -18,6 +18,7 @@ import {
   MapPin, Navigation, Route, LocateFixed, ExternalLink
 } from 'lucide-react';
 import { toast } from 'sonner';
+import BillServiceButton from '../components/billing/BillServiceButton';
 import { runExclusive } from '../lib/submitGuard';
 import { syncServiceAppointments } from '../lib/serviceAppointments';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
@@ -1354,6 +1355,7 @@ export default function Scheduling() {
                           </button>
                         )}
 
+                        <BillServiceButton collection="appointments" id={app.id} />
                         <button
                           onClick={() => handleOpenEditModal(app)}
                           className="py-1.5 px-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer flex items-center justify-center gap-1 border border-slate-200"

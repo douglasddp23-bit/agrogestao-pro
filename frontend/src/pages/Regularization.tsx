@@ -25,6 +25,7 @@ import { cn, formatDate, formatDateTime, handleFirestoreError, OperationType, to
 import { Client } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
+import BillServiceButton from '../components/billing/BillServiceButton';
 import { syncServiceAppointments } from '../lib/serviceAppointments';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -555,6 +556,7 @@ export default function Regularization() {
                       })()}
                    </div>
                    <div className="flex gap-2">
+                      <BillServiceButton collection="regularization_services" id={service.id} />
                       <button 
                         onClick={() => generatePDF(service)}
                         className="p-2 bg-slate-100 text-slate-400 rounded-xl hover:bg-emerald-50 hover:text-emerald-600 transition-all shadow-sm"
