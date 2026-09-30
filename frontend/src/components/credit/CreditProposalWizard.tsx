@@ -93,7 +93,11 @@ export default function CreditProposalWizard({ isOpen, onClose, clients, existin
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
   const program = loadCreditProgram(proposal?.programId || programId);
-  const bankPrograms = useMemo(() => loadBankPrograms(proposal?.bankId || bankId), [proposal?.bankId, bankId]);
+  // Proposta antiga com programa que saiu da lista do banco: ele continua aparecendo nela
+  const bankPrograms = useMemo(() => {
+    const list = loadBankPrograms(proposal?.bankId || bankId);
+    return program && !list.some(p => p.id === program.id) ? [...list, program] : list;
+  }, [proposal?.bankId, bankId, program]);
   const totals = useMemo(() => (proposal && program ? calculateProposalTotals(proposal, program) : null), [proposal, program]);
 
   const preparerDefaults = () => ({ company: getPdfBranding().companyName || '', companyDoc: '', name: user?.displayName || '', doc: '' });

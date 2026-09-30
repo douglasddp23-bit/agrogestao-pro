@@ -131,6 +131,8 @@ test('região automática pelo município (tabela da planilha)', () => {
 test('previsão do contrato = data + 30 dias; bancos e programas configuráveis', () => {
   assert.equal(expectedContractDate('2026-09-30'), '2026-10-30');
   const bnb = loadBankPrograms('bnb').map(p => p.name);
-  for (const n of ['Investimento Rural', 'PRONAF', 'PRONAF A', 'PRONAF A2']) assert.ok(bnb.includes(n), n);
+  // Lista simplificada (30/09/2026): 3 modelos completos + só custeio de Pronaf, Pronamp e demais
+  assert.deepEqual(loadBankPrograms('bnb').map(p => p.id), ['bnb-investimento-rural', 'bnb-pronaf', 'bnb-pronaf-a2', 'pronaf-custeio', 'pronamp-custeio', 'custeio-demais']);
+  assert.ok(!bnb.includes('PRONAF A'), 'PRONAF A saiu da lista');
   for (const b of ['bb', 'caixa', 'sicoob']) assert.ok(BANKS.find(x => x.id === b) && loadBankPrograms(b).length > 0, b);
 });

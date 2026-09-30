@@ -15,7 +15,11 @@ export interface Bank {
 const PLANO_SAFRA_IDS = CREDIT_PROGRAMS.map(p => p.id);
 
 export const BANKS: Bank[] = [
-  { id: 'bnb', name: 'Banco do Nordeste (BNB)', programIds: ['bnb-investimento-rural', 'bnb-pronaf', 'bnb-pronaf-a', 'bnb-pronaf-a2', ...PLANO_SAFRA_IDS] },
+  // Lista simplificada a pedido do escritório (30/09/2026): os três modelos completos
+  // das planilhas (sem o PRONAF A — o A2 já traz as duas linhas) e, do Plano Safra,
+  // só as linhas de CUSTEIO de Pronaf, Pronamp e demais produtores.
+  // (Propostas antigas com outro programa continuam abrindo: a configuração não foi apagada.)
+  { id: 'bnb', name: 'Banco do Nordeste (BNB)', programIds: ['bnb-investimento-rural', 'bnb-pronaf', 'bnb-pronaf-a2', 'pronaf-custeio', 'pronamp-custeio', 'custeio-demais'] },
   { id: 'bb', name: 'Banco do Brasil', programIds: PLANO_SAFRA_IDS },
   { id: 'caixa', name: 'Caixa Econômica Federal', programIds: PLANO_SAFRA_IDS },
   { id: 'sicoob', name: 'Sicoob', programIds: PLANO_SAFRA_IDS },
