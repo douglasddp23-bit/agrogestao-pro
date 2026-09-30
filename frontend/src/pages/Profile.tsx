@@ -429,7 +429,7 @@ export default function Profile() {
 
              <div className="w-full pt-4">
                 <button 
-                  onClick={handleResetPassword}
+                  onClick={() => runExclusive('Profile.resetPassword', () => handleResetPassword())}
                   className="w-full py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
                 >
                   <KeyRound className="w-3.5 h-3.5 text-emerald-600" /> Alterar Minha Senha

@@ -1065,7 +1065,7 @@ function FinancialContent() {
                           <div className="flex justify-center items-center gap-1.5">
                             {item.status !== 'paid' && (
                               <button
-                                onClick={() => handleToggleState(item, 'paid')}
+                                onClick={() => runExclusive('Financial.toggle.' + item.id, () => handleToggleState(item, 'paid'))}
                                 className="p-1 text-emerald-600 hover:bg-emerald-50 rounded"
                                 title="Marcar como pago"
                               >

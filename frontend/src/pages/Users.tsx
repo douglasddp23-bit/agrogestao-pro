@@ -700,7 +700,7 @@ export default function Users() {
                           >
                             {canResetPasswordOf(member) && (
                             <button 
-                               onClick={() => handleResetPassword(member)}
+                               onClick={() => runExclusive('Users.reset.' + member.uid, () => handleResetPassword(member))}
                                className="w-full px-4 py-2 text-left text-xs font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-2"
                             >
                                <KeyRound className="w-3.5 h-3.5" /> Redefinir Senha
@@ -742,7 +742,7 @@ export default function Users() {
                             )}
                             {canBlockUsers && (
                               <button 
-                                 onClick={() => handleToggleBlock(member)}
+                                 onClick={() => runExclusive('Users.block.' + member.uid, () => handleToggleBlock(member))}
                                  className={cn(
                                    "w-full px-4 py-2 text-left text-xs font-bold flex items-center gap-2",
                                    member.blocked ? "text-emerald-600 hover:bg-emerald-50" : "text-rose-600 hover:bg-rose-50"
@@ -897,7 +897,7 @@ export default function Users() {
                          <div className="flex items-center justify-end gap-2">
                            {canBlockUsers && (
                              <button 
-                               onClick={() => handleToggleBlock(member)}
+                               onClick={() => runExclusive('Users.block.' + member.uid, () => handleToggleBlock(member))}
                                className={cn(
                                  "p-1.5 rounded-lg transition-all",
                                  member.blocked ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100" : "bg-rose-50 text-rose-600 hover:bg-rose-100"
@@ -909,7 +909,7 @@ export default function Users() {
                            )}
                            {canResetPasswordOf(member) && (
                            <button 
-                             onClick={() => handleResetPassword(member)}
+                             onClick={() => runExclusive('Users.reset.' + member.uid, () => handleResetPassword(member))}
                              className="p-1.5 bg-slate-50 text-slate-600 rounded-lg hover:bg-slate-100 transition-all font-bold"
                              title="Redefinir Senha"
                            >

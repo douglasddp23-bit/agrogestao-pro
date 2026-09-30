@@ -21,7 +21,7 @@ import { AttendanceRecord, UserProfile, VacationRequest } from '../types';
 import { logAudit } from '../lib/audit';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
-import { handleFirestoreError, OperationType, formatDateTime, formatDate, cn, todayLocalDateString, sortByDateDesc, toMillis, formatCurrency, parseDecimalBR, validateCPF } from '../lib/utils';
+import { handleFirestoreError, OperationType, formatDateTime, formatDate, cn, todayLocalDateString, sortByDateDesc, toMillis, formatCurrency, parseDecimalBR, validateCPF, validateEmail } from '../lib/utils';
 import WeeklyWorkedHoursChart from '../components/WeeklyWorkedHoursChart';
 import { canCreateRole, UserRole, ROLE_LABELS } from '../lib/permissions';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
@@ -513,6 +513,15 @@ export default function HR() {
     }
     if (employeeForm.cpf && !validateCPF(employeeForm.cpf)) {
       toast.error('O CPF informado é inválido.');
+      return;
+    }
+    if (employeeForm.email && !validateEmail(employeeForm.email)) {
+      toast.error('O e-mail informado é inválido.');
+      return;
+    }
+    const phoneDigits = (employeeForm.phone || '').replace(/\D/g, '');
+    if (phoneDigits.length > 0 && ![10, 11].includes(phoneDigits.length)) {
+      toast.error('Telefone inválido: use DDD + número (10 ou 11 dígitos).');
       return;
     }
     // Dados confidenciais vão para employee_records (só RH/Admin e o próprio leem);
@@ -1386,14 +1395,14 @@ export default function HR() {
                             ) : l.status === 'pending' ? (
                               <div className="flex gap-1.5 justify-end">
                                 <button 
-                                  onClick={() => handleLeaveStatusChange(l.id, l.userName, l.type, 'approved')}
+                                  onClick={() => runExclusive('HR.leave.' + l.id, () => handleLeaveStatusChange(l.id, l.userName, l.type, 'approved'))}
                                   className="p-1 text-emerald-600 hover:bg-emerald-50 rounded"
                                   title="Aprovar"
                                 >
                                   <Check className="w-4 h-4" />
                                 </button>
                                 <button 
-                                  onClick={() => handleLeaveStatusChange(l.id, l.userName, l.type, 'rejected')}
+                                  onClick={() => runExclusive('HR.leave.' + l.id, () => handleLeaveStatusChange(l.id, l.userName, l.type, 'rejected'))}
                                   className="p-1 text-rose-600 hover:bg-rose-50 rounded"
                                   title="Rejeitar"
                                 >

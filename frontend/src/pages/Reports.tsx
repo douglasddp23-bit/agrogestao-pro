@@ -1332,7 +1332,7 @@ ${analyses.slice(0, 3).map(a => `- Tipo: ${a.type}, Fazenda: ${a.propertyName ||
 
           {/* Input Sender footer */}
           <form 
-            onSubmit={handleSendChatQuery} 
+            onSubmit={(e) => { e.preventDefault(); runExclusive('Reports.chat', () => handleSendChatQuery()); }} 
             className="p-3 bg-white border-t border-slate-150 flex gap-2 items-center shrink-0"
           >
             <input 

@@ -266,6 +266,7 @@ export default function MainApp() {
 
   const handleSaveBranding = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (brandingSaving) return; // trava contra duplo clique
     if (!(brandingInput.companyName || '').trim()) {
       setBrandingError(true);
       setShouldShake(true);

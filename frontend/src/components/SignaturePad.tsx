@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Trash2, Check, PenTool, User } from 'lucide-react';
 import { toast } from 'sonner';
+import { runExclusive } from '../lib/submitGuard';
 
 interface SignaturePadProps {
   onSave: (signatureDataUrl: string, signerName: string) => void;
@@ -228,7 +229,7 @@ export default function SignaturePad({ onSave, onCancel, defaultSignerName = '',
         </button>
         <button
           type="button"
-          onClick={handleSave}
+          onClick={() => runExclusive('SignaturePad.save', () => handleSave())}
           className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/10 font-display"
         >
           <Check className="w-4 h-4" /> Confirmar Assinatura

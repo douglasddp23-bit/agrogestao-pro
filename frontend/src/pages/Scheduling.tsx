@@ -18,6 +18,7 @@ import {
   MapPin, Navigation, Route, LocateFixed, ExternalLink
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { runExclusive } from '../lib/submitGuard';
 import { syncServiceAppointments } from '../lib/serviceAppointments';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
 import { CalendarDays as PageIcon } from 'lucide-react';
@@ -1371,7 +1372,7 @@ export default function Scheduling() {
 
                         {app.status === 'scheduled' && (
                           <button 
-                            onClick={() => handleUpdateStatus(app.id, 'confirmed')}
+                            onClick={() => runExclusive('Scheduling.status.' + app.id, () => handleUpdateStatus(app.id, 'confirmed'))}
                             className="flex-1 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer flex items-center justify-center gap-1 min-w-[70px]"
                           >
                             <Check className="w-3.5 h-3.5" /> Confirmar
@@ -1380,7 +1381,7 @@ export default function Scheduling() {
 
                         {app.status === 'confirmed' && (
                           <button 
-                            onClick={() => handleUpdateStatus(app.id, 'completed')}
+                            onClick={() => runExclusive('Scheduling.status.' + app.id, () => handleUpdateStatus(app.id, 'completed'))}
                             className="flex-1 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer flex items-center justify-center gap-1 min-w-[70px]"
                           >
                             <CheckCircle2 className="w-3.5 h-3.5" /> Concluir
@@ -1389,7 +1390,7 @@ export default function Scheduling() {
 
                         {app.status !== 'completed' && app.status !== 'cancelled' && (
                           <button 
-                            onClick={() => handleCancelAppointment(app)}
+                            onClick={() => runExclusive('Scheduling.status.' + app.id, () => handleCancelAppointment(app))}
                             className="py-1.5 px-3 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer flex items-center justify-center gap-1"
                           >
                             <X className="w-3.5 h-3.5" /> Cancelar
@@ -1783,7 +1784,7 @@ export default function Scheduling() {
                   Cancelar
                 </button>
                 <button 
-                  onClick={editingAppointmentId ? handleEditAppointment : handleCreateAppointment}
+                  onClick={() => runExclusive('Scheduling.save', editingAppointmentId ? handleEditAppointment : handleCreateAppointment)}
                   disabled={modalLoading}
                   className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1 shadow-md shadow-emerald-500/10 font-display"
                 >

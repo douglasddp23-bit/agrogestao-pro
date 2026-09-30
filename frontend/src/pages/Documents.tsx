@@ -23,6 +23,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import PageHeader from '../components/layout/PageHeader';
 import { FileText as PageIcon } from 'lucide-react';
 import { toast } from 'sonner';
+import { runExclusive } from '../lib/submitGuard';
 import { sanitizeFileName } from '../lib/uploadGuard';
 import { collection, onSnapshot, query, orderBy, where, addDoc, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
 import { saveFile, deleteStoredFile, handleFileLinkClick, uploadErrorMessage, FileTooLargeError, isTooLargeToSave } from '../lib/fileStore';
@@ -1408,7 +1409,7 @@ export default function Documents() {
                           </div>
                         ) : (
                           <button
-                            onClick={() => generateServicePDF(currentFolder, true)}
+                            onClick={() => runExclusive('Documents.savePdf', () => generateServicePDF(currentFolder, true))}
                             disabled={isGeneratingPDF}
                             title={currentFolder.type === 'contract' ? "Sincronizar cópia oficial deste contrato com a pasta de documentos" : "Guardar e arquivar cópia oficial deste relatório na pasta de forma permanente"}
                             className={cn(

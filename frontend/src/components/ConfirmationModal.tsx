@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AlertTriangle } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -24,6 +24,10 @@ export default function ConfirmationModal({
   cancelLabel = 'Cancelar',
   variant = 'danger'
 }: ConfirmationModalProps) {
+  // Trava contra duplo clique: durante a animação de fechar o botão ainda
+  // aparece — um segundo clique chamaria a exclusão/ação duas vezes.
+  const fired = useRef(false);
+  useEffect(() => { if (isOpen) fired.current = false; }, [isOpen]);
   return (
     <AnimatePresence>
       {isOpen && (
@@ -62,6 +66,8 @@ export default function ConfirmationModal({
               </button>
               <button 
                 onClick={() => {
+                  if (fired.current) return;
+                  fired.current = true;
                   onConfirm();
                   onClose();
                 }}
