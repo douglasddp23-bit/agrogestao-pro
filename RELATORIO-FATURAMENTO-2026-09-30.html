@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Módulo de Faturamento</title>
+<style>
+  @page { size: A4; margin: 15mm 14mm 17mm 14mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; color: #1e293b; font-size: 10pt; line-height: 1.45; margin: 0; }
+  .banner { background: #10b981; color: #fff; border-radius: 10px; padding: 14px 18px; display: flex; align-items: center; gap: 16px; }
+  .logo { width: 64px; height: 64px; background: #fff; border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
+  .logo img { max-width: 58px; max-height: 58px; }
+  .logo span { color: #10b981; font-weight: 800; font-size: 34px; }
+  .banner h1 { margin: 0; font-size: 17pt; }
+  .banner p { margin: 2px 0 0; font-size: 9.5pt; }
+  .doc-title { text-align: center; margin: 16px 0 3px; font-size: 15pt; font-weight: 800; }
+  .doc-sub { text-align: center; color: #64748b; font-size: 9pt; margin-bottom: 12px; }
+  h2 { font-size: 12.5pt; color: #047857; border-bottom: 2px solid #d1fae5; padding-bottom: 3px; margin: 18px 0 8px; page-break-after: avoid; }
+  h3 { font-size: 10.5pt; margin: 12px 0 5px; page-break-after: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 10px; font-size: 8.8pt; }
+  th { background: #1e293b; color: #fff; text-align: left; padding: 4px 6px; }
+  td { border-bottom: 1px solid #e2e8f0; padding: 4px 6px; vertical-align: top; }
+  tr { page-break-inside: avoid; }
+  .ok { color: #047857; font-weight: 700; }
+  .box { border: 1px solid #a7f3d0; background: #ecfdf5; border-radius: 8px; padding: 9px 12px; margin: 8px 0; page-break-inside: avoid; }
+  .warn { border-color: #fecaca; background: #fff1f2; }
+  .mono { font-family: Consolas, monospace; font-size: 8.6pt; background: #f1f5f9; padding: 0 3px; border-radius: 3px; }
+  ul, ol { margin: 4px 0 8px 18px; padding: 0; }
+  li { margin: 2px 0; }
+  .flow { text-align: center; font-weight: 700; color: #047857; font-size: 9.5pt; margin: 6px 0 10px; }
+  .pb { page-break-before: always; }
+  .footer { margin-top: 20px; border-top: 1px solid #e2e8f0; padding-top: 6px; font-size: 8pt; color: #94a3b8; display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+<div class="banner"><div class="logo">{{LOGO_HTML}}</div><div><h1>{{EMPRESA}}</h1><p>{{FRASE}}</p></div></div>
+<div class="doc-title">MÓDULO DE FATURAMENTO E DOCUMENTOS FISCAIS</div>
+<div class="doc-sub">Implementado na noite de 30/09/2026 · testado no aplicativo de verdade, com banco de TESTE (nenhum dado real usado)</div>
+
+<div class="flow">CLIENTE → SERVIÇO / VENDA → FATURAMENTO → FINANCEIRO (contas a receber) → DOCUMENTO FISCAL → PAGAMENTO → HISTÓRICO</div>
+
+<div class="box">
+  <strong>Resumo</strong>
+  <ul>
+    <li><strong>Novo menu "Faturamento"</strong> (Gerente e Administrador), no mesmo visual das telas de serviço:
+      <ul>
+        <li>mini painel;</li>
+        <li>abas Em aberto, Pagos, Vencidos, Cancelados, Histórico e Documentos Fiscais;</li>
+        <li>7 filtros;</li>
+        <li>formulário em 4 etapas.</li>
+      </ul>
+    </li>
+    <li><strong>Botão "Faturar serviço"</strong> em 8 telas: Irrigação, Topografia, Regularização, Crédito Rural, Perícia, Avaliação, Análises e Agendamentos. Ele abre o faturamento <strong>já preenchido</strong> com cliente, CPF/CNPJ, serviço e valor. Serviço já faturado mostra o número do faturamento em vez do botão.</li>
+    <li><strong>Contas a receber no Financeiro que já existe</strong> (não foi criado um financeiro paralelo). Cada parcela vira um lançamento, e nunca em dobro.</li>
+    <li><strong>Documento fiscal (NFS-e / NF-e)</strong> por uma camada "plugável":
+      <ul>
+        <li>hoje fica <strong>desligada</strong>, até você contratar um provedor fiscal;</li>
+        <li>foi testada com um provedor <strong>simulado</strong>, que gera notas sem valor fiscal e só funciona em ambiente de teste.</li>
+      </ul>
+    </li>
+    <li><strong>Novo menu "Configuração Fiscal"</strong> (só Administrador): dados da empresa, tributação, séries e numeração, e configuração fiscal por tipo de serviço. <strong>Nenhuma regra tributária foi inventada</strong>: tudo é campo para o contador preencher.</li>
+    <li><strong>Mais:</strong>
+      <ul>
+        <li>9 indicadores no Dashboard;</li>
+        <li>9 relatórios em Relatórios, com Excel e PDF;</li>
+        <li>campos fiscais opcionais no Estoque, para vender produtos;</li>
+        <li>tudo sincronizado em tempo real entre computadores.</li>
+      </ul>
+    </li>
+    <li><strong>Testes:</strong>
+      <ul>
+        <li>os 10 testes obrigatórios passaram;</li>
+        <li>mais 34 verificações de segurança e regras;</li>
+        <li>todas as abas abertas com os 4 cargos, sem erro.</li>
+      </ul>
+    </li>
+    <li><strong>5 commits</strong> no Git (fases agrupadas + relatório), ainda <strong>não enviados ao GitHub</strong>.</li>
+  </ul>
+</div>
+
+<h2>Regras de negócio respeitadas</h2>
+<ul>
+  <li>Serviço concluído <strong>não</strong> significa pago; serviço faturado <strong>não</strong> significa pago; nota emitida <strong>não</strong> significa paga.</li>
+  <li>Registrar pagamento <strong>não</strong> emite nota. A nota só sai pelo botão "Emitir documento fiscal".</li>
+  <li>Cancelar a nota <strong>não</strong> apaga o faturamento. Cancelar o faturamento <strong>não</strong> apaga pagamentos, contas pagas nem a nota.</li>
+  <li><strong>Nada é apagado:</strong>
+    <ul>
+      <li>faturamento se cancela, com motivo;</li>
+      <li>pagamento é permanente;</li>
+      <li>nota cancelada continua com número, XML e PDF;</li>
+      <li>a conta a receber de um faturamento não pode ser excluída, nem pelo Administrador.</li>
+    </ul>
+  </li>
+  <li>O tipo de nota vem da natureza da operação: serviço → NFS-e; produto → NF-e. Quando há serviço e produto juntos, o sistema pede para você escolher.</li>
+</ul>
+
+<h2>Testes obrigatórios (rodando o app de verdade)</h2>
+<table>
+  <tr><th style="width:4%">#</th><th style="width:44%">Teste</th><th>Resultado</th></tr>
+  <tr><td>1</td><td>Criar serviço → Faturar serviço</td><td class="ok">OK — Irrigação R$ 2.500,00: faturamento aberto já com cliente, CPF, serviço e valor ("não precisa digitar de novo")</td></tr>
+  <tr><td>2</td><td>Faturamento parcelado → contas a receber</td><td class="ok">OK — 3 parcelas (333,34 + 333,33 + 333,33) = 3 lançamentos no Financeiro, com vencimentos mensais; 2 parcelas de 1.250,00 no outro teste</td></tr>
+  <tr><td>3</td><td>Registrar pagamento → financeiro atualizado</td><td class="ok">OK — parcela paga no Financeiro (data e forma), status "Parcialmente pago"; duplo clique gerou 1 pagamento só; baixa feita pela tela Financeiro também atualiza o faturamento</td></tr>
+  <tr><td>4</td><td>Emitir NFS-e (simulado)</td><td class="ok">OK — nº 1001 emitida; PDF e XML guardados no próprio sistema (PDF válido conferido)</td></tr>
+  <tr><td>5</td><td>Simular rejeição</td><td class="ok">OK — status "Rejeitado" com mensagem amigável; detalhe técnico só para Gerente/Admin; "Tentar novamente" consultou o provedor antes e emitiu</td></tr>
+  <tr><td>6</td><td>Emitir de novo nota já emitida</td><td class="ok">OK — tela mostra "Este faturamento já possui documento fiscal" [Visualizar] / [Consultar]; servidor recusa (e dois pedidos simultâneos → só uma nota)</td></tr>
+  <tr><td>7</td><td>Cancelar nota</td><td class="ok">OK — status "Cancelado", número 1001 mantido, histórico com motivo; o faturamento continuou "Faturado"</td></tr>
+  <tr><td>8</td><td>Usuário sem permissão tenta emitir</td><td class="ok">OK — Consultor e RH recebem "acesso negado" (403); não veem o menu; banco recusa gravação</td></tr>
+  <tr><td>9</td><td>Abrir serviço faturado</td><td class="ok">OK — o cartão da Irrigação mostra "FAT-2026-0002 · Faturado" e abre o faturamento</td></tr>
+  <tr><td>10</td><td>Abrir faturamento</td><td class="ok">OK — mostra origem (serviço), cliente/CPF, parcelas do Financeiro, pagamentos, documento fiscal e histórico fiscal</td></tr>
+</table>
+<p><strong>Também testado:</strong></p>
+<ul>
+  <li>20 regras do banco. Exemplos: o Gerente não consegue "forjar" nota emitida; ninguém apaga faturamento ou pagamento; faturamento cancelado fica congelado.</li>
+  <li>Validação na ordem pedida: um CPF inválido do cliente bloqueou a emissão com mensagem clara.</li>
+  <li>"Em processamento" → a consulta achou a nota autorizada, sem reenviar.</li>
+  <li>Cancelamento sem motivo é recusado.</li>
+  <li>Sem provedor configurado, a emissão é bloqueada com aviso.</li>
+  <li><strong>Sincronização:</strong> um faturamento criado "no outro computador" apareceu na tela sozinho, sem recarregar.</li>
+  <li>Painel do Dashboard e os 9 relatórios, conferidos com os dados de teste.</li>
+  <li>Regressão de todas as abas nos 4 cargos: 64 aberturas, 0 erros.</li>
+</ul>
+
+<h2 class="pb">Arquivos criados</h2>
+<table>
+  <tr><th>Arquivo</th><th>Para que serve</th></tr>
+  <tr><td class="mono">frontend/src/pages/Billing.tsx</td><td>Tela Faturamento (painel, abas, filtros, lista, Documentos Fiscais)</td></tr>
+  <tr><td class="mono">frontend/src/pages/FiscalSettings.tsx</td><td>Tela Configuração Fiscal (só Administrador)</td></tr>
+  <tr><td class="mono">frontend/src/components/billing/BillingForm.tsx</td><td>Formulário em 4 etapas (cliente/origem, itens, pagamento/parcelas, documento fiscal)</td></tr>
+  <tr><td class="mono">frontend/src/components/billing/BillingDetail.tsx</td><td>Detalhe: parcelas, pagamento, documento fiscal, histórico, cancelamento</td></tr>
+  <tr><td class="mono">frontend/src/components/billing/BillServiceButton.tsx</td><td>Botão "Faturar serviço" / selo do faturamento nas telas de serviço</td></tr>
+  <tr><td class="mono">frontend/src/components/billing/BillingDashboardPanel.tsx</td><td>9 indicadores no Dashboard</td></tr>
+  <tr><td class="mono">frontend/src/components/billing/BillingReports.tsx</td><td>9 relatórios com Excel e PDF</td></tr>
+  <tr><td class="mono">frontend/src/lib/billing/types.ts · calc.ts · sources.ts · service.ts</td><td>Modelo de dados, cálculos (parcelas, status), origens e operações no banco</td></tr>
+  <tr><td class="mono">frontend/src/lib/billing/billing.test.ts</td><td>5 testes automáticos dos cálculos</td></tr>
+  <tr><td class="mono">backend/services/fiscalService.ts</td><td>Interface FiscalService (emitirNfse, emitirNfe, consultar, cancelar, baixarXml, baixarPdf) + provedor "não configurado" + "simulado"</td></tr>
+  <tr><td class="mono">backend/controllers/fiscalController.ts · routes/fiscalRoutes.ts</td><td>Emissão, consulta, nova tentativa e cancelamento (validação, duplicidade, XML/PDF, eventos, auditoria)</td></tr>
+</table>
+
+<h2>Arquivos modificados</h2>
+<ul>
+  <li><span class="mono">firestore.rules</span>: regras das coleções novas.</li>
+  <li><span class="mono">lib/permissions.ts</span>: permissões <span class="mono">faturamento.*</span>, <span class="mono">fiscal.*</span> e <span class="mono">relatorios.*</span>.</li>
+  <li><span class="mono">constants/navigation.ts</span> e <span class="mono">MainApp.tsx</span>: menus.</li>
+  <li><span class="mono">Financial.tsx</span>: selo do faturamento; baixa integrada; formas de pagamento novas.</li>
+  <li><span class="mono">types.ts</span>, <span class="mono">Dashboard.tsx</span>, <span class="mono">Reports.tsx</span>, <span class="mono">Inventory.tsx</span> (campos fiscais).</li>
+  <li>As 8 telas de serviço (botão "Faturar serviço").</li>
+  <li><span class="mono">backend/server.ts</span> (rota <span class="mono">/api/fiscal</span>), <span class="mono">.env.example</span> e <span class="mono">package.json</span>.</li>
+</ul>
+
+<h2>Coleções do banco (Firestore) — todas em tempo real</h2>
+<table>
+  <tr><th>Coleção</th><th>Conteúdo</th><th>Quem grava</th></tr>
+  <tr><td class="mono">billings</td><td>Faturamentos (nº FAT-AAAA-NNNN, itens, parcelas, status, resumo fiscal)</td><td>Gerente/Admin (resumo fiscal: só o servidor)</td></tr>
+  <tr><td class="mono">financials</td><td><em>Já existia.</em> Cada parcela = uma conta a receber (id FAT-…-P1, -P2…)</td><td>Gerente/Admin</td></tr>
+  <tr><td class="mono">payments</td><td>Pagamentos (permanentes)</td><td>Gerente/Admin</td></tr>
+  <tr><td class="mono">fiscal_documents</td><td>Notas: tipo, status, número, série, chave, protocolo, link, XML, PDF, mensagens</td><td>Só o servidor</td></tr>
+  <tr><td class="mono">fiscal_events</td><td>Histórico fiscal (emissão, rejeição, consulta, cancelamento)</td><td>Só o servidor</td></tr>
+  <tr><td class="mono">fiscal_settings</td><td>Configuração fiscal da empresa e por tipo de serviço</td><td>Só Administrador</td></tr>
+  <tr><td class="mono">inventory_items</td><td><em>Já existia.</em> Produtos ganharam código, preço de venda, NCM, CEST, CFOP, origem</td><td>Gestão</td></tr>
+  <tr><td class="mono">file_blobs · logs</td><td><em>Já existiam.</em> XML/PDF das notas e auditoria de cada evento</td><td>—</td></tr>
+</table>
+<p>Obs.: os nomes seguem o padrão real do projeto (minúsculas com "_", como <span class="mono">field_visits</span>). Os itens ficam dentro do faturamento, e as contas a receber reutilizam o Financeiro, em vez de criar <span class="mono">billingItems</span> e <span class="mono">receivables</span> separados.</p>
+
+<h2>Componentes reaproveitados</h2>
+<ul>
+  <li>Telas: PageHeader, ServiceKpiCards (mini painel), WizardSteps (etapas), ExportExcelButton / exportToExcel.</li>
+  <li>Lógica: logAudit (auditoria), toast, runExclusive (trava de duplo clique), formGuards (validação geral).</li>
+  <li>Arquivos e PDF: fileStore (XML/PDF no mesmo padrão dos documentos de cliente), marca da empresa nos PDFs (pdfBranding).</li>
+  <li>Permissões: cargo efetivo (effectiveRole) e requireManager no servidor.</li>
+</ul>
+
+<h2>Integrações criadas</h2>
+<ul>
+  <li>Serviços → Faturamento: botão com pré-preenchimento e selo "já faturado".</li>
+  <li>Faturamento ↔ Financeiro: contas a receber; baixa pelos dois lados.</li>
+  <li>Faturamento → Servidor → FiscalService → provedor: plugável.</li>
+  <li>Faturamento → Dashboard e Relatórios.</li>
+  <li>Estoque → itens de produto do faturamento.</li>
+</ul>
+
+<h2 class="pb">Variáveis de ambiente para quando escolher o provedor fiscal</h2>
+<p>Ficam no arquivo de chaves <span class="mono">.env.local</span> (fora do Git, fora do instalador e nunca dentro das telas). Hoje ficam <strong>vazias</strong>, então a emissão está desligada e o resto do Faturamento funciona normalmente.</p>
+<table>
+  <tr><th>Variável</th><th>O que colocar</th></tr>
+  <tr><td class="mono">FISCAL_PROVIDER</td><td>Nome do provedor contratado (vazio = desligado; <span class="mono">simulado</span> = só testes)</td></tr>
+  <tr><td class="mono">FISCAL_API_URL</td><td>Endereço da API do provedor</td></tr>
+  <tr><td class="mono">FISCAL_API_KEY</td><td>Chave/token do provedor</td></tr>
+  <tr><td class="mono">FISCAL_ENVIRONMENT</td><td><span class="mono">homologacao</span> (testes) ou <span class="mono">producao</span> (notas reais)</td></tr>
+  <tr><td class="mono">FISCAL_CERT_PATH / FISCAL_CERT_PASSWORD</td><td>Só se o provedor exigir certificado digital A1: arquivo .pfx na pasta protegida de chaves e a senha dele</td></tr>
+</table>
+<p>Ao escolher o provedor, um programador precisa criar a "ponte" para ele no arquivo <span class="mono">backend/services/fiscalService.ts</span>. O lugar já está marcado no código. Nada mais no sistema muda.</p>
+
+<h2>Pendências — o que depende de você</h2>
+<ol>
+  <li><strong>Publicar as regras do banco</strong> (agora incluem o Faturamento): dê dois cliques em <span class="mono">5-publicar-regras.bat</span>, digite <strong>SIM</strong> e aperte Enter. Sem isso o Faturamento não grava no banco real.</li>
+  <li><strong>Preencher a Configuração Fiscal</strong> (menu Administrativo → Configuração Fiscal) com o seu contador: CNPJ, inscrição municipal, códigos de serviço e alíquotas.</li>
+  <li><strong>Escolher o provedor fiscal</strong> (a empresa que transmite as notas) quando quiser emitir notas pelo sistema. Até lá, dá para faturar, parcelar e receber normalmente.</li>
+  <li><strong>Enviar ao GitHub</strong> os commits desta noite (só neste computador por enquanto).</li>
+  <li>Continuam valendo as pendências da auditoria de segurança: instalar as chaves em cada PC, fechar o app para eu atualizar o Electron, e a decisão sobre o xlsx.</li>
+</ol>
+
+<div class="box warn">
+  <strong>Pontos de atenção</strong>
+  <ul>
+    <li><strong>Pagamento parcial de uma parcela</strong> ainda não existe. Cada parcela é paga inteira; para receber em partes, divida em mais parcelas.</li>
+    <li><strong>Nota do tipo "serviço + produto":</strong> cada faturamento gera um tipo de nota. Se precisar das duas notas, fature o serviço e o produto separadamente.</li>
+    <li><strong>Regularização e Avaliação de Imóveis</strong> não têm campo de valor no cadastro. O faturamento abre com valor zero para você digitar.</li>
+  </ul>
+</div>
+
+<div class="footer"><span>Gerado em {{DATA}}</span><span>Faturamento e documentos fiscais · AgroGestão Pro</span></div>
+</body>
+</html>
