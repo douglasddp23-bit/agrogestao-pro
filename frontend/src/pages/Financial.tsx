@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { runExclusive } from '../lib/submitGuard';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   DollarSign, 
@@ -62,6 +63,7 @@ export default function Financial() {
 
 function FinancialContent() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<FinancialRecord[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -564,6 +566,25 @@ function FinancialContent() {
       toast.error("Somente gestores ou administradores podem alterar faturamentos.");
       return;
     }
+    // Conta a receber de um faturamento: o pagamento é registrado no Faturamento
+    // (grava o pagamento, baixa esta conta e atualiza o status do faturamento).
+    // Cancelar só pelo faturamento — evita contas "soltas" do faturamento.
+    if (record.billingId) {
+      if (nextStatus !== 'paid') {
+        toast.error(`Esta conta pertence ao faturamento ${record.billingNumber || record.billingId}. Cancele pelo módulo Faturamento.`);
+        return;
+      }
+      try {
+        const { registerPayment } = await import('../lib/billing/service');
+        await registerPayment(record.billingId, Number(record.installmentNumber) || 1,
+          { method: (record.paymentMethod as any) || 'pix', paidAt: todayLocalDateString(), notes: 'Baixa feita pela tela Financeiro' },
+          { uid: user?.uid || '', displayName: user?.displayName, email: user?.email });
+        toast.success(`Pagamento registrado (${record.billingNumber} — parcela ${record.installmentNumber}).`);
+      } catch (e: any) {
+        toast.error(e?.message || 'Não foi possível registrar o pagamento.');
+      }
+      return;
+    }
     try {
       await updateDoc(doc(db, 'financials', record.id), {
         status: nextStatus,
@@ -1044,9 +1065,15 @@ function FinancialContent() {
                         <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 mt-1 inline-block">
                           {item.category}
                         </span>
+                        {item.billingId && (
+                          <a href={`/billing?abrir=${item.billingId}`} onClick={(e) => { e.preventDefault(); navigate(`/billing?abrir=${item.billingId}`); }}
+                            className="ml-1 text-[9px] font-bold uppercase tracking-wider text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-100 mt-1 inline-block hover:underline" data-financial-billing={item.billingId}>
+                            {item.billingNumber} · parcela {item.installmentNumber}
+                          </a>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-xs uppercase font-mono text-slate-500 whitespace-nowrap">
-                        {item.paymentMethod || 'Dinheiro'}
+                        {({ pix: 'Pix', dinheiro: 'Dinheiro', cartao_credito: 'Cartão crédito', cartao_debito: 'Cartão débito', transferencia: 'Transferência', boleto: 'Boleto', cheque: 'Cheque', outros: 'Outros' } as Record<string, string>)[item.paymentMethod || ''] || item.paymentMethod || '—'}
                       </td>
                       <td className="px-6 py-4 text-center whitespace-nowrap">
                         <span className={`px-2.5 py-1 text-[10px] font-bold border rounded-lg uppercase tracking-wider ${status.color}`}>
@@ -1073,7 +1100,7 @@ function FinancialContent() {
                               </button>
                             )}
                             
-                            {item.status !== 'cancelled' && (
+                            {item.status !== 'cancelled' && !item.billingId && (
                               <button
                                 onClick={() => handleToggleState(item, 'cancelled')}
                                 className="p-1 text-slate-400 hover:bg-slate-50 rounded"
@@ -1083,7 +1110,7 @@ function FinancialContent() {
                               </button>
                             )}
 
-                            {(user?.effectiveRole ?? user?.role) === 'admin' && (
+                            {(user?.effectiveRole ?? user?.role) === 'admin' && !item.billingId && (
                             <button
                               onClick={() => setIsDeleteModalOpen(item.id)}
                               className="p-1 text-rose-500 hover:bg-rose-50 rounded"
@@ -1532,6 +1559,9 @@ function FinancialContent() {
                         <option value="transferencia">Transferência Bancária</option>
                         <option value="dinheiro">Dinheiro vivo</option>
                         <option value="cheque">Cheque Rural</option>
+                        <option value="cartao_credito">Cartão de crédito</option>
+                        <option value="cartao_debito">Cartão de débito</option>
+                        <option value="outros">Outros</option>
                       </select>
                     </div>
 

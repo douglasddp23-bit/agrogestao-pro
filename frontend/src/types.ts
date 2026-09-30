@@ -337,7 +337,7 @@ export interface FieldVisit {
 
 // ─── FINANCEIRO ──────────────────────────────────────────────────────
 export type FinancialStatus = 'pending' | 'paid' | 'overdue' | 'cancelled';
-export type PaymentMethod = 'pix' | 'boleto' | 'transferencia' | 'dinheiro' | 'cheque';
+export type PaymentMethod = 'pix' | 'boleto' | 'transferencia' | 'dinheiro' | 'cheque' | 'cartao_credito' | 'cartao_debito' | 'outros';
 export type FinancialCategory = 'analysis' | 'irrigation' | 'topography' | 'credit' | 'regularization' | 'field_visit' | 'contract' | 'expense_report' | 'other';
 
 export interface FinancialRecord {
@@ -361,6 +361,10 @@ export interface FinancialRecord {
   nfse?: string;                   // número da NF-Se
   isExpense?: boolean;             // indica se é uma despesa/saída
   approvedByAdmin?: boolean;       // indica se foi aprovado pelo admin
+  // Conta a receber gerada pelo módulo Faturamento (id fixo FAT-AAAA-NNNN-Pn)
+  billingId?: string;
+  billingNumber?: string;
+  installmentNumber?: number;
 }
 
 // ─── RELATÓRIO DE DESPESAS ──────────────────────────────────────────

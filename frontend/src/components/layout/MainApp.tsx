@@ -45,6 +45,8 @@ const PAGE_LOADERS: Record<string, () => Promise<{ default: React.ComponentType<
   analysis_credit: () => import('../../pages/RuralCredit'),
   rural_valuation: () => import('../../pages/RuralPropertyValuation'),
   financial: () => import('../../pages/Financial'),
+  billing: () => import('../../pages/Billing'),
+  fiscal_settings: () => import('../../pages/FiscalSettings'),
   reports: () => import('../../pages/Reports'),
   inventory: () => import('../../pages/Inventory'),
   hr: () => import('../../pages/HR'),
@@ -70,6 +72,8 @@ const ClientsPage = React.lazy(PAGE_LOADERS.clients);
 const ContractsPage = React.lazy(PAGE_LOADERS.contracts);
 const DocumentsPage = React.lazy(PAGE_LOADERS.documents);
 const FinancialPage = React.lazy(PAGE_LOADERS.financial);
+const BillingPage = React.lazy(PAGE_LOADERS.billing);
+const FiscalSettingsPage = React.lazy(PAGE_LOADERS.fiscal_settings);
 const HRPage = React.lazy(PAGE_LOADERS.hr);
 const InventoryPage = React.lazy(PAGE_LOADERS.inventory);
 const IrrigationPage = React.lazy(PAGE_LOADERS.analysis_irrigation);
@@ -104,7 +108,7 @@ const shakeVariants = {
   }
 };
 
-type Page = 'dashboard' | 'clients' | 'scheduling' | 'analysis' | 'analysis_irrigation' | 'analysis_documentation' | 'analysis_topography' | 'analysis_credit' | 'judicial-expertise' | 'judicial_expertise' | 'rural-valuation' | 'rural_valuation' | 'hr' | 'messages' | 'documents' | 'users' | 'profile' | 'financial' | 'inventory' | 'field_visits' | 'contracts' | 'reports' | 'vehicles' | 'audit_logs';
+type Page = 'dashboard' | 'clients' | 'scheduling' | 'analysis' | 'analysis_irrigation' | 'analysis_documentation' | 'analysis_topography' | 'analysis_credit' | 'judicial-expertise' | 'judicial_expertise' | 'rural-valuation' | 'rural_valuation' | 'hr' | 'messages' | 'documents' | 'users' | 'profile' | 'financial' | 'billing' | 'fiscal_settings' | 'inventory' | 'field_visits' | 'contracts' | 'reports' | 'vehicles' | 'audit_logs';
 
 const getRoleBadgeClass = (role?: UserRole) => {
   switch (role) {
@@ -517,6 +521,8 @@ export default function MainApp() {
       case 'documents': return <DocumentsPage />;
       case 'profile': return <ProfilePage />;
       case 'financial': return <FinancialPage />;
+      case 'billing': return <BillingPage />;
+      case 'fiscal_settings': return <FiscalSettingsPage />;
       case 'inventory': return <InventoryPage />;
       case 'field_visits': return <FieldVisitsPage />;
       case 'contracts': return <ContractsPage />;

@@ -2,7 +2,7 @@ import {
   LayoutDashboard, Users, ClipboardCheck, Map, Droplet, FileText,
   UsersRound, Clock, Wallet, ShieldCheck, DollarSign, BarChart3,
   Package, ClipboardList, FilePen, Car,
-  CalendarDays, History, Scale, Landmark
+  CalendarDays, History, Scale, Landmark, Receipt, FileCog
 } from 'lucide-react';
 import { UserRole } from '../lib/permissions';
 
@@ -31,6 +31,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'rural_valuation',        key: 'rural_valuation',     label: 'Avaliação de Imóveis',   icon: Landmark,        group: 'Serviços' },
 
   { id: 'financial',              key: 'financial',           label: 'Financeiro',             icon: DollarSign,      group: 'Gestão' },
+  { id: 'billing',                key: 'billing',             label: 'Faturamento',            icon: Receipt,         group: 'Gestão' },
   { id: 'reports',                key: 'reports',             label: 'Relatórios',             icon: BarChart3,       group: 'Gestão' },
   { id: 'inventory',              key: 'inventory',           label: 'Estoque / Insumos',      icon: Package,         group: 'Gestão' },
 
@@ -40,5 +41,6 @@ export const NAV_ITEMS: NavItem[] = [
 
   { id: 'contracts',              key: 'contracts',           label: 'Contratos',              icon: FilePen,         group: 'Administrativo' },
   { id: 'documents',              key: 'documents',           label: 'Documentos',             icon: FileText,        group: 'Administrativo' },
+  { id: 'fiscal_settings',        key: 'fiscal_settings',     label: 'Configuração Fiscal',    icon: FileCog,         group: 'Administrativo' },
   { id: 'audit_logs',             key: 'audit_logs',          label: 'Auditoria Global',       icon: History,         group: 'Administrativo' },
 ];
