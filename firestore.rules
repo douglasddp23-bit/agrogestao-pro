@@ -457,18 +457,10 @@ service cloud.firestore {
     // --- Contratos (só Gerente e Administrador; consultor/RH não vêem valores) ---
     match /contracts/{id} {
       allow list: if isManager();
-      // Leitura pública por ID só de contrato aprovado/ativo: é o link de assinatura
-      // remota (/assinar/ID). O ID é aleatório e longo (não dá para adivinhar).
-      allow get: if isValidId(id) && (isManager() || existing().status in ['approved', 'active', 'ativo', 'completed', 'concluido']);
+      // Sem leitura pública: o link de assinatura remota foi desligado (30/09/2026).
+      allow get: if isValidId(id) && isManager();
       allow create: if isManager() && isValidId(id);
-      allow update: if isValidId(id) && (isManager() || (
-        existing().status == 'approved' &&
-        incoming().status == 'active' &&
-        incoming().signatureBase64 is string && incoming().signatureBase64.size() <= 500000 &&
-        incoming().signedByName is string && incoming().signedByName.size() <= 200 &&
-        incoming().signedAt is string &&
-        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'signatureBase64', 'signedByName', 'signedAt', 'updatedAt'])
-      ));
+      allow update: if isValidId(id) && isManager();
       // Antes qualquer consultor (e depois o RH/Gerente) podia excluir contratos.
       allow delete: if isAdmin() && isValidId(id);
     }

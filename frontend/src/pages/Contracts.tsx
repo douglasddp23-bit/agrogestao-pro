@@ -2867,54 +2867,14 @@ export default function Contracts() {
                                 </button>
                               </div>
 
-                              {/* Option 2: Remota */}
-                              <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-xs flex flex-col items-center text-center">
-                                <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest block mb-1">Opção Remota</span>
-                                <h5 className="text-xs font-bold text-slate-700 font-display">Assinar por Celular</h5>
-                                <p className="text-[10px] text-slate-455 mt-1 leading-normal max-w-[200px] mx-auto">
-                                  Compartilhe o link de acesso seguro ou exiba o QR Code para assinatura remota via dispositivo móvel do cliente.
+                              {/* Assinatura remota por link: desativada até a versão no aplicativo (decisão de 30/09/2026).
+                                  Antes o link abria o contrato sem login e o QR Code era gerado num site externo. */}
+                              <div className="bg-slate-50 p-5 rounded-2xl border border-dashed border-slate-200 flex flex-col items-center justify-center text-center">
+                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Em breve</span>
+                                <h5 className="text-xs font-bold text-slate-600 font-display">Assinar por Celular</h5>
+                                <p className="text-[10px] text-slate-500 mt-1 leading-normal max-w-[220px] mx-auto">
+                                  A assinatura pelo celular do cliente chegará numa próxima versão do aplicativo. Por enquanto, colha a assinatura na tela atual.
                                 </p>
-                                
-                                <div className="mt-3.5 w-full space-y-2.5">
-                                  {/localhost|127\.0\.0\.1/.test(window.location.origin) && (
-                                    <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg text-[9px] text-amber-800 font-semibold text-left">
-                                      Atenção: este link só abre neste computador. Para o cliente assinar pelo celular, o sistema precisa estar publicado na internet. Por enquanto, colha a assinatura presencialmente.
-                                    </div>
-                                  )}
-                                  {/* Link container */}
-                                  <div className="flex gap-1.5 items-center">
-                                    <input 
-                                      type="text" 
-                                      readOnly 
-                                      value={window.location.origin + '/assinar/' + selectedContract.id}
-                                      className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-[9px] font-mono text-slate-500 focus:outline-none"
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const url = window.location.origin + '/assinar/' + selectedContract.id;
-                                        navigator.clipboard.writeText(url);
-                                        toast.success('Link de assinatura copiado com sucesso!');
-                                      }}
-                                      className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-[9px] font-bold uppercase cursor-pointer whitespace-nowrap"
-                                    >
-                                      Copiar
-                                    </button>
-                                  </div>
-
-                                  {/* QR Code trigger */}
-                                  <div className="pt-1.5 flex flex-col items-center">
-                                    <img 
-                                      src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(window.location.origin + '/assinar/' + selectedContract.id)}`} 
-                                      alt="QR Code de Assinatura"
-                                      className="w-16 h-16 border border-slate-200 p-1 rounded-lg shadow-xs"
-                                      referrerPolicy="no-referrer"
-                                    />
-                                    <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider mt-1.5 flex items-center gap-1">
-                                      <Smartphone className="w-3 h-3 text-emerald-500 animate-pulse" /> Escanear com celular
-                                    </span>
-                                  </div>
-                                </div>
                               </div>
                             </div>
                           </div>

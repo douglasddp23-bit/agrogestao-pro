@@ -32,7 +32,8 @@ function AuthWrapper() {
   }, []);
 
   // Intercept public remote signature route before anything else
-  const isRemoteSign = window.location.pathname.startsWith('/assinar/');
+  // Assinatura remota por link desligada (30/09/2026) — volta na versão do aplicativo.
+  const isRemoteSign = false && window.location.pathname.startsWith('/assinar/');
 
   if (isRemoteSign) {
     const contractId = window.location.pathname.split('/').pop() || '';
