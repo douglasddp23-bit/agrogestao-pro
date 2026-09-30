@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Auditoria de Segurança</title>
+<style>
+  @page { size: A4; margin: 15mm 14mm 17mm 14mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; color: #1e293b; font-size: 10pt; line-height: 1.45; margin: 0; }
+  .banner { background: #10b981; color: #fff; border-radius: 10px; padding: 14px 18px; display: flex; align-items: center; gap: 16px; }
+  .logo { width: 64px; height: 64px; background: #fff; border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
+  .logo img { max-width: 58px; max-height: 58px; }
+  .logo span { color: #10b981; font-weight: 800; font-size: 34px; }
+  .banner h1 { margin: 0; font-size: 17pt; }
+  .banner p { margin: 2px 0 0; font-size: 9.5pt; }
+  .doc-title { text-align: center; margin: 16px 0 3px; font-size: 15pt; font-weight: 800; }
+  .doc-sub { text-align: center; color: #64748b; font-size: 9pt; margin-bottom: 12px; }
+  h2 { font-size: 12.5pt; color: #047857; border-bottom: 2px solid #d1fae5; padding-bottom: 3px; margin: 18px 0 8px; page-break-after: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 10px; font-size: 8.8pt; }
+  th { background: #1e293b; color: #fff; text-align: left; padding: 4px 6px; }
+  td { border-bottom: 1px solid #e2e8f0; padding: 4px 6px; vertical-align: top; }
+  tr { page-break-inside: avoid; }
+  .item { border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px; margin: 8px 0; page-break-inside: avoid; }
+  .item h3 { margin: 0 0 4px; font-size: 10.5pt; display: flex; justify-content: space-between; gap: 8px; }
+  .tag { font-size: 7.8pt; font-weight: 800; padding: 1px 7px; border-radius: 10px; white-space: nowrap; text-transform: uppercase; letter-spacing: .03em; }
+  .t-ok { background: #d1fae5; color: #047857; }
+  .t-fix { background: #fef3c7; color: #92400e; }
+  .t-pend { background: #fee2e2; color: #b91c1c; }
+  .row { margin: 2px 0; }
+  .row b { display: inline-block; min-width: 88px; color: #475569; }
+  .box { border: 1px solid #a7f3d0; background: #ecfdf5; border-radius: 8px; padding: 9px 12px; margin: 8px 0; page-break-inside: avoid; }
+  .warn { border-color: #fecaca; background: #fff1f2; }
+  .mono { font-family: Consolas, monospace; font-size: 8.8pt; background: #f1f5f9; padding: 0 3px; border-radius: 3px; }
+  ul, ol { margin: 4px 0 8px 18px; padding: 0; }
+  li { margin: 2px 0; }
+  .small { font-size: 8.3pt; color: #64748b; }
+  .pb { page-break-before: always; }
+  .footer { margin-top: 20px; border-top: 1px solid #e2e8f0; padding-top: 6px; font-size: 8pt; color: #94a3b8; display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+<div class="banner"><div class="logo">{{LOGO_HTML}}</div><div><h1>{{EMPRESA}}</h1><p>{{FRASE}}</p></div></div>
+<div class="doc-title">AUDITORIA DE SEGURANÇA — 19 ITENS</div>
+<div class="doc-sub">30/09/2026 · antes de gerar o instalador · correções testadas no aplicativo de verdade, com banco de TESTE (nenhum dado real usado)</div>
+
+<div class="box">
+  <strong>Resumo</strong>
+  <ul>
+    <li><strong>Os 19 itens foram verificados.</strong> 14 foram corrigidos, 1 foi corrigido em parte e 4 já estavam corretos. Ficam pendências que dependem de uma ação ou decisão sua (seção final).</li>
+    <li><strong>Falhas mais graves encontradas e corrigidas:</strong>
+      <ul>
+        <li>era possível <strong>escapar do limite de tentativas de senha</strong> inventando um endereço de computador diferente a cada tentativa;</li>
+        <li>o arquivo do <strong>servidor e o mapa do código-fonte</strong> podiam ser baixados pelo navegador;</li>
+        <li>um site aberto no mesmo computador <strong>conseguia mandar pedidos</strong> para o sistema;</li>
+        <li>arquivos disfarçados (uma página com código malicioso renomeada para <em>.pdf</em> ou <em>.jpg</em>) eram <strong>aceitos no envio</strong>;</li>
+        <li>a sessão de login <strong>nunca expirava</strong> enquanto o app ficasse aberto;</li>
+        <li>o <strong>instalador levaria as chaves secretas</strong> (senha do e-mail, chave da IA) dentro dele.</li>
+      </ul>
+    </li>
+    <li><strong>Testes feitos:</strong>
+      <ul>
+        <li>36 ataques contra o servidor e 22 ataques direto no banco, todos bloqueados;</li>
+        <li>envio de arquivos falsos em 2 telas;</li>
+        <li>abertura de todas as abas com os 4 cargos, sem nenhuma quebra;</li>
+        <li>cadastro real em 11 telas, todos gravando normalmente.</li>
+      </ul>
+    </li>
+    <li><strong>5 blocos de segurança e os 2 pedidos novos gravados no histórico (Git)</strong> — ainda não enviados ao GitHub.</li>
+  </ul>
+</div>
+
+<h2>Os 19 itens</h2>
+
+<div class="item"><h3>1. Chaves secretas (.env, service-account.json) <span class="tag t-fix">corrigido</span></h3>
+  <div class="row"><b>Encontrado:</b> as chaves nunca foram para o Git (histórico conferido) nem para dentro das telas (código do app conferido). Mas o <strong>instalador copiava o .env.local</strong> — com a senha do e-mail e a chave da IA — para a pasta do programa.</div>
+  <div class="row"><b>Corrigido:</b> o instalador não leva mais nenhuma chave. Em cada computador, as chaves ficam numa pasta protegida do Windows (<span class="mono">%APPDATA%\AgroGestaoPro</span>), que só o seu usuário do Windows consegue abrir. Novo arquivo <span class="mono">8-instalar-chaves-neste-pc.bat</span> faz a cópia. Nenhuma chave pode ser aberta por endereço no navegador (testado).</div>
+</div>
+
+<div class="item"><h3>2. Validação nas telas <span class="tag t-fix">corrigido</span></h3>
+  <div class="row"><b>Encontrado:</b> CPF e campos obrigatórios já eram conferidos, mas campos de número aceitavam valores negativos em várias telas, e o cadastro do RH não conferia e-mail nem telefone.</div>
+  <div class="row"><b>Corrigido:</b> nova conferência geral, que vale para todos os formulários do sistema:
+    <ul>
+      <li>números sem negativo;</li>
+      <li>e-mail no formato certo;</li>
+      <li>datas com ano válido;</li>
+      <li>tamanho máximo em todos os campos de texto.</li>
+    </ul>
+    No RH, passam a ser conferidos também o e-mail e o telefone (DDD + número). Testado: estoque com saldo negativo é recusado com aviso claro.</div>
+</div>
+
+<div class="item"><h3>3. Validação no servidor e no banco <span class="tag t-fix">corrigido</span></h3>
+  <div class="row"><b>Encontrado:</b> as rotas do servidor já conferiam os dados; as regras do banco conferiam só parte dos campos.</div>
+  <div class="row"><b>Corrigido:</b> o banco passa a recusar:
+    <ul>
+      <li>CPF com letras ou código;</li>
+      <li>telefone com letras;</li>
+      <li>e-mail inválido;</li>
+      <li>datas fora do formato;</li>
+      <li>valores em texto no lugar de números;</li>
+      <li>textos gigantes.</li>
+    </ul>
+    Vale para clientes, serviços, financeiro, reembolsos e agendamentos. Nas rotas de IA, o tamanho do texto enviado passou a ter limite. <strong>Pendente: publicar as regras</strong> (seção final).</div>
+</div>
+
+<div class="item"><h3>4. Injeção de comandos <span class="tag t-ok">já estava correto</span></h3>
+  <div class="row"><b>Verificado:</b> todas as buscas no banco usam filtros com parâmetros (não montam texto de comando). Nomes de coleções vêm só do próprio código. O único programa externo chamado (gerador de PDF) recebe os dados separados, sem passar pelo prompt de comando. Nenhuma tela insere HTML vindo do usuário.</div>
+  <div class="row"><b>Reforço:</b> códigos usados em endereços internos passaram a ser sempre "escapados".</div>
+</div>
+
+<div class="item"><h3>5. Autenticação <span class="tag t-fix">corrigido</span></h3>
+  <div class="row"><b>Encontrado:</b> senha com hash e troca a cada 30 dias funcionando. Mas a sessão nunca expirava enquanto o app ficasse aberto, e ainda existiam restos da antiga "sessão virtual", em que a tela confiava num perfil gravado no navegador.</div>
+  <div class="row"><b>Corrigido:</b>
+    <ul>
+      <li>a sessão agora dura no máximo <strong>12 horas</strong> desde o login, conferidas pela tela, pelo servidor e pelo banco (testado com uma sessão de 13 h: recusada);</li>
+      <li>a saída por 1 hora de inatividade continua valendo;</li>
+      <li>a "sessão virtual" foi removida;</li>
+      <li>a criação de "usuário virtual" (conta sem login real) foi desativada.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="item"><h3>6. Acesso a dados de outros (IDOR) <span class="tag t-fix">corrigido</span></h3>
+  <div class="row"><b>Encontrado:</b> as regras do banco já conferem o dono de cada registro. Havia uma brecha no servidor: a verificação de prazos devolvia a qualquer consultor a lista de contratos com valores.</div>
+  <div class="row"><b>Corrigido:</b> essa rota agora é só para Gerente e Administrador. A "Raio-X" (tela retirada) só pode ser alterada pela gestão. Testado: o consultor não lê contratos, financeiro, senhas ou ficha confidencial de outros, e não cria registros em nome de outra pessoa.</div>
+</div>
+
+<div class="item"><h3>7. Senhas no banco <span class="tag t-ok">já estava correto</span></h3>
+  <div class="row"><b>Verificado:</b> toda senha é guardada só como hash bcrypt, numa área do banco que as telas não conseguem ler. Senhas antigas no formato fraco são convertidas no próximo login. A senha temporária não aparece nos registros do servidor; ela só é mostrada uma vez ao administrador que criou o acesso.</div>
+  <div class="row"><b>Atenção:</b> o backup diário leva os hashes (necessários para restaurar os logins). Mantenha a pasta de backup no OneDrive, protegida.</div>
+</div>
+
+<div class="item"><h3>8. Força bruta <span class="tag t-fix">corrigido</span></h3>
+  <div class="row"><b>Encontrado:</b> havia limite por computador + conta, mas o servidor aceitava um "endereço" informado pelo próprio atacante — trocando-o a cada tentativa, o limite nunca era atingido.</div>
+  <div class="row"><b>Corrigido:</b> o endereço não pode mais ser inventado. Agora há três limites:
+    <ul>
+      <li>5 senhas erradas por conta e computador;</li>
+      <li>10 senhas erradas por conta, de qualquer lugar;</li>
+      <li>30 tentativas por computador.</li>
+    </ul>
+    Todos contam em janelas de 15 minutos. Testado: o ataque com endereço falso foi bloqueado na 6ª tentativa.</div>
+</div>
+
+<div class="item"><h3>9. Duplo clique / duplo envio <span class="tag t-fix">corrigido</span></h3>
+  <div class="row"><b>Encontrado:</b> a maioria dos formulários já estava travada. Faltavam:
+    <ul>
+      <li>Agendamentos: salvar, confirmar e cancelar;</li>
+      <li>a janela "Excluir", que durante o fechamento aceitava um 2º clique;</li>
+      <li>marcar como pago;</li>
+      <li>aprovar ou recusar férias;</li>
+      <li>bloquear usuário e redefinir senha;</li>
+      <li>salvar a marca e a assinatura;</li>
+      <li>o chat da IA.</li>
+    </ul>
+  </div>
+  <div class="row"><b>Corrigido:</b> todos travados. Testado: 3 cliques rápidos gravaram 1 registro só.</div>
+</div>
+
+<div class="item"><h3>10. Pedidos forjados por outro site (CSRF) <span class="tag t-fix">corrigido</span></h3>
+  <div class="row"><b>Encontrado:</b> o login não usa cookies (usa um token enviado pela própria tela), o que já impede o ataque clássico. Mesmo assim, as rotas públicas (login) aceitavam pedidos vindos de qualquer site aberto no mesmo PC. Também dava para enganar o endereço do servidor ("DNS rebinding").</div>
+  <div class="row"><b>Corrigido:</b> o servidor só aceita alterações vindas do próprio app. Ele confere a origem, o tipo de dado e o nome do endereço. Testado: pedidos de outro site, formulário comum e endereço falso foram todos recusados.</div>
+</div>
+
+<div class="item"><h3>11. Envio de arquivos <span class="tag t-fix">corrigido</span></h3>
+  <div class="row"><b>Encontrado:</b> só o tamanho era conferido; o tipo vinha da extensão do nome, que qualquer um pode trocar.</div>
+  <div class="row"><b>Corrigido:</b> todos os envios agora conferem o tipo real do arquivo:
+    <ul>
+      <li>documentos do dossiê;</li>
+      <li>documentos do cadastro de clientes;</li>
+      <li>fotos de visita;</li>
+      <li>foto de perfil e logo;</li>
+      <li>anexos do chat e do e-mail interno.</li>
+    </ul>
+    A conferência lê os primeiros bytes do arquivo. A extensão precisa combinar com o conteúdo, o tamanho tem limite e o nome é limpo. Arquivos de tipo desconhecido nunca abrem dentro do app, só são baixados. O banco também recusa tipos perigosos.</div>
+  <div class="row"><b>Testado:</b> página HTML renomeada para .pdf, programa renomeado para .jpg e imagem SVG com código foram recusados. PDF e PNG verdadeiros foram aceitos.</div>
+</div>
+
+<div class="item"><h3>12. Erros revelando detalhes internos <span class="tag t-fix">corrigido</span></h3>
+  <div class="row"><b>Encontrado:</b> 9 respostas do servidor devolviam a mensagem técnica do erro (e uma devolvia a resposta do provedor de WhatsApp).</div>
+  <div class="row"><b>Corrigido:</b> o usuário recebe mensagens genéricas; o detalhe técnico fica só no registro do servidor. Foi acrescentado um tratador final para qualquer erro inesperado. O servidor também deixou de se identificar como "Express". Testado: dados quebrados e pedidos gigantes recebem só "Pedido inválido" ou "Dados grandes demais".</div>
+</div>
+
+<div class="item"><h3>13. Bibliotecas com falhas conhecidas <span class="tag t-pend">parcial</span></h3>
+  <div class="row"><b>Encontrado:</b> 24 alertas (1 crítico, 15 altos, 8 moderados).</div>
+  <div class="row"><b>Corrigido:</b> nodemailer (e-mail) atualizado para a versão 10, que corrige uma falha alta; firebase-admin na última versão da série 13; correções automáticas aplicadas. Testado: servidor, login e ataques continuam iguais.</div>
+  <div class="row"><b>Pendente:</b>
+    <ul>
+      <li><strong>Electron</strong> (a "casca" do app, falha alta) e a ferramenta que monta o instalador (onde está o alerta crítico): a atualização foi travada porque o AgroGestão estava aberto neste PC. Basta fechá-lo (seção final).</li>
+      <li><strong>xlsx</strong> (planilhas Excel): a correção só existe no site do fabricante, fora da loja oficial de bibliotecas. Por segurança, não instalei sem a sua decisão. O risco é baixo: o sistema só <em>gera</em> planilhas, nunca abre planilhas recebidas.</li>
+      <li><strong>firebase-admin 14</strong>: alertas moderados e indiretos; a versão nova exige reescrever todo o servidor. Recomendo deixar para depois.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="item"><h3>14. Tokens de sessão <span class="tag t-fix">corrigido</span></h3>
+  <div class="row"><b>Encontrado:</b>
+    <ul>
+      <li>o token de login é do Firebase: dura 1 hora, é assinado pelo Google e não dá para prever;</li>
+      <li>os tokens internos do servidor (troca de senha, 2 etapas) usam gerador criptográfico e expiram em 5–15 minutos;</li>
+      <li>nenhum token aparece nos registros;</li>
+      <li>a renovação automática do Firebase não tinha limite (ver item 5).</li>
+    </ul>
+  </div>
+  <div class="row"><b>Corrigido:</b> limite de 12 horas por sessão; comparação do token de troca de senha feita de forma que não permite "adivinhar por tempo".</div>
+  <div class="row"><b>Observação:</b> o Firebase guarda a sessão no armazenamento do app (IndexedDB), não num cookie protegido. Isso é parte do Firebase. Trocar exigiria mudar a arquitetura do login (ver pendências). No app instalado, as ferramentas de desenvolvedor, que permitiriam ler esse armazenamento, foram desligadas.</div>
+</div>
+
+<div class="item"><h3>15. Limite de pedidos (rate limit) <span class="tag t-fix">corrigido</span></h3>
+  <div class="row"><b>Encontrado:</b> havia limites só em login, IA e alertas, e contados de um jeito que dava para contornar.</div>
+  <div class="row"><b>Corrigido:</b> limites contados por usuário logado em cada rota sensível:
+    <ul>
+      <li>IA: 40 a cada 15 minutos;</li>
+      <li>e-mail e WhatsApp: 30 por hora;</li>
+      <li>verificação de alertas: 10 a cada 15 minutos;</li>
+      <li>criar, bloquear e redefinir senha: 60 a cada 15 minutos;</li>
+      <li>backup manual: 6 por hora.</li>
+    </ul>
+    Além disso, há um teto geral por computador. O sistema não tem cadastro público de contas.</div>
+</div>
+
+<div class="item"><h3>16. Arquivos expostos por endereço <span class="tag t-fix">corrigido</span></h3>
+  <div class="row"><b>Encontrado:</b> <span class="mono">/server.cjs</span> e <span class="mono">/server.cjs.map</span> (o código do servidor) podiam ser baixados pelo navegador.</div>
+  <div class="row"><b>Corrigido:</b> bloqueados. O servidor só entrega as telas do app; qualquer endereço de arquivo que não existe responde "não encontrado". Testados 14 caminhos: .env, .env.local, service-account.json, backups, node_modules, package.json, regras, código do servidor e tentativas com "../". Nenhum vazou.</div>
+</div>
+
+<div class="item"><h3>17. Busca de endereços externos (SSRF) <span class="tag t-ok">já estava correto</span></h3>
+  <div class="row"><b>Verificado:</b> o servidor só acessa endereços fixos (Google/Firebase, IA) ou configurados no arquivo de chaves (WhatsApp). Nenhum endereço digitado por usuário é buscado pelo servidor. A busca de CEP é feita pela tela e só envia números.</div>
+</div>
+
+<div class="item"><h3>18. Cookies <span class="tag t-ok">já estava correto</span></h3>
+  <div class="row"><b>Verificado:</b> o sistema não usa cookies de sessão (o login vai num cabeçalho, não num cookie). Não há cookie a proteger.</div>
+</div>
+
+<div class="item"><h3>19. CORS (quais sites podem chamar o sistema) <span class="tag t-fix">corrigido</span></h3>
+  <div class="row"><b>Encontrado:</b> já liberava só o próprio app (não usava "*").</div>
+  <div class="row"><b>Corrigido/preparado:</b> a mesma lista agora também vale para a proteção contra outros sites (item 10) e para o nome do endereço. Para a <strong>sincronização entre os dois computadores</strong>, o endereço do outro PC deve ser incluído na configuração <span class="mono">ALLOWED_ORIGINS</span>. Nada fica liberado para "qualquer site".</div>
+</div>
+
+<h2 class="pb">Também feito nesta rodada (pedidos seus)</h2>
+<ul>
+  <li><strong>Proposta de Crédito — Banco do Nordeste:</strong> a lista de linhas agora é só:
+    <ul>
+      <li>Investimento Rural;</li>
+      <li>PRONAF;</li>
+      <li>PRONAF A2 (com as duas linhas);</li>
+      <li>Pronaf Custeio, Pronamp Custeio e Custeio Rural dos demais produtores.</li>
+    </ul>
+    O PRONAF A saiu da lista. Propostas antigas continuam abrindo. <em>Os outros bancos ficaram como estavam</em> — veja a pergunta na lista de pendências.</li>
+  <li><strong>Agendamentos automáticos:</strong> todo serviço com data ou prazo, de hoje em diante, aparece sozinho na aba Agendamentos, com o selo "Automático":
+    <ul>
+      <li>Análises;</li>
+      <li>Irrigação;</li>
+      <li>Topografia;</li>
+      <li>Regularização (data e prazo final);</li>
+      <li>Crédito;</li>
+      <li>Perícia (vistoria e prazo do laudo).</li>
+    </ul>
+    Se a data mudar, o agendamento acompanha; se o serviço for concluído ou cancelado, ele é fechado. Nunca duplica, nem com dois computadores. Testado.</li>
+</ul>
+
+<h2>Pendências — o que depende de você</h2>
+<ol>
+  <li><strong>Publicar as regras novas do banco</strong> (validação e limite de 12 horas). Na pasta do sistema, dê dois cliques em <span class="mono">5-publicar-regras.bat</span>, digite <strong>SIM</strong> e aperte Enter. A versão atual fica guardada para poder desfazer.</li>
+  <li><strong>Chaves em cada computador</strong> (antes de usar o instalador):
+    <ol>
+      <li>copie o <span class="mono">8-instalar-chaves-neste-pc.bat</span> para a pasta do Cofre Pessoal, onde estão o <span class="mono">.env.local</span> e o <span class="mono">service-account.json</span>;</li>
+      <li>dê dois cliques nele, em cada computador.</li>
+    </ol>
+  </li>
+  <li><strong>Fechar o AgroGestão neste PC</strong> e me avisar: eu atualizo o Electron e a ferramenta do instalador e testo de novo.</li>
+  <li><strong>Decidir sobre o xlsx:</strong> instalar a versão corrigida direto do site do fabricante (SheetJS), ou manter como está (risco baixo, ver item 13).</li>
+  <li><strong>Outros bancos</strong> (Banco do Brasil, Caixa, Sicoob, Sicredi, Cresol): devem ficar com a mesma lista simplificada do Banco do Nordeste (só custeio no Pronaf, Pronamp e demais)?</li>
+  <li><strong>Link de assinatura remota:</strong> quem tem o link de um contrato aprovado consegue abri-lo sem login (é assim que o cliente assina). O link é longo e impossível de adivinhar, mas quem o receber vê o contrato. Manter assim?</li>
+  <li><strong>Sincronização entre os dois computadores:</strong> se um PC for acessar o servidor do outro pela rede, será preciso um certificado (HTTPS) para a comunicação ir criptografada. Isso pode exigir contratar um domínio ou certificado. Vamos definir quando chegarmos nessa etapa.</li>
+  <li><strong>Enviar ao GitHub</strong> as gravações de hoje (ainda só neste computador).</li>
+</ol>
+
+<div class="box warn">
+  <strong>Recomendado para depois do lançamento (não bloqueia o instalador)</strong>
+  <ul>
+    <li>Instalador mais enxuto: hoje ele copia <em>todas</em> as bibliotecas, inclusive as ferramentas de montagem, que não são usadas pelo app. Dá para enxugar numa próxima versão.</li>
+    <li>firebase-admin 14 (item 13) e sessão em cookie protegido (item 14): mudanças grandes de arquitetura, só se desejar.</li>
+  </ul>
+</div>
+
+<div class="footer"><span>Gerado em {{DATA}}</span><span>Auditoria de segurança · AgroGestão Pro</span></div>
+</body>
+</html>

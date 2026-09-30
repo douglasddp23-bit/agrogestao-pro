@@ -36,7 +36,8 @@ function findEdge() {
 (async () => {
   const src = process.argv[2]
     ? path.resolve(ROOT, process.argv[2])
-    : fs.readdirSync(ROOT).filter((f) => /^RELATORIO-.*\.html$/i.test(f)).sort().map((f) => path.join(ROOT, f)).pop();
+    : fs.readdirSync(ROOT).filter((f) => /^RELATORIO-.*\.html$/i.test(f)).map((f) => path.join(ROOT, f))
+        .sort((x, y) => fs.statSync(x).mtimeMs - fs.statSync(y).mtimeMs).pop(); // o mais recente
   if (!src || !fs.existsSync(src)) throw new Error('Relatório HTML não encontrado.');
 
   console.log('1/3 Lendo a marca da empresa no sistema...');
