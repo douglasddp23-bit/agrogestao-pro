@@ -240,23 +240,6 @@ async function startServer() {
     message: { error: 'Muitas requisições em pouco tempo. Aguarde alguns minutos.' },
   }));
 
-  // In-memory storage as requested
-  let dados: any[] = [];
-  
-  // Simulated PostGIS Database Tables
-  let db_tables = {
-    users: [] as any[],
-    propriedades: [] as any[],
-    desmatamento: [] as any[],
-    embargos: [] as any[],
-    car: [
-      { id: 1, codigo_car: 'MT-5103403-E5E6.7A9E.8F8D.4B8C.A9E8.F8D4.B8CA', geom: { type: 'Polygon', coordinates: [[[-55.5, -12.5], [-55.4, -12.5], [-55.4, -12.6], [-55.5, -12.6], [-55.5, -12.5]]] } },
-      { id: 2, codigo_car: 'MG-3101705-1234.5678.90AB.CDEF.1234.5678.90AB', geom: { type: 'Polygon', coordinates: [[[-44.5, -18.2], [-44.2, -18.2], [-44.2, -18.0], [-44.5, -18.0], [-44.5, -18.2]]] } }
-    ] as any[],
-    sigef: [] as any[],
-    analises: [] as any[]
-  };
-
   // Modular Enterprise Security & Admin Routes
   app.use('/api', authRoutes);
 

@@ -408,7 +408,6 @@ html.dark .recharts-pie-sector:hover {
   .backdrop-blur-sm,
   .backdrop-blur-md,
   /* Floating Widgets & Chatbots */
-  [class*="SyncStatusWidget"],
   [class*="WeatherWidget"],
   [class*="AgendaWidget"],
   [class*="PersonalReminders"],
