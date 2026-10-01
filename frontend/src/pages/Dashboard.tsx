@@ -44,7 +44,6 @@ import {
   CartesianGrid
 } from 'recharts';
 import { PageTitle, PAGE_HEADER_CLASS } from '../components/layout/PageHeader';
-import BillingDashboardPanel from '../components/billing/BillingDashboardPanel';
 import { LayoutDashboard as PageIcon } from 'lucide-react';
 
 interface AgNews {
@@ -805,9 +804,6 @@ export default function Dashboard() {
           </button>
         </div>
       </div>
-
-      {/* Faturamento (Gerente/Administrador) — indicadores em tempo real */}
-      {canSeeFinance && <BillingDashboardPanel />}
 
       {/* Personalization Drawer / Modal */}
       <AnimatePresence>
