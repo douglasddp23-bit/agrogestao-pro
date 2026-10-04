@@ -27,7 +27,8 @@ import {
   doc, 
   serverTimestamp, 
   deleteDoc,
-  setDoc
+  setDoc,
+  runTransaction
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
@@ -239,10 +240,14 @@ export default function ChannelChat({ channel, users, onBack }: ChannelChatProps
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as ChannelMessage[];
+      const msgs = snapshot.docs.map(doc => {
+        const data = doc.data();
+        const reactions: Record<string, string[]> = { ...(data.reactions || {}) };
+        for (const [uid, emojis] of Object.entries(data.reactionByUser || {})) {
+          for (const emoji of emojis as string[]) reactions[emoji] = [...new Set([...(reactions[emoji] || []), uid])];
+        }
+        return { id: doc.id, ...data, reactions };
+      }) as ChannelMessage[];
 
       // Sort in-memory to handle latency with null serverTimestamp()
       msgs.sort((a, b) => {
@@ -352,30 +357,18 @@ export default function ChannelChat({ channel, users, onBack }: ChannelChatProps
     const msg = messages.find(m => m.id === msgId);
     if (!msg) return;
 
-    const currentReactions = msg.reactions || {};
-    const userList = currentReactions[emoji] || [];
-    const hasReacted = userList.includes(user.uid);
-
-    let newUserList;
-    if (hasReacted) {
-      newUserList = userList.filter(uid => uid !== user.uid);
-    } else {
-      newUserList = [...userList, user.uid];
-    }
-
-    const updatedReactions = { ...currentReactions };
-    if (newUserList.length === 0) {
-      delete updatedReactions[emoji];
-    } else {
-      updatedReactions[emoji] = newUserList;
-    }
-
     try {
-      await updateDoc(doc(db, 'channel_messages', msgId), { reactions: updatedReactions });
-    } catch (error) {
-       console.error("Error updating reaction:", error);
+      const ref = doc(db, 'channel_messages', msgId);
+      await runTransaction(db, async tx => {
+        const snapshot = await tx.get(ref);
+        if (!snapshot.exists()) throw new Error('Mensagem não encontrada.');
+        const mine: string[] = snapshot.data().reactionByUser?.[user.uid] || [];
+        const next = mine.includes(emoji) ? mine.filter(x => x !== emoji) : [...mine, emoji];
+        tx.update(ref, { [`reactionByUser.${user.uid}`]: next });
+      });
+    } catch (error: any) {
+      toast.error(error.message || 'Não foi possível registrar a reação.');
     }
-    setShowEmojiPickerForMsg(null);
   };
 
   const handleDeleteMessage = async (msgId: string) => {

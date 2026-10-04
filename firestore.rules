@@ -28,7 +28,7 @@ service cloud.firestore {
     // renovaria o acesso para sempre enquanto o app ficasse aberto.
     function isSignedIn() {
       return request.auth != null && request.auth.uid != null
-        && request.time < timestamp.value(request.auth.token.get('auth_time', 0) * 1000) + duration.value(12, 'h');
+        && request.time < timestamp.value(request.auth.token.get('auth_time', 0) * 1000) + duration.value(12, 'h') && isNotBlocked();
     }
 
     // --- Conferência de formato (auditoria 30/09/2026): a tela já valida, mas o
@@ -65,22 +65,26 @@ service cloud.firestore {
         : 'none';
     }
 
-    // Bloqueio de conta é feito no Firebase Auth (conta desativada + tokens
-    // revogados pelo servidor). Mantido como função para documentação.
+    // A ficha atual fecha acesso direto ao Firestore mesmo com um token antigo.
     function isNotBlocked() {
-      return true;
+      let p = /databases/$(database)/documents/users/$(request.auth.uid);
+      return !exists(p) || (get(p).data.get('blocked', false) != true
+        && (get(p).data.get('twoFactorEnabled', false) != true || request.auth.token.get('mfaVerified', false) == true));
+    }
+    function noProfileCredentials(data) {
+      return !data.keys().hasAny(['passwordHash', 'passwordHistory', 'password', 'tempPassword', 'temporaryPassword', 'totp', 'totpPending', 'recoveryCodes']);
     }
 
     function isPrimaryAdmin() {
       return request.auth != null && request.auth.token != null && request.auth.token.get('isPrimaryAdmin', false) == true;
     }
 
-    function isAdmin()      { return isSignedIn() && (getRole() == 'admin' || isPrimaryAdmin()); }
-    function isHR()         { return isSignedIn() && (getRole() in ['admin', 'hr'] || isPrimaryAdmin()); }
-    function isManager()    { return isSignedIn() && (getRole() in ['admin', 'manager'] || isPrimaryAdmin()); }
-    function isManagement() { return isSignedIn() && (getRole() in ['admin', 'hr', 'manager'] || isPrimaryAdmin()); }
+    function isAdmin()      { return isSignedIn() && isNotBlocked() && (getRole() == 'admin' || isPrimaryAdmin()); }
+    function isHR()         { return isSignedIn() && isNotBlocked() && (getRole() in ['admin', 'hr'] || isPrimaryAdmin()); }
+    function isManager()    { return isSignedIn() && isNotBlocked() && (getRole() in ['admin', 'manager'] || isPrimaryAdmin()); }
+    function isManagement() { return isSignedIn() && isNotBlocked() && (getRole() in ['admin', 'hr', 'manager'] || isPrimaryAdmin()); }
     // Qualquer colaborador cadastrado por um administrador (tem cargo no token)
-    function isStaff()      { return isSignedIn() && (getRole() in ['admin', 'consultant', 'staff', 'hr', 'manager'] || isPrimaryAdmin()); }
+    function isStaff()      { return isSignedIn() && isNotBlocked() && (getRole() in ['admin', 'consultant', 'staff', 'hr', 'manager'] || isPrimaryAdmin()); }
 
     function isOwnerOf(field) { return isSignedIn() && existing().get(field, '') == request.auth.uid; }
     function keepsField(field) { return incoming().get(field, '') == existing().get(field, ''); }
@@ -98,12 +102,14 @@ service cloud.firestore {
       // Criação: Admin qualquer cargo; RH só Consultor/RH; o próprio usuário só
       // com o cargo que o servidor já gravou no token (primeiro acesso).
       // Antes, qualquer conta nova criava a própria ficha como "consultor".
-      allow create: if isSignedIn() && isValidId(userId) && strMax(incoming().get('displayName', ''), 120) && (
+      allow create: if isSignedIn() && noProfileCredentials(incoming()) && isValidId(userId) && strMax(incoming().get('displayName', ''), 120) && (
         isAdmin() ||
         (isHR() && request.auth.uid != userId && incoming().get('role', 'consultant') in ['consultant', 'hr']) ||
         (request.auth.uid == userId && getRole() in ['admin', 'consultant', 'staff', 'hr', 'manager'] && incoming().get('role', '') == getRole())
       );
-      allow update: if isSignedIn() && strMax(incoming().get('displayName', ''), 120) && (
+      allow update: if isSignedIn() && noProfileCredentials(incoming())
+        && !incoming().diff(existing()).affectedKeys().hasAny(['twoFactorEnabled'])
+        && strMax(incoming().get('displayName', ''), 120) && (
         isAdmin() ||
         (isManagement() && request.auth.uid != userId
           && !incoming().diff(existing()).affectedKeys().hasAny(['blocked', 'uid', 'isPrimaryAdmin', 'mustChangePassword', 'passwordExpired', 'passwordChangedAt', 'twoFactorEnabled'])
@@ -373,7 +379,7 @@ service cloud.firestore {
         && okText(incoming(), 'description', 2000);
       // Antes o próprio solicitante podia marcar a SUA despesa como "aprovada".
       allow update: if isStaff() && isValidId(expenseId) && (
-        isManagement() ||
+        (isManagement() && (incoming().status == existing().status || existing().createdBy != request.auth.uid)) ||
         (existing().createdBy == request.auth.uid && existing().status == 'pending_approval'
           && !incoming().diff(existing()).affectedKeys().hasAny(['status', 'approvedBy', 'approvedAt', 'approvalNotes', 'createdBy']))
       );
@@ -410,8 +416,9 @@ service cloud.firestore {
     match /documents/{docId} {
       allow list: if isStaff();
       allow get: if isStaff() && isValidId(docId);
-      allow create: if isStaff() && isValidId(docId) && isValidDoc(incoming());
-      allow update: if isStaff() && isValidId(docId) && isValidDoc(incoming()) && keepsField('clientId');
+      allow create: if isStaff() && isValidId(docId) && isValidDoc(incoming()) && incoming().uploadedBy == request.auth.uid;
+      allow update: if isStaff() && isValidId(docId) && isValidDoc(incoming()) && keepsField('clientId')
+        && keepsField('uploadedBy') && (isManagement() || isOwnerOf('uploadedBy'));
       // Antes qualquer funcionário apagava qualquer documento de qualquer cliente.
       allow delete: if isAdmin() && isValidId(docId);
     }
@@ -494,9 +501,22 @@ service cloud.firestore {
         && incoming().createdBy == request.auth.uid && !('fiscal' in incoming());
       // O resumo fiscal (campo "fiscal") só o servidor altera — ninguém "emite" nota pela tela.
       allow update: if isManager() && isValidBilling(incoming())
-        && keepsField('number') && keepsField('createdBy') && keepsField('clientId')
+        && keepsField('number') && keepsField('createdBy') && keepsField('clientId') && keepsField('source')
         && !incoming().diff(existing()).affectedKeys().hasAny(['fiscal'])
         && existing().status != 'cancelled';
+      allow delete: if false;
+    }
+
+    match /billing_origins/{originId} {
+      allow read: if isManager();
+      allow create, update: if isManager() && isValidId(originId)
+        && originId == incoming().sourceCollection + '_' + incoming().sourceId
+        && (!exists(/databases/$(database)/documents/billing_origins/$(originId))
+          || (keepsField('sourceId') && keepsField('sourceCollection')
+            && get(/databases/$(database)/documents/billings/$(existing().billingId)).data.status == 'cancelled'))
+        && incoming().billingId is string
+        && getAfter(/databases/$(database)/documents/billings/$(incoming().billingId)).data.source.id == incoming().sourceId
+        && getAfter(/databases/$(database)/documents/billings/$(incoming().billingId)).data.source.collection == incoming().sourceCollection;
       allow delete: if false;
     }
 
@@ -546,8 +566,8 @@ service cloud.firestore {
       allow create: if isManagement() && isValidId(id);
       // Movimentação de estoque (entrada/saída) pode ser feita por qualquer colaborador,
       // mas ele só altera a quantidade — cadastro/preço só a gestão.
-      allow update: if isValidId(id) && (isManagement() ||
-        (isStaff() && incoming().diff(existing()).affectedKeys().hasOnly(['currentQuantity', 'updatedAt'])));
+      allow update: if isValidId(id) && incoming().currentQuantity is number && incoming().currentQuantity >= 0
+        && (isManagement() || (isStaff() && incoming().diff(existing()).affectedKeys().hasOnly(['currentQuantity', 'updatedAt'])));
       allow delete: if isAdmin() && isValidId(id);
     }
 
@@ -571,7 +591,14 @@ service cloud.firestore {
     match /vehicles/{id} {
       allow list: if isStaff();
       allow get: if isStaff() && isValidId(id);
-      allow create, update: if isManagement() && isValidId(id);
+      allow create: if isManagement() && isValidId(id);
+      allow update: if isValidId(id) && (isManagement() || (isStaff()
+        && incoming().diff(existing()).affectedKeys().hasOnly(['currentKm', 'status', 'lastTripId', 'updatedAt'])
+        && incoming().currentKm is number && incoming().currentKm >= existing().get('currentKm', 0)
+        && incoming().status == 'available'
+        && getAfter(/databases/$(database)/documents/vehicle_trips/$(incoming().lastTripId)).data.driverId == request.auth.uid
+        && getAfter(/databases/$(database)/documents/vehicle_trips/$(incoming().lastTripId)).data.vehicleId == id
+        && getAfter(/databases/$(database)/documents/vehicle_trips/$(incoming().lastTripId)).data.endKm == incoming().currentKm));
       allow delete: if isAdmin() && isValidId(id);
     }
 
@@ -650,9 +677,14 @@ service cloud.firestore {
       allow list: if isStaff();
       allow get: if isStaff() && isValidId(messageId);
       allow create: if isStaff() && isValidId(messageId) && incoming().senderId == request.auth.uid && strMax(incoming().get('content', ''), 10000);
-      allow update: if isStaff() && isValidId(messageId) && isOwnerOf('senderId')
-        && incoming().diff(existing()).affectedKeys().hasOnly(['reactions', 'content'])
-        && strMax(incoming().get('content', ''), 10000);
+      allow update: if isStaff() && isValidId(messageId) && (
+        (isOwnerOf('senderId') && incoming().diff(existing()).affectedKeys().hasOnly(['content'])
+          && strMax(incoming().get('content', ''), 10000)) ||
+        (incoming().diff(existing()).affectedKeys().hasOnly(['reactionByUser'])
+          && incoming().reactionByUser is map
+          && incoming().reactionByUser.diff(existing().get('reactionByUser', {})).affectedKeys().hasOnly([request.auth.uid])
+          && incoming().reactionByUser[request.auth.uid] is list
+          && incoming().reactionByUser[request.auth.uid].size() <= 20));
       allow delete: if isStaff() && isValidId(messageId) && (isOwnerOf('senderId') || isAdmin());
     }
 

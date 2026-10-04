@@ -10,11 +10,12 @@
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "test": "node node_modules/tsx/dist/cli.mjs --test frontend/src/lib/credit/credit.test.ts frontend/src/lib/billing/billing.test.ts",
+    "test": "node --import tsx --test frontend/src/lib/credit/credit.test.ts frontend/src/lib/billing/billing.test.ts frontend/src/lib/integrity.test.ts",
     "electron:dev": "npm run build && electron .",
     "dist:win": "npm run build && electron-builder --win",
     "dist:mac": "npm run build && electron-builder --mac",
-    "dist:linux": "npm run build && electron-builder --linux"
+    "dist:linux": "npm run build && electron-builder --linux",
+    "test:rules": "node --import tsx --test tests/firestore.rules.test.ts"
   },
   "dependencies": {
     "@google/genai": "^1.50.1",
@@ -51,6 +52,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.21",

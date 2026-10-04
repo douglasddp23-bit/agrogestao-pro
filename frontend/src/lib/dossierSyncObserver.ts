@@ -1,3 +1,4 @@
+import { onAuthStateChanged } from 'firebase/auth';
 import { 
   collection, 
   onSnapshot, 
@@ -7,7 +8,7 @@ import {
   Unsubscribe 
 } from 'firebase/firestore';
 import { useEffect, useState, useCallback } from 'react';
-import { db, ensureDocumentFolder } from './firebase';
+import { db, auth, ensureDocumentFolder } from './firebase';
 import { JudicialExpertise, RuralPropertyValuation } from '../types';
 
 export type SyncBadgeState = 'synced' | 'syncing' | 'recent' | 'unlinked' | 'pending';
@@ -44,7 +45,7 @@ class DossierSyncManager {
   }
 
   public initGlobalObservers() {
-    if (this.isInitialized) return;
+    if (this.isInitialized || !auth.currentUser) return;
     this.isInitialized = true;
 
     try {
@@ -96,7 +97,7 @@ class DossierSyncManager {
                       status: 'synced',
                       statusLabel: 'Dossiê Sincronizado',
                       documentsCount: newCount,
-                      hasOfficialPdf: true
+                      hasOfficialPdf: newCount > 0
                     };
                     this.syncStatusMap.set(serviceId, updatedInfo);
                     this.notifyListeners(updatedInfo);
@@ -158,7 +159,7 @@ class DossierSyncManager {
                       status: 'synced',
                       statusLabel: 'Laudo NBR Sincronizado',
                       documentsCount: newCount,
-                      hasOfficialPdf: true
+                      hasOfficialPdf: newCount > 0
                     };
                     this.syncStatusMap.set(serviceId, updatedInfo);
                     this.notifyListeners(updatedInfo);
@@ -181,7 +182,7 @@ class DossierSyncManager {
         const countMap = new Map<string, number>();
         for (const docItem of snapshot.docs) {
           const sId = docItem.data().serviceId;
-          if (sId) {
+          if (sId && docItem.data().url) {
             countMap.set(sId, (countMap.get(sId) || 0) + 1);
           }
         }
@@ -213,10 +214,18 @@ class DossierSyncManager {
     try {
       const q = query(collection(db, 'documents'), where('serviceId', '==', serviceId));
       const snap = await getDocs(q);
-      return snap.size;
+      return snap.docs.filter(d => !!d.data().url).length;
     } catch {
       return 0;
     }
+  }
+
+  public reset() {
+    this.activeSubscriptions.forEach(unsubscribe => unsubscribe());
+    this.activeSubscriptions = [];
+    this.syncStatusMap.clear();
+    this.isInitialized = false;
+    this.notifyListeners();
   }
 
   public subscribe(listener: SyncListener): () => void {
@@ -255,7 +264,10 @@ export const dossierSyncManager = DossierSyncManager.getInstance();
 
 // Auto-start observers on module load in browser
 if (typeof window !== 'undefined') {
-  dossierSyncManager.initGlobalObservers();
+  onAuthStateChanged(auth, () => {
+    dossierSyncManager.reset();
+    dossierSyncManager.initGlobalObservers();
+  });
 }
 
 /**

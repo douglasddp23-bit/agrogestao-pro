@@ -208,12 +208,8 @@ interface TotpConfig {
 
 /** Documento user_credentials/{uid} inteiro (hash da senha + configuração do 2FA). */
 async function getCredentialDoc(uid: string): Promise<{ passwordHash?: string; totp?: TotpConfig; totpPending?: { secret: string; createdAt: number } } | null> {
-  try {
-    const snap = await admin.firestore().collection('user_credentials').doc(uid).get();
-    return snap.exists ? (snap.data() as any) : null;
-  } catch {
-    return null;
-  }
+  const snap = await admin.firestore().collection('user_credentials').doc(uid).get();
+  return snap.exists ? (snap.data() as any) : null;
 }
 
 function activeTotp(cred: { totp?: TotpConfig } | null): TotpConfig | null {
@@ -288,7 +284,7 @@ async function recordNewPassword(uid: string, passwordHash: string): Promise<voi
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
   } catch {
-    await setUserCredential(uid, passwordHash); // fallback (só o hash)
+    if (!(await setUserCredential(uid, passwordHash))) throw new Error('Não foi possível gravar as credenciais.');
   }
 }
 
@@ -478,6 +474,9 @@ export async function syncRoleClaim(req: Request, res: Response) {
   }
 
   try {
+    if (activeTotp(await getCredentialDoc(decoded.uid)) && (decoded as any).mfaVerified !== true) {
+      return res.status(403).json({ error: 'Entre com e-mail e senha e confirme o código de verificação.', code: 'mfa_required' });
+    }
     const role = await resolveClaimRole(decoded.uid, decoded.email, decoded.email_verified === true);
     if (!role || decoded.role === role) {
       return res.json({ updated: false, role: decoded.role || null });
@@ -658,14 +657,11 @@ export async function createUser(req: Request, res: Response) {
       });
       uid = userRecord.uid;
       
-      try {
-        await admin.auth().setCustomUserClaims(uid, { role });
-      } catch {
-        // ignore claims failure
-      }
+      await admin.auth().setCustomUserClaims(uid, { role });
     } catch (authErr: any) {
       // SEGURANÇA: antes, se o Firebase Auth falhasse, criava um "usuário virtual"
       // (só na memória deste PC, sem conta de login real). Agora a criação falha.
+      if (uid) await admin.auth().deleteUser(uid).catch(() => {});
       console.error('[createUser] Firebase Auth recusou a criação:', authErr?.code || authErr?.message || authErr);
       if (authErr?.code === 'auth/email-already-exists') {
         return res.status(409).json({ error: 'Já existe uma conta com esse nome/e-mail. Use um nome diferente (ex.: com o sobrenome do meio).' });
@@ -700,19 +696,23 @@ export async function createUser(req: Request, res: Response) {
     // vai nele — fica só em user_credentials/{uid}, que o cliente não
     // consegue ler (ver firestore.rules).
     const { passwordHash: _omitHash, ...firestoreProfile } = userProfile;
-    await recordNewPassword(uid, passwordHash);
-
     try {
-      await db.collection('users').doc(uid).set({
-        ...firestoreProfile,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-    } catch {
-      // Save via REST if config exists
-      const config = getFirebaseConfig();
-      if (config) {
-        await saveFirestoreUserREST(uid, firestoreProfile);
+      await recordNewPassword(uid, passwordHash);
+      try {
+        await db.collection('users').doc(uid).set({
+          ...firestoreProfile, createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch {
+        if (!getFirebaseConfig() || !(await saveFirestoreUserREST(uid, firestoreProfile))) {
+          throw new Error('Não foi possível gravar o perfil da conta.');
+        }
       }
+    } catch (error) {
+      // Do not return a successful registration with an unusable partial account.
+      await admin.auth().deleteUser(uid).catch(e => console.error('[createUser] Falha ao remover conta parcial:', e?.code));
+      await db.collection('user_credentials').doc(uid).delete().catch(() => {});
+      virtualUsersMap.delete(uid);
+      throw error;
     }
 
     // 3. Envia as credenciais ao administrador — SÓ para o ADMIN_EMAIL configurado.
@@ -847,13 +847,7 @@ export async function resetPassword(req: Request, res: Response) {
     }
 
     // 1. Update Password in Firebase Auth via Admin SDK (Attempt)
-    try {
-      await admin.auth().updateUser(uid, {
-        password: await firebasePasswordFor(uid, tempPassword)
-      });
-    } catch {
-      // ignore
-    }
+    await admin.auth().updateUser(uid, { password: await firebasePasswordFor(uid, tempPassword) });
 
     // 2. O hash fica em user_credentials/{uid}, nunca em users/{uid}.
     await recordNewPassword(uid, passwordHash);
@@ -864,8 +858,8 @@ export async function resetPassword(req: Request, res: Response) {
         tempPassword: admin.firestore.FieldValue.delete(),
         temporaryPassword: admin.firestore.FieldValue.delete()
       });
-    } catch {
-      // ignore
+    } catch (error) {
+      throw error;
     }
 
     // 3. Envia as credenciais só para o ADMIN_EMAIL configurado
@@ -916,26 +910,9 @@ export async function blockUser(req: Request, res: Response) {
       virtualUsersMap.set(uid, virtualUser);
     }
 
-    // 1. Disable in Firebase Authentication (Attempt)
-    try {
-      await admin.auth().updateUser(uid, {
-        disabled: true
-      });
-      await admin.auth().revokeRefreshTokens(uid);
-    } catch {
-      // ignore
-    }
-
-    // 2. Set profile flags in Firestore
-    try {
-      const db = admin.firestore();
-      await db.collection('users').doc(uid).update({
-        blocked: true,
-        status: 'blocked'
-      });
-    } catch {
-      // ignore
-    }
+    await admin.firestore().collection('users').doc(uid).update({ blocked: true, status: 'blocked' });
+    await admin.auth().updateUser(uid, { disabled: true });
+    await admin.auth().revokeRefreshTokens(uid);
 
     return res.json({ success: true, message: 'Usuário bloqueado e desautorizado no sistema.' });
   } catch (error: any) {
@@ -962,25 +939,8 @@ export async function unblockUser(req: Request, res: Response) {
       virtualUsersMap.set(uid, virtualUser);
     }
 
-    // 1. Enable account in Firebase Auth (Attempt)
-    try {
-      await admin.auth().updateUser(uid, {
-        disabled: false
-      });
-    } catch {
-      // ignore
-    }
-
-    // 2. Reset flags in Firestore
-    try {
-      const db = admin.firestore();
-      await db.collection('users').doc(uid).update({
-        blocked: false,
-        status: 'offline'
-      });
-    } catch {
-      // ignore
-    }
+    await admin.auth().updateUser(uid, { disabled: false });
+    await admin.firestore().collection('users').doc(uid).update({ blocked: false, status: 'offline' });
 
     return res.json({ success: true, message: 'Usuário restabelecido com sucesso.' });
   } catch (error: any) {
@@ -1063,7 +1023,7 @@ async function freshSessionToken(uid: string): Promise<string | null> {
   try {
     const snap = await admin.firestore().collection('users').doc(uid).get();
     const role = snap.data()?.role;
-    return await admin.auth().createCustomToken(uid, role ? { role } : undefined);
+    return await admin.auth().createCustomToken(uid, { ...(role ? { role } : {}), mfaVerified: !!activeTotp(await getCredentialDoc(uid)) });
   } catch {
     return null;
   }
@@ -1087,7 +1047,7 @@ async function buildLoginSuccess(userData: any) {
       } catch {
         // a claim também é gravada depois, por /api/sync-role-claim
       }
-      firebaseToken = await admin.auth().createCustomToken(userData.uid, { role: userData.role });
+      firebaseToken = await admin.auth().createCustomToken(userData.uid, { role: userData.role, mfaVerified: !!activeTotp(await getCredentialDoc(userData.uid)) });
     } catch (tokenErr: any) {
       console.warn('[loginUser] Não foi possível emitir token do Firebase (verifique o service-account.json):', tokenErr.message || tokenErr);
     }
@@ -1274,7 +1234,8 @@ export async function twoFactorEnable(req: Request, res: Response) {
 
     const recoveryCodes = generateRecoveryCodes();
     const ref = admin.firestore().collection('user_credentials').doc(owner.uid);
-    await ref.set({
+    const activation = admin.firestore().batch();
+    activation.set(ref, {
       // Garante que exista o hash da senha no servidor: com o 2FA ligado o
       // login só pode acontecer por ele (nunca direto pelo Firebase Auth).
       passwordHash: cred?.passwordHash || bcrypt.hashSync(currentPassword, 10),
@@ -1289,16 +1250,19 @@ export async function twoFactorEnable(req: Request, res: Response) {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 
+    activation.update(admin.firestore().collection('users').doc(owner.uid), { twoFactorEnabled: true });
+    await activation.commit();
+
     // Tira a senha real do Firebase Auth (ver firebasePasswordFor).
     try {
       await admin.auth().updateUser(owner.uid, { password: unguessablePassword() });
     } catch (e: any) {
-      console.warn('[2FA] Não foi possível trocar a senha interna do Firebase Auth:', e?.message || e);
-    }
-    try {
-      await admin.firestore().collection('users').doc(owner.uid).update({ twoFactorEnabled: true });
-    } catch {
-      // só informativo (a regra de verdade está em user_credentials)
+      // Roll back activation: never announce protection if native password remains usable.
+      const rollback = admin.firestore().batch();
+      rollback.set(ref, { totp: admin.firestore.FieldValue.delete() }, { merge: true });
+      rollback.update(admin.firestore().collection('users').doc(owner.uid), { twoFactorEnabled: false });
+      await rollback.commit();
+      throw e;
     }
     // Trocar a senha interna do Firebase derruba todas as sessões abertas
     // (inclusive a desta tela). Mandamos uma sessão nova para este PC.
@@ -1323,15 +1287,11 @@ export async function twoFactorDisable(req: Request, res: Response) {
     if (!(await checkSecondFactor(owner.uid, totp, code))) {
       return res.status(401).json({ error: 'Código incorreto.' });
     }
-    await admin.firestore().collection('user_credentials').doc(owner.uid).set(
-      { totp: admin.firestore.FieldValue.delete() },
-      { merge: true }
-    );
-    try {
-      await admin.firestore().collection('users').doc(owner.uid).update({ twoFactorEnabled: false });
-    } catch {
-      // só informativo
-    }
+    const deactivation = admin.firestore().batch();
+    deactivation.set(admin.firestore().collection('user_credentials').doc(owner.uid),
+      { totp: admin.firestore.FieldValue.delete() }, { merge: true });
+    deactivation.update(admin.firestore().collection('users').doc(owner.uid), { twoFactorEnabled: false });
+    await deactivation.commit();
     return res.json({ success: true });
   } catch (error: any) {
     console.error('Erro ao desativar 2FA:', error?.message || error);
@@ -1406,7 +1366,7 @@ export async function loginUser(req: Request, res: Response) {
     // nunca passou pelo Firestore. Usuários reais têm o hash separado em
     // user_credentials/{uid} (ver comentário acima de getUserCredentialHash).
     const credentialHash: string | null =
-      userData.passwordHash || (!userData.isVirtual ? await getUserCredentialHash(userData.uid) : null);
+      userData.isVirtual ? userData.passwordHash : await getUserCredentialHash(userData.uid);
 
     if (credentialHash) {
       const isLegacySha256 = credentialHash.length === 64 && !credentialHash.startsWith('$');
@@ -1528,13 +1488,7 @@ export async function updateUserPassword(req: Request, res: Response) {
       virtualUsersMap.set(uid, virtualUser);
     }
 
-    try {
-      await admin.auth().updateUser(uid, {
-        password: await firebasePasswordFor(uid, newPassword)
-      });
-    } catch {
-      // ignore
-    }
+    await admin.auth().updateUser(uid, { password: await firebasePasswordFor(uid, newPassword) });
 
     await recordNewPassword(uid, passwordHash);
     if (virtualUser) virtualUser.passwordExpired = false;
@@ -1545,9 +1499,8 @@ export async function updateUserPassword(req: Request, res: Response) {
         passwordExpired: false,
         passwordChangedAt: new Date().toISOString(),
       });
-    } catch {
-      // Documento pode ainda não existir com esse campo — não é crítico,
-      // o hash em user_credentials já foi atualizado acima.
+    } catch (error) {
+      throw new Error('Senha gravada, mas falhou a atualização do perfil. Contate o administrador.');
     }
 
     return res.json({

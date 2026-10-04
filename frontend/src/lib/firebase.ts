@@ -18,100 +18,8 @@ const isKeyValid = (key?: string) => {
 const rawApiKey = (import.meta as any).env.VITE_FIREBASE_API_KEY || firebaseConfigJson.apiKey;
 export const hasValidConfig = isKeyValid(rawApiKey);
 
-// Intercept and mock Google Firebase network calls to prevent "auth/api-key-not-valid" or "auth/unauthorized-domain" crash
-if (typeof window !== 'undefined') {
-  // Fetch interceptor: APENAS se config inválida
-  if (!hasValidConfig) {
-    try {
-      const originalFetch = window.fetch;
-      Object.defineProperty(window, 'fetch', {
-        value: async function (input: any, init: any) {
-          const url = typeof input === 'string' ? input
-            : (input instanceof URL ? input.href : input?.url || '');
-          if (
-            url.includes('identitytoolkit.googleapis.com') ||
-            url.includes('securetoken.googleapis.com') ||
-            url.includes('firestore.googleapis.com')
-          ) {
-            console.warn('[Mock Fetch] Interceptado (config inválida):', url);
-            return new Response(JSON.stringify({
-              projectId: 'agrogestao-pro',
-              authorizedDomains: ['localhost', '127.0.0.1', window.location.hostname],
-            }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-          }
-          return originalFetch.apply(this, arguments as any);
-        },
-        writable: true,
-        configurable: true
-      });
-    } catch (e: any) {
-      console.warn('[Firebase] Fetch interceptor falhou:', e.message);
-    }
-  }
-
-  // XHR interceptor: instalar APENAS se config inválida
-  if (!hasValidConfig) {
-    const OriginalXHR = window.XMLHttpRequest;
-    (window as any).XMLHttpRequest = function () {
-      const xhr = new OriginalXHR();
-      const originalOpen = xhr.open;
-      let isFirebaseUrl = false;
-      let isConfigUrl = false;
-      let requestedUrl = '';
-      xhr.open = function (method, url) {
-        if (typeof url === 'string') {
-          if (url.includes('identitytoolkit.googleapis.com') && (url.includes('getProjectConfig') || url.includes('/config'))) {
-            isConfigUrl = true;
-            requestedUrl = url;
-            console.warn('[Mock XHR] Interceptado open config:', url);
-          } else if (url.includes('identitytoolkit.googleapis.com') || url.includes('securetoken.googleapis.com') || url.includes('firestore.googleapis.com')) {
-            isFirebaseUrl = true;
-            requestedUrl = url;
-            console.warn('[Offline Mock XHR] Interceptado open:', url);
-          }
-        }
-        return originalOpen.apply(this, arguments as any);
-      } as any;
-      const originalSend = xhr.send;
-      xhr.send = function (body) {
-        if (isConfigUrl || isFirebaseUrl) {
-          console.warn('[Offline Mock XHR] Interceptado send');
-          // Spoof state transition
-          Object.defineProperty(xhr, 'readyState', { value: 4 });
-          Object.defineProperty(xhr, 'status', { value: 200 });
-          
-          let responseText = '{}';
-          const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-          if (requestedUrl.includes('accounts:lookup')) {
-            responseText = JSON.stringify({
-              users: []
-            });
-          } else {
-            responseText = JSON.stringify({
-              projectId: 'agrogestao-pro',
-              authorizedDomains: ['localhost', '127.0.0.1', 'agrogestao-pro.firebaseapp.com', currentHost],
-              recaptchaKey: 'mock_recaptcha_key',
-              recaptchaSiteKey: 'mock_recaptcha_site_key'
-            });
-          }
-          
-          Object.defineProperty(xhr, 'responseText', { value: responseText });
-          if (xhr.onreadystatechange) {
-            xhr.onreadystatechange(new Event('readystatechange') as any);
-          }
-          if (xhr.onload) {
-            xhr.onload(new Event('load') as any);
-          }
-          return;
-        }
-        return originalSend.apply(this, arguments as any);
-      };
-      return xhr;
-    } as any;
-  }
-}
-
-const finalApiKey = hasValidConfig ? rawApiKey : "AIzaSyAsB_CDeFGHIJklMNOpQrSTUVwXyz12345";
+// Invalid configuration is diagnosed by the login screen; never fabricate API responses.
+const finalApiKey = hasValidConfig ? rawApiKey : 'invalid-configuration';
 
 const firebaseConfig = {
   apiKey: finalApiKey,
@@ -238,72 +146,9 @@ export async function ensureDocumentFolder({
   documentsCount: number;
   syncedDocId?: string;
 }> {
-  if (!clientId || !serviceId) {
-    console.warn('[ensureDocumentFolder] clientId and serviceId are required.');
-    return { folderExists: false, documentsCount: 0 };
-  }
-
-  try {
-    const qDocs = query(
-      collection(db, 'documents'),
-      where('serviceId', '==', serviceId)
-    );
-    const snap = await getDocs(qDocs);
-    const documentsCount = snap.size;
-    const folderExists = documentsCount > 0;
-
-    let syncedDocId: string | undefined = undefined;
-
-    if (folderExists) {
-      // If folder already has files, ensure they are linked to current client and update if needed
-      for (const docSnap of snap.docs) {
-        const data = docSnap.data();
-        if (data.clientId !== clientId) {
-          await updateDoc(doc(db, 'documents', docSnap.id), {
-            clientId,
-            updatedAt: new Date().toISOString()
-          });
-        }
-      }
-      syncedDocId = snap.docs[0]?.id;
-    } else {
-      // Create initial folder dossier entry in 'documents'
-      const docTitle = initialFile?.name || (processNumber 
-        ? `Laudo Pericial Oficial — Proc. ${processNumber}` 
-        : `Dossiê do Processo — ${serviceName || 'Perícia Judicial'}`);
-
-      const docPayload: any = {
-        clientId,
-        serviceId,
-        serviceName: serviceName || (processNumber ? `Perícia Judicial: Proc. ${processNumber}` : 'Perícia Judicial'),
-        name: docTitle,
-        category,
-        type: initialFile?.type || 'application/pdf',
-        url: initialFile?.url || '',
-        storagePath: initialFile?.storagePath || '',
-        size: initialFile?.size || '0 KB',
-        isGeneratedReport: true,
-        folderType,
-        // Obrigatório pelas regras do banco (isValidDoc). Sem ele a criação da
-        // pasta do laudo era sempre recusada — e derrubava o salvamento da perícia.
-        uploadedBy: auth.currentUser?.uid || 'sistema',
-        uploadedAt: new Date().toISOString(),
-        createdAt: serverTimestamp(),
-        ...metadata
-      };
-
-      const newDocRef = await addDoc(collection(db, 'documents'), docPayload);
-      syncedDocId = newDocRef.id;
-    }
-
-    return {
-      folderExists,
-      documentsCount: folderExists ? documentsCount : 1,
-      syncedDocId
-    };
-  } catch (error) {
-    console.error('[ensureDocumentFolder] Error verifying or creating document folder:', error);
-    throw error;
-  }
+  const { ensureServiceDocumentFolder } = await import('./documentSync');
+  const result = await ensureServiceDocumentFolder({ clientId, serviceId,
+    serviceName: serviceName || processNumber || 'Serviço', serviceType: folderType,
+    category, metadata: { ...metadata, ...(processNumber ? { processNumber } : {}) }, initialFile });
+  return { folderExists: result.folderExists, documentsCount: result.documentsCount, syncedDocId: result.docId };
 }
-

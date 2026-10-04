@@ -272,7 +272,7 @@ export default function Documents() {
         url: downloadUrl,
         storagePath: filePath,
         size: file.size,
-        uploadedBy: auth.currentUser?.displayName || 'Sistema',
+        uploadedBy: auth.currentUser?.uid || '',
         uploadedAt: serverTimestamp()
       };
 
@@ -882,7 +882,7 @@ export default function Documents() {
             url: downloadUrl,
             storagePath: filePath,
             size: pdfBlob.size,
-            uploadedBy: auth.currentUser?.displayName || 'Sistema',
+            uploadedBy: auth.currentUser?.uid || '',
             uploadedAt: serverTimestamp()
           });
           

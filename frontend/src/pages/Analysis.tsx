@@ -638,27 +638,11 @@ export default function Analysis({ typeFilter }: AnalysisProps) {
         newValues: updatedData
       });
 
-      // Criar lançamento financeiro se for concluído agora
+      // Contas a receber são criadas exclusivamente no módulo Faturamento.
       if (isReadyToConclude && selectedAnalysis.status !== 'Concluído') {
-        const financialRecord = {
-          clientId: selectedAnalysis.clientId,
-          clientName: selectedAnalysis.clientName || 'Cliente',
-          category: 'analysis',
-          description: `Análise concluída: ${selectedAnalysis.type} - ID: ${selectedAnalysis.id}`,
-          value: Number(editDetails.value) || 0,
-          dueDate: new Date(Date.now() + 7 * 864e5).toISOString().split('T')[0], // 7 dias pra pagar
-          paymentDate: null,
-          paymentMethod: null,
-          status: 'pending',
-          notes: 'Gerado automaticamente via Análise Técnica',
-          linkedServiceId: selectedAnalysis.id,
-          createdBy: user?.uid || 'system',
-          createdAt: new Date().toISOString()
-        };
-        await addDoc(collection(db, 'financials'), financialRecord);
         syncServiceAppointments(user?.displayName || '').catch(() => {}); // agendamento automático (aba Agendamentos)
         toast.success(`Análise de ${selectedAnalysis.type === 'soil' ? 'Solo' : 'Água'} concluída com sucesso!`, {
-          description: `Lançamento financeiro de R$ ${Number(editDetails.value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} gerado para ${selectedAnalysis.clientName || 'Cliente'}.`,
+          description: 'Use Faturar serviço para criar as contas a receber.',
           duration: 5000,
         });
       } else {

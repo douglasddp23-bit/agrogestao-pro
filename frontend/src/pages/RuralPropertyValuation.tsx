@@ -1,3 +1,4 @@
+import { technicalAuthorOf } from '../lib/technicalAuthor';
 import React, { useState, useEffect } from 'react';
 import { runExclusive } from '../lib/submitGuard';
 import { useConfirm } from '../hooks/useConfirm';
@@ -281,7 +282,7 @@ export default function RuralPropertyValuationPage() {
   };
 
   // Helper to build jsPDF document for Rural Property Valuation
-  const buildRuralValuationPDF = (val: RuralPropertyValuation) => {
+  const buildRuralValuationPDF = async (val: RuralPropertyValuation) => {
     const doc = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
@@ -289,8 +290,9 @@ export default function RuralPropertyValuationPage() {
     });
 
     const todayStr = formatDate(val.reportDate || new Date());
-    const expertName = user?.displayName || 'Engenheiro Agrônomo / Avaliador Rural';
-    const creaNumber = user?.professionalCertification || 'CREA-MG 000.000/D';
+    const author = await technicalAuthorOf(val);
+    const expertName = author.name;
+    const creaNumber = author.registration;
     const purposeLabel = PURPOSE_LABELS[val.purpose] || val.purpose;
     const totalVal = val.totalValue || ((val.landValuePerHa || 0) * val.totalArea + (val.improvementsValue || 0));
     const valorExtenso = numberToWordsBRL(totalVal);
@@ -520,7 +522,7 @@ export default function RuralPropertyValuationPage() {
       }
 
       // Generate PDF Blob
-      const pdfDoc = buildRuralValuationPDF(val);
+      const pdfDoc = await buildRuralValuationPDF(val);
       const pdfBlob = pdfDoc.output('blob');
       const sanitizedProperty = (val.propertyName || 'imovel').replace(/[^a-zA-Z0-9]/g, '_');
       const fileName = `Laudo_Avaliacao_${sanitizedProperty}_${Date.now()}.pdf`;
@@ -691,10 +693,15 @@ export default function RuralPropertyValuationPage() {
         visitaDate: formData.visitaDate || undefined,
         reportDate: formData.reportDate || undefined,
         laudoNotes: (formData.laudoNotes || '').trim() || undefined,
-        createdBy: user?.uid || 'anonymous',
+        technicalAuthor: editingId ? (valuations.find(x => x.id === editingId) as any)?.technicalAuthor : { uid: user?.uid || '', name: user?.displayName || '', registration: user?.professionalCertification || '' },
+        createdBy: editingId ? (valuations.find(x => x.id === editingId)?.createdBy || user?.uid || '') : (user?.uid || ''),
         createdAt: editingId ? (valuations.find(v => v.id === editingId)?.createdAt || new Date().toISOString()) : new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
+
+      if (editingId && (valuations.find(x => x.id === editingId)?.clientId || '') !== (formData.clientId || '')) {
+        throw new Error('A transferência para outro cliente exige revisão administrativa do dossiê.');
+      }
 
       let savedId = editingId;
       if (editingId) {
@@ -777,7 +784,7 @@ export default function RuralPropertyValuationPage() {
     if (e) e.stopPropagation();
 
     try {
-      const doc = buildRuralValuationPDF(val);
+      const doc = await buildRuralValuationPDF(val);
       const sanitizedName = (val.propertyName || 'imovel').replace(/[^a-zA-Z0-9]/g, '_');
       doc.save(`Laudo_Avaliacao_${sanitizedName}.pdf`);
       toast.success('Laudo de avaliação gerado em PDF com sucesso!');

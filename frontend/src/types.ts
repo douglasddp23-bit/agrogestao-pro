@@ -614,6 +614,7 @@ export interface ChannelMessage {
 
 export interface JudicialExpertise {
   id: string;
+  technicalAuthor?: { uid: string; name: string; registration: string };
   // Dados do processo
   processNumber: string;       // ex: 5000630-52.2026.8.13.0347
   comarca: string;             // ex: Jacinto/MG
@@ -670,6 +671,7 @@ export interface JudicialExpertise {
 
 export interface RuralPropertyValuation {
   id: string;
+  technicalAuthor?: { uid: string; name: string; registration: string };
   // Identificação
   clientId?: string;
   clientName: string;

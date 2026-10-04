@@ -1,3 +1,4 @@
+import { technicalAuthorOf } from '../lib/technicalAuthor';
 import React, { useState, useEffect } from 'react';
 import { runExclusive } from '../lib/submitGuard';
 import { useConfirm } from '../hooks/useConfirm';
@@ -220,7 +221,7 @@ export default function JudicialExpertisePage() {
   };
 
   // Helper to build jsPDF document for Judicial Expertise
-  const buildJudicialExpertisePDF = (exp: JudicialExpertise) => {
+  const buildJudicialExpertisePDF = async (exp: JudicialExpertise) => {
     const doc = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
@@ -228,8 +229,9 @@ export default function JudicialExpertisePage() {
     });
 
     const todayStr = formatDate(new Date());
-    const expertName = user?.displayName || 'Engenheiro Agrônomo / Perito Judicial';
-    const creaNumber = user?.professionalCertification || 'CREA-MG 000.000/D';
+    const author = await technicalAuthorOf(exp);
+    const expertName = author.name;
+    const creaNumber = author.registration;
     const expertiseTypeLabel = EXPERTISE_TYPE_LABELS[exp.expertiseType] || exp.expertiseType;
     const honorariosStatusLabel = HONORARIOS_STATUS_CONFIG[exp.honorariosStatus]?.label || exp.honorariosStatus;
 
@@ -411,7 +413,7 @@ export default function JudicialExpertisePage() {
       }
 
       // 2. Generate PDF Blob
-      const pdfDoc = buildJudicialExpertisePDF(exp);
+      const pdfDoc = await buildJudicialExpertisePDF(exp);
       const pdfBlob = pdfDoc.output('blob');
       const sanitizedProcess = (exp.processNumber || 'processo').replace(/[^a-zA-Z0-9]/g, '_');
       const fileName = `Laudo_Pericial_${sanitizedProcess}_${Date.now()}.pdf`;
@@ -554,10 +556,15 @@ export default function JudicialExpertisePage() {
         metodologia: (formData.metodologia || '').trim() || 'Comparativo Direto de Dados de Mercado',
         clientId: formData.clientId || undefined,
         status: formData.status,
-        createdBy: user?.uid || 'anonymous',
+        technicalAuthor: editingId ? (expertises.find(x => x.id === editingId) as any)?.technicalAuthor : { uid: user?.uid || '', name: user?.displayName || '', registration: user?.professionalCertification || '' },
+        createdBy: editingId ? (expertises.find(x => x.id === editingId)?.createdBy || user?.uid || '') : (user?.uid || ''),
         createdAt: editingId ? (expertises.find(e => e.id === editingId)?.createdAt || new Date().toISOString()) : new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
+
+      if (editingId && (expertises.find(x => x.id === editingId)?.clientId || '') !== (formData.clientId || '')) {
+        throw new Error('A transferência para outro cliente exige revisão administrativa do dossiê.');
+      }
 
       let savedId = editingId;
       if (editingId) {
@@ -715,7 +722,7 @@ export default function JudicialExpertisePage() {
     if (e) e.stopPropagation();
 
     try {
-      const doc = buildJudicialExpertisePDF(exp);
+      const doc = await buildJudicialExpertisePDF(exp);
       const sanitizedName = (exp.processNumber || 'processo').replace(/[^a-zA-Z0-9]/g, '_');
       doc.save(`Minuta_Laudo_Pericial_${sanitizedName}.pdf`);
       toast.success('Minuta do laudo gerada em PDF com sucesso!');

@@ -13,7 +13,7 @@ import {
   X,
   Link2
 } from 'lucide-react';
-import { collection, onSnapshot, addDoc, doc, deleteDoc, updateDoc, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, doc, deleteDoc, updateDoc, query, orderBy, runTransaction } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
@@ -235,16 +235,18 @@ export default function Vehicles() {
         createdAt: new Date().toISOString()
       };
 
-      await addDoc(collection(db, 'vehicle_trips'), tripPayload);
-
-      // Smoothly update referenced vehicle current odometer on the fly
-      if (selectedVeh) {
-        await updateDoc(doc(db, 'vehicles', selectedVeh.id), {
-          currentKm: kmEnd,
-          status: 'available'
-        });
-      }
-
+      if (!selectedVeh) throw new Error('Veículo não encontrado.');
+      const tripRef = doc(collection(db, 'vehicle_trips'));
+      const vehicleRef = doc(db, 'vehicles', selectedVeh.id);
+      await runTransaction(db, async tx => {
+        const current = await tx.get(vehicleRef);
+        if (!current.exists()) throw new Error('Veículo não encontrado.');
+        if (!Number.isFinite(kmEnd) || kmEnd < Number(current.data().currentKm || 0)) {
+          throw new Error('O odômetro já foi atualizado. Revise a quilometragem desta viagem.');
+        }
+        tx.set(tripRef, tripPayload);
+        tx.update(vehicleRef, { currentKm: kmEnd, status: 'available', lastTripId: tripRef.id, updatedAt: new Date().toISOString() });
+      });
       toast.success("Diário de quilometragem gravado com sucesso!");
       setIsLogTripOpen(false);
       resetTripForm();

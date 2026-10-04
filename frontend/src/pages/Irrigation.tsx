@@ -338,6 +338,11 @@ export default function Irrigation() {
       if (!demand.area) return 'Informe a área do projeto (ha).';
       if (!irrigationType) return 'Escolha o sistema de irrigação (gotejamento ou aspersão).';
     }
+    if (i === 2) {
+      if (![hydraulic.length, hydraulic.diameter, hydraulic.flow, hydraulic.cFactor, demand.eto, demand.kc, demand.area].every(v => Number.isFinite(v) && v > 0)) return 'Informe valores positivos para tubulação, vazão, coeficiente C, ETo, Kc e área.';
+      if (![pump.staticHead, pump.servicePressure].every(v => Number.isFinite(v) && v >= 0)) return 'Altura e pressão devem ser finitas e não negativas.';
+      if (!Number.isFinite(pump.efficiency) || pump.efficiency <= 0 || pump.efficiency > 100 || !Number.isFinite(appEfficiency) || appEfficiency <= 0 || appEfficiency > 100) return 'Os rendimentos devem estar entre 0 e 100%, acima de zero.';
+    }
     if (i === 4) {
       if (!responsibleTech.name.trim()) return 'Informe o nome do responsável técnico.';
     }

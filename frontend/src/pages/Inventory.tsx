@@ -1,3 +1,4 @@
+import { stockAfterMovement } from '../lib/integrity';
 import React, { useState, useEffect } from 'react';
 import { runExclusive } from '../lib/submitGuard';
 import { 
@@ -16,7 +17,7 @@ import {
   ScanBarcode,
   QrCode,
   X} from 'lucide-react';
-import { collection, onSnapshot, addDoc, deleteDoc, doc, writeBatch, query, orderBy, increment } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, deleteDoc, doc, writeBatch, query, orderBy, increment, runTransaction } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
@@ -267,8 +268,6 @@ export default function Inventory() {
     }
 
     try {
-      const batch = writeBatch(db);
-
       // Create Movement record
       const mPayload = {
         itemId: itemToMove.id,
@@ -284,17 +283,14 @@ export default function Inventory() {
       };
       
       const mRef = doc(collection(db, 'inventory_movements'));
-      batch.set(mRef, mPayload);
-
-      // Update Item current stock
       const iRef = doc(db, 'inventory_items', itemToMove.id);
-      // increment() soma no servidor: duas movimentações simultâneas não se sobrescrevem.
-      batch.update(iRef, {
-        currentQuantity: increment(movementForm.type === 'in' ? qty : -qty),
-        updatedAt: new Date().toISOString()
+      await runTransaction(db, async tx => {
+        const snap = await tx.get(iRef);
+        if (!snap.exists()) throw new Error('Item não encontrado.');
+        const currentQuantity = stockAfterMovement(Number(snap.data().currentQuantity), qty, movementForm.type);
+        tx.set(mRef, mPayload);
+        tx.update(iRef, { currentQuantity, updatedAt: new Date().toISOString() });
       });
-
-      await batch.commit();
       toast.success(`${movementForm.type === 'in' ? 'Entrada' : 'Retirada'} de ${qty} ${itemToMove.unit} realizada!`);
       setIsMovementModalOpen(false);
       setSelectedItemForMovement(null);

@@ -1,3 +1,4 @@
+import { payContractInstallment } from '../lib/ledger';
 import React, { useState, useEffect } from 'react';
 import { runExclusive } from '../lib/submitGuard';
 import { motion, AnimatePresence } from 'motion/react';
@@ -873,43 +874,10 @@ export default function Contracts() {
       return;
     }
 
-    const updatedInstallments = contract.installments.map(inst => {
-      if (inst.id === installmentId) {
-        return { ...inst, status: 'paid' as const, paymentDate: todayLocalDateString() };
-      }
-      return inst;
-    });
-
     const targetInstallment = contract.installments.find(i => i.id === installmentId);
-    if (!targetInstallment) return;
-
+    if (!targetInstallment || !user) return;
     try {
-      // 1. Update contract installment in database
-      await updateDoc(doc(db, 'contracts', contract.id), {
-        installments: updatedInstallments,
-        updatedAt: new Date().toISOString()
-      });
-
-      // 2. Write auto ledger transaction in collection `'financials'`
-      const financialPayload: Partial<FinancialRecord> = {
-        clientId: contract.clientId,
-        clientName: contract.clientName,
-        category: 'contract',
-        description: `Parcela ${targetInstallment.installmentNumber}/${contract.installmentsCount} do Contrato ${contract.contractNumber}`,
-        value: targetInstallment.value,
-        dueDate: targetInstallment.dueDate,
-        paymentDate: todayLocalDateString(),
-        paymentMethod: 'pix',
-        status: 'paid',
-        serviceId: contract.id,
-        notes: `Baixa automática oriunda da tela de Contratos.`,
-        createdBy: user?.uid || 'web-portal',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-
-      await addDoc(collection(db, 'financials'), financialPayload);
-
+      const { installments: updatedInstallments } = await payContractInstallment(contract.id, installmentId, user);
       await logAudit({
         userId: user?.uid || 'unknown',
         userName: user?.displayName || user?.email || 'Usuário',
