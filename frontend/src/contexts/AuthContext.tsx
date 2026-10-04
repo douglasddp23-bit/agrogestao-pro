@@ -176,6 +176,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         method: 'POST',
         headers: { Authorization: `Bearer ${idToken}` },
       });
+      if (!response.ok) {
+        const result = await response.json();
+        if ([401, 403].includes(response.status)) {
+          await signOut(auth);
+          setUser(null);
+          setAuthError(result.error || "Entre novamente para validar suas permissões.");
+          setLoading(false);
+          return false;
+        }
+        throw new Error(result.error || "Não foi possível validar a sessão.");
+      }
       if (response.ok) {
         const result = await response.json();
         if (result.updated) {
@@ -184,7 +195,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (e) {
       console.warn('[AuthContext] Não foi possível sincronizar o cargo no token:', e);
+      setUser(null);
+      setAuthError('Não foi possível validar a sessão. Tente novamente.');
+      setLoading(false);
+      return false;
     }
+    return true;
   };
 
   const resolveUserWithDelegation = async (profile: UserProfile): Promise<UserProfile> => {
@@ -279,7 +295,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           localStorage.removeItem('virtual_user_session');
           setLoading(true);
           try {
-            await syncRoleClaim(firebaseUser);
+            if (!(await syncRoleClaim(firebaseUser))) return;
             // Fetch custom claims securely on credentials refresh
             const tokenResult = await firebaseUser.getIdTokenResult(true);
             let userDoc;
@@ -312,6 +328,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             
             if (userDoc.exists()) {
               const profile = { uid: firebaseUser.uid, ...userDoc.data() } as UserProfile;
+              if ((profile as any).twoFactorEnabled && tokenResult.claims.mfaVerified !== true) {
+                await signOut(auth);
+                setUser(null);
+                setAuthError('Esta conta exige verificação em duas etapas. Entre com e-mail/matrícula e senha.');
+                setLoading(false);
+                return;
+              }
               
               // O cargo que vale é o do token (é o único que as regras do
               // Firestore enxergam). Antes, qualquer conta Google virava

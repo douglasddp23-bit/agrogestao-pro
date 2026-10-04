@@ -1,3 +1,4 @@
+import { approveExpenseReport } from '../lib/ledger';
 import React, { useState, useEffect, useMemo } from 'react';
 import { runExclusive } from '../lib/submitGuard';
 import { useNavigate } from 'react-router-dom';
@@ -127,24 +128,15 @@ function FinancialContent() {
   useEffect(() => {
     const q = query(collection(db, 'financials'), orderBy('dueDate', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FinancialRecord));
+      const data = snapshot.docs.map(doc => {
+        const item = { id: doc.id, ...doc.data() } as FinancialRecord;
+        return item.status === 'pending' && item.dueDate < todayLocalDateString() ? { ...item, status: 'overdue' as const } : item;
+      });
       setRecords(data);
       setLoading(false);
 
-      // Atualizar cobranças vencidas automaticamente se vencidas
-      const today = todayLocalDateString();
-      const batchUpdates: Promise<void>[] = [];
-      snapshot.docs.forEach(docSnap => {
-        const item = docSnap.data() as FinancialRecord;
-        if (item.status === 'pending' && item.dueDate < today) {
-          batchUpdates.push(updateDoc(docSnap.ref, { status: 'overdue' }));
-        }
-      });
-      if (batchUpdates.length > 0) {
-        Promise.all(batchUpdates)
-          .then(() => toast.info(`${batchUpdates.length} cobrança(s) pendente(s) atualizada(s) para vencida(s) automaticamente.`))
-          .catch(err => console.error('Erro ao atualizar vencidos automaticamente:', err));
-      }
+      // Derive overdue in the view; a stale listener must never overwrite a payment.
+
     }, (error) => {
       console.error(error);
       toast.error("Erro ao carregar dados financeiros.");
@@ -467,36 +459,8 @@ function FinancialContent() {
 
     setSavingExpenseDecision(true);
     try {
-      // 1. Update expense status to approved
-      await updateDoc(doc(db, 'expense_reports', report.id), {
-        status: 'approved',
-        approvedBy: user?.displayName || user?.email || 'Administrador',
-        approvedAt: new Date().toISOString(),
-        approvalNotes: expenseApprovalNotes.trim() || 'Aprovado pelo Administrador',
-        updatedAt: new Date().toISOString()
-      });
-
-      // 2. Add to financials (contabilizar no sistema financeiro) as an active expense
-      const financialPayload: Partial<FinancialRecord> = {
-        clientId: 'empresa-interna',
-        clientName: 'AgroGestão Pro (Gasto Interno)',
-        category: 'expense_report',
-        description: `[Despesa Aprovada] ${report.description} (${report.createdByName})`,
-        value: report.value,
-        dueDate: report.dueDate,
-        paymentDate: todayLocalDateString(),
-        paymentMethod: 'transferencia',
-        status: 'paid', // approved implies finalized/paid
-        serviceId: report.id,
-        serviceType: 'expense_report',
-        notes: `Reembolso de despesa de ${report.createdByName} (${(report.category || '').toUpperCase()}). Parecer: ${expenseApprovalNotes.trim() || 'Aprovado'}. ${report.notes || ''}`,
-        createdBy: report.createdBy,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        isExpense: true // indicates it is an expense
-      };
-
-      await addDoc(collection(db, 'financials'), financialPayload);
+      if (!user) throw new Error('Sessão expirada.');
+      await approveExpenseReport(report.id, expenseApprovalNotes.trim() || 'Aprovado pelo Administrador', user);
 
       await logAudit({
         userId: user?.uid || 'unknown',
@@ -509,7 +473,7 @@ function FinancialContent() {
         newValues: { status: 'approved', approvedBy: user?.displayName || user?.email }
       });
 
-      toast.success("Despesa aprovada e contabilizada com sucesso nas Finanças!");
+      toast.success("Despesa aprovada. Conta a pagar criada; registre o pagamento após a transferência.");
       setIsExpenseApprovalModalOpen(false);
       setSelectedExpenseReport(null);
       setExpenseApprovalNotes('');

@@ -1,14 +1,15 @@
-import { 
-  collection, 
-  onSnapshot, 
-  query, 
-  where, 
-  getDocs, 
-  addDoc, 
-  updateDoc, 
-  doc, 
-  serverTimestamp, 
-  Unsubscribe 
+import {
+  collection,
+  onSnapshot,
+  query,
+  where,
+  getDocs,
+  addDoc,
+  updateDoc,
+  doc,
+  serverTimestamp,
+  runTransaction,
+  Unsubscribe
 } from 'firebase/firestore';
 import { useEffect, useState, useCallback } from 'react';
 import { db, auth } from './firebase';
@@ -81,10 +82,7 @@ export async function ensureServiceDocumentFolder({
       const firstDoc = snap.docs[0];
       const data = firstDoc.data();
       if (data.clientId !== clientId) {
-        await updateDoc(doc(db, 'documents', firstDoc.id), {
-          clientId,
-          updatedAt: new Date().toISOString()
-        });
+        throw new Error('Este dossiê pertence a outro cliente. A transferência exige revisão administrativa.');
       }
       return { folderExists: true, documentsCount: count, docId: firstDoc.id };
     }
@@ -117,7 +115,15 @@ export async function ensureServiceDocumentFolder({
       ...metadata
     };
 
-    const newDocRef = await addDoc(collection(db, 'documents'), docPayload);
+    const newDocRef = doc(db, 'documents', `folder_${serviceType}_${serviceId}`);
+    await runTransaction(db, async tx => {
+      const existing = await tx.get(newDocRef);
+      if (existing.exists()) {
+        if (existing.data().clientId !== clientId) throw new Error('Dossiê já vinculado a outro cliente.');
+        return;
+      }
+      tx.set(newDocRef, docPayload);
+    });
     return { folderExists: false, documentsCount: 1, docId: newDocRef.id };
   } catch (error) {
     console.error('[documentSync] Error in ensureServiceDocumentFolder:', error);

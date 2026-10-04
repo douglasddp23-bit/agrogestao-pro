@@ -1,3 +1,4 @@
+import { cancelPendingInstallments } from '../integrity';
 // Operações do Faturamento no Firestore. Tudo vai para o banco (sincroniza em
 // tempo real entre os computadores via onSnapshot) — nada fica só na memória.
 import {
@@ -174,6 +175,7 @@ export function validateDraft(draft: BillingDraft): string | null {
   if (!draft.clientId) return 'Escolha o cliente.';
   const items = normalizeItems(draft.items);
   if (!items.length) return 'Inclua pelo menos um item com descrição e quantidade.';
+  if (operationFromItems(items) === 'mixed') return 'Separe produtos e serviços em faturamentos próprios antes de confirmar.';
   if (items.some(i => i.unitPrice < 0 || i.discount < 0)) return 'Valores e descontos não podem ser negativos.';
   const { total } = billingTotals(items);
   if (total <= 0) return 'O valor total do faturamento precisa ser maior que zero.';
@@ -197,10 +199,19 @@ export async function createBilling(draft: BillingDraft, actor: Actor, confirm: 
     const id = billingNumberFor(year, seq);
     const ref = doc(db, 'billings', id);
     const data = buildBillingDoc(draft, actor, id, false);
+    const origin = draft.source.collection && draft.source.id ? doc(db, 'billing_origins', `${draft.source.collection}_${draft.source.id}`) : null;
     const ok = await runTransaction(db, async (tx) => {
+      if (origin) {
+        const reservation = await tx.get(origin);
+        if (reservation.exists()) {
+          const previous = await tx.get(doc(db, 'billings', reservation.data().billingId));
+          if (previous.exists() && previous.data().status !== 'cancelled') throw new Error('Este serviço já possui faturamento ativo. Abra o faturamento existente.');
+        }
+      }
       if ((await tx.get(ref)).exists()) return false; // número já usado no outro computador
       const { id: _id, ...payload } = data;
       tx.set(ref, payload);
+      if (origin) tx.set(origin, { billingId: id, sourceCollection: draft.source.collection, sourceId: draft.source.id });
       return true;
     });
     if (ok) saved = data;
@@ -218,10 +229,11 @@ export async function createBilling(draft: BillingDraft, actor: Actor, confirm: 
 
 export async function updateDraft(billing: Billing, draft: BillingDraft, actor: Actor): Promise<void> {
   if (billing.status !== 'draft') throw new Error('Só rascunhos podem ser editados por completo.');
+  if (draft.source.id !== billing.source.id || draft.source.collection !== billing.source.collection) throw new Error('A origem do faturamento não pode ser trocada. Cancele o rascunho e crie outro.');
   const err = validateDraft(draft);
   if (err) throw new Error(err);
   const data = buildBillingDoc(draft, actor, billing.id, false);
-  const { id: _i, createdAt: _c, createdBy: _b, createdByName: _n, number: _num, clientId: _cl, ...patch } = data;
+  const { id: _i, createdAt: _c, createdBy: _b, createdByName: _n, number: _num, clientId: _cl, source: _source, ...patch } = data;
   const batch = writeBatch(db);
   batch.update(doc(db, 'billings', billing.id), { ...patch, clientName: data.clientName, updatedAt: new Date().toISOString() });
   await batch.commit();
@@ -238,6 +250,14 @@ export async function updateDraft(billing: Billing, draft: BillingDraft, actor: 
  */
 export async function confirmBilling(billingId: string, actor: Actor): Promise<Billing> {
   const ref = doc(db, 'billings', billingId);
+  const preview = await getDoc(ref);
+  const source = preview.data()?.source;
+  if (source?.collection === 'analyses' && source.id) {
+    const legacy = await getDocs(query(collection(db, 'financials'), where('linkedServiceId', '==', source.id)));
+    if (legacy.docs.some(d => d.data().status !== 'cancelled' && d.data().billingId !== billingId)) {
+      throw new Error('Já existe cobrança financeira antiga desta análise. Concilie/cancele essa cobrança antes de confirmar o faturamento.');
+    }
+  }
   const result = await runTransaction(db, async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists()) throw new Error('Faturamento não encontrado.');
@@ -298,6 +318,9 @@ export async function registerPayment(
     if (p.status === 'paid') throw new Error(`A parcela ${installmentNumber} já está paga.`);
     const recRef = doc(db, 'financials', p.receivableId || receivableIdFor(b.id, p.number));
     const recSnap = await tx.get(recRef);
+    if (!recSnap.exists() || recSnap.data().status === 'paid' || recSnap.data().status === 'cancelled') {
+      throw new Error('Conta a receber ausente ou já processada. Concilie o faturamento.');
+    }
     const now = new Date().toISOString();
     const payment: Omit<Payment, 'id'> = {
       billingId: b.id, billingNumber: b.number, installmentNumber, receivableId: recRef.id,
@@ -330,31 +353,31 @@ export async function registerPayment(
  */
 export async function cancelBilling(billing: Billing, reason: string, actor: Actor): Promise<void> {
   if (!reason.trim()) throw new Error('Informe o motivo do cancelamento.');
-  const now = new Date().toISOString();
-  const batch = writeBatch(db);
-  for (const p of billing.installments) {
-    if (p.status === 'pending' && p.receivableId) {
-      batch.update(doc(db, 'financials', p.receivableId), { status: 'cancelled', updatedAt: now });
+  const ref = doc(db, 'billings', billing.id);
+  await runTransaction(db, async tx => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error('Faturamento não encontrado.');
+    const current = snap.data() as Billing;
+    if (current.status === 'cancelled') throw new Error('Faturamento já cancelado.');
+    const pending = current.installments.filter(p => p.status === 'pending' && p.receivableId);
+    const receivables = await Promise.all(pending.map(p => tx.get(doc(db, 'financials', p.receivableId!))));
+    if (receivables.some(x => !x.exists() || x.data().status === 'paid')) {
+      throw new Error('As contas a receber divergem do faturamento. Concilie os pagamentos antes de cancelar.');
     }
-  }
-  const installments = billing.installments.map(p => (p.status === 'pending' ? { ...p, status: 'cancelled' as const } : p));
-  batch.update(doc(db, 'billings', billing.id), {
-    status: 'cancelled', installments, cancelReason: reason.trim().slice(0, 1000), cancelledAt: now, cancelledBy: actor.uid, updatedAt: now,
+    const now = new Date().toISOString();
+    receivables.forEach(x => tx.update(x.ref, { status: 'cancelled', updatedAt: now }));
+    tx.update(ref, { status: 'cancelled', installments: cancelPendingInstallments(current.installments),
+      cancelReason: reason.trim().slice(0, 1000), cancelledAt: now, cancelledBy: actor.uid, updatedAt: now });
   });
-  await batch.commit();
   await logAudit({ userId: actor.uid, userName: actorName(actor), action: 'status_changed', collection: 'billings', recordId: billing.id,
     recordName: `${billing.number} — ${billing.clientName}`, details: `Faturamento cancelado. Motivo: ${reason.trim()}`,
     previousValues: { status: billing.status }, newValues: { status: 'cancelled' } });
 }
 
 /** Faturamentos cujo status mudou só pela passagem do tempo (vencido) — grava o status atual. */
-export async function refreshOverdueStatuses(list: Billing[]) {
-  const today = todayLocalDateString();
-  const stale = list.filter(b => b.status !== 'draft' && b.status !== 'cancelled' && computeBillingStatus(b, today) !== b.status);
-  if (!stale.length) return;
-  const batch = writeBatch(db);
-  stale.slice(0, 400).forEach(b => batch.update(doc(db, 'billings', b.id), { status: computeBillingStatus(b, today), updatedAt: new Date().toISOString() }));
-  await batch.commit().catch(() => { /* sem permissão ou offline: tenta de novo depois */ });
+export async function refreshOverdueStatuses(_list: Billing[]) {
+  // Atraso é derivado por computeBillingStatus na leitura. Nunca sobrescreve
+  // pagamentos/cancelamentos concorrentes com a cópia antiga de uma tela.
 }
 
 // ─── Documento fiscal (via servidor — o navegador nunca fala com o provedor) ──

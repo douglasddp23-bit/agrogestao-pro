@@ -223,7 +223,7 @@ export default function Clients() {
   useEffect(() => {
     const q = query(collection(db, 'clients'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setClients(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client)));
+      setClients(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client)).filter(c => !(c as any).archived));
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'clients');
     });
@@ -556,7 +556,7 @@ export default function Clients() {
                 url: downloadUrl,
                 storagePath: filePath,
                 size: file.size,
-                uploadedBy: user?.displayName || 'Sistema',
+                uploadedBy: user?.uid || '',
                 uploadedAt: hasValidConfig ? serverTimestamp() : new Date()
               };
 
@@ -3218,50 +3218,30 @@ export default function Clients() {
           if (isDeleteModalOpen) {
             const targetClient = clients.find(c => c.id === isDeleteModalOpen);
             try {
-              // Remove também o dossiê de documentos do cliente (Firestore + Storage),
-              // pra não deixar arquivos e registros órfãos depois que o cliente some.
-              if (hasValidConfig) {
-                try {
-                  const docsSnap = await getDocs(query(collection(db, 'documents'), where('clientId', '==', isDeleteModalOpen)));
-                  await Promise.all(docsSnap.docs.map(async (docSnap) => {
-                    const data = docSnap.data() as any;
-                    if (data.storagePath) {
-                      await deleteStoredFile(data.storagePath).catch((err) => console.warn('Arquivo do dossiê não encontrado:', err));
-                    }
-                    await deleteDoc(doc(db, 'documents', docSnap.id));
-                  }));
-                } catch (docErr) {
-                  console.error('Erro ao remover documentos do dossiê do cliente:', docErr);
-                }
-              }
-
-              const deletePromise = deleteDoc(doc(db, 'clients', isDeleteModalOpen));
-              if (hasValidConfig) {
-                await deletePromise;
-              }
+              await updateDoc(doc(db, 'clients', isDeleteModalOpen), { archived: true, archivedAt: new Date().toISOString(), archivedBy: user?.uid || '' });
 
               await logAudit({
                 userId: user?.uid || 'unknown',
                 userName: user?.displayName || user?.email || 'Usuário',
-                action: 'deleted',
+                action: 'archived',
                 collection: 'clients',
                 recordId: isDeleteModalOpen,
                 recordName: targetClient ? targetClient.name : `Cliente ${isDeleteModalOpen}`,
                 details: targetClient 
-                  ? `Cliente/Produtor "${targetClient.name}" (CPF/CNPJ: ${targetClient.cpf}) foi removido permanentemente.`
-                  : `Cliente ID ${isDeleteModalOpen} foi removido permanentemente.`,
+                  ? `Cliente/Produtor "${targetClient.name}" (CPF/CNPJ: ${targetClient.cpf}) foi arquivado; o histórico foi preservado.`
+                  : `Cliente ID ${isDeleteModalOpen} foi arquivado; o histórico foi preservado.`,
                 previousValues: targetClient || undefined
               });
 
-              toast.success('Cliente removido com sucesso.');
+              toast.success('Cliente arquivado com sucesso.');
             } catch (error) {
               handleFirestoreError(error, OperationType.DELETE, 'clients');
             }
           }
         }}
-        title="Excluir Cliente e Dossiê?"
-        description="Esta ação removerá permanentemente o produtor, seu histórico no dossiê de documentos anexados e todas as suas propriedades vinculadas da base de dados."
-        confirmLabel="Confirmar Exclusão"
+        title="Arquivar Cliente?"
+        description="O cliente será retirado da listagem ativa. Serviços, documentos, contratos e cobranças permanecem no histórico."
+        confirmLabel="Arquivar Cliente"
       />
     </div>
   );

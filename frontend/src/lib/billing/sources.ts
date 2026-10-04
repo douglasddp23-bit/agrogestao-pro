@@ -1,6 +1,7 @@
 // De onde um faturamento pode nascer — e como cada origem pré-preenche o
 // faturamento SEM pedir de novo o que já está cadastrado (cliente, CPF/CNPJ,
 // serviço e valor).
+import { parseMoneySource } from '../integrity';
 import type { SourceKind } from './types';
 import { executionCost } from '../credit/calculations';
 
@@ -20,7 +21,7 @@ export interface SourceDef {
   isDone: (d: any) => boolean;
 }
 
-const num = (v: any) => (typeof v === 'number' ? v : Number(String(v ?? '').replace(/\./g, '').replace(',', '.')) || 0);
+const num = parseMoneySource;
 const done = (d: any) => /conclu|finaliz|entregue|completed/i.test(String(d?.status || ''));
 const where = (d: any) => (d?.propertyName ? ` — ${d.propertyName}` : '');
 

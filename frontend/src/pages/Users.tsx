@@ -280,42 +280,20 @@ export default function Users() {
     const action = member.blocked ? 'unblock-user' : 'block-user';
     const originalBlocked = member.blocked;
 
-    // 1. Optimistic feedback: update UI state instantly
-    setTeam(prev => prev.map(u => u.uid === member.uid ? { ...u, blocked: !u.blocked } : u));
-    toast.success(`Colaborador ${originalBlocked ? 'restabelecido' : 'suspenso'} com sucesso!`);
-    setSelectedUser(null);
-
-    // 2. Perform backend & Firebase updates asynchronously in the background
-    (async () => {
-      let idToken = '';
-      const currentUser = auth.currentUser;
-      if (currentUser) {
-        idToken = await currentUser.getIdToken();
-      } else {
-        const cachedSession = localStorage.getItem('virtual_user_session');
-        if (cachedSession) {
-          const parsed = JSON.parse(cachedSession);
-          idToken = '';
-        }
-      }
-      
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error('Sessão expirada. Entre novamente.');
       const response = await fetch(`/api/${action}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`
-        },
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ uid: member.uid }),
       });
-
-      if (!response.ok) {
-        console.warn('Backend toggle block returned non-ok status.');
-      }
-
-      await updateDoc(doc(db, 'users', member.uid), { blocked: !originalBlocked });
-    })().catch(err => {
-      console.error('Background toggle block failed:', err);
-    });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.error || 'Não foi possível alterar o acesso.');
+      toast.success(`Colaborador ${originalBlocked ? 'restabelecido' : 'suspenso'} com sucesso!`);
+      setSelectedUser(null);
+    } catch (error: any) {
+      toast.error(error.message || 'Não foi possível alterar o acesso.');
+    }
   };
 
   // Redefinir senha: Administrador de qualquer pessoa; RH só de Consultor (decisão de

@@ -34,18 +34,21 @@ function isVerifiedPrimaryAdmin(decoded: admin.auth.DecodedIdToken): boolean {
  * documento users/{uid} (definido por um administrador). Bloqueados = sem cargo.
  */
 async function resolveRole(decoded: admin.auth.DecodedIdToken): Promise<string | null> {
+  const snap = await admin.firestore().collection('users').doc(decoded.uid).get();
+  const data = snap.exists ? snap.data() : null;
+  if (data?.blocked || (data?.twoFactorEnabled && (decoded as any).mfaVerified !== true)) return null;
   if (isVerifiedPrimaryAdmin(decoded)) return 'admin';
-  let profileRole: string | null = null;
-  try {
-    const snap = await admin.firestore().collection('users').doc(decoded.uid).get();
-    const data = snap.exists ? snap.data() : null;
-    if (data?.blocked) return null;
-    profileRole = typeof data?.role === 'string' ? data.role : null;
-  } catch {
-    // sem acesso ao Firestore: usa só o token
+  let role = typeof data?.role === 'string' ? data.role : null;
+  if (!role) return null;
+  const ranks: Record<string, number> = { staff: 1, consultant: 1, hr: 2, manager: 3, admin: 4 };
+  const today = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10);
+  const delegations = await admin.firestore().collection('delegations').where('delegateUserId', '==', decoded.uid).where('active', '==', true).get();
+  for (const d of delegations.docs) {
+    const x = d.data();
+    if (typeof x.startDate === 'string' && x.startDate <= today && (!x.endDate || x.endDate >= today)
+      && (ranks[x.absentUserRole] || 0) > (ranks[role] || 0)) role = x.absentUserRole;
   }
-  const claimRole = typeof (decoded as any).role === 'string' ? (decoded as any).role : null;
-  return claimRole || profileRole;
+  return role;
 }
 
 /**
@@ -79,7 +82,11 @@ async function authenticate(req: AuthenticatedRequest, res: Response): Promise<{
     res.status(401).json({ error: `Sua sessão passou de ${SESSION_MAX_HOURS} horas. Entre novamente com sua senha.`, code: 'session_expired' });
     return null;
   }
-  const role = await resolveRole(decoded);
+  let role: string | null;
+  try { role = await resolveRole(decoded); } catch {
+    res.status(503).json({ error: 'Não foi possível confirmar suas permissões. Tente novamente.' });
+    return null;
+  }
   if (!role || !STAFF_ROLES.includes(role as StaffRole)) {
     // Conta existe no Firebase, mas não foi cadastrada por um administrador (ou está bloqueada)
     res.status(403).json({ error: 'Acesso negado: conta sem cargo autorizado no sistema.' });

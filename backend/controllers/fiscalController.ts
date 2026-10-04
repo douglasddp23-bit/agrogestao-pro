@@ -128,6 +128,7 @@ async function validateForEmission(billing: any, requestedType?: string): Promis
   // 5. Serviço/produto
   const items: any[] = Array.isArray(billing.items) ? billing.items : [];
   if (!items.length) return { error: 'O faturamento não tem itens.', field: 'itens' };
+  if (items.some(i => i.kind === 'product') && items.some(i => i.kind !== 'product')) return { error: 'Separe produtos e serviços em faturamentos distintos antes de emitir.', field: 'itens' };
   // 8. Tipo de documento (pela natureza da operação)
   const op = billing.operationType;
   const docType: FiscalDocKind | null = op === 'service' ? 'NFSE' : op === 'product' ? 'NFE' : (requestedType === 'NFSE' || requestedType === 'NFE' ? requestedType : billing.fiscalDocType || null);
